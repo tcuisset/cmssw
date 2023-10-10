@@ -14,6 +14,7 @@ from RecoHGCal.TICL.pfTICLProducer_cfi import pfTICLProducer as _pfTICLProducer
 from RecoHGCal.TICL.trackstersMergeProducer_cfi import trackstersMergeProducer as _trackstersMergeProducer
 from RecoHGCal.TICL.trackstersMergeProducerV3_cfi import trackstersMergeProducerV3 as _trackstersMergeProducerV3
 from RecoHGCal.TICL.tracksterSelectionTf_cfi import *
+from RecoHGCal.TICL.superclusteringProducer_cfi import superclusteringProducer
 
 ticlLayerTileTask = cms.Task(ticlLayerTileProducer)
 
@@ -56,8 +57,9 @@ ticlIterLabelsMerge = ticlIterLabels + ["Merge"]
 ticlIterLabelsMergeV3 = ticlIterLabels + ["MergeV3"]
 ticl_v3.toModify(ticlIterLabelsMerge, func=lambda x : x.extend(ticlIterLabelsMergeV3))
 
-iterTICLTask = cms.Task(mergeTICLTask
-    ,ticlPFTask)
+iterTICLTask = cms.Task(mergeTICLTask,
+    cms.Task(superclusteringProducer),
+    ticlPFTask)
 
 ticlLayerTileHFNose = ticlLayerTileProducer.clone(
     detector = 'HFNose'
