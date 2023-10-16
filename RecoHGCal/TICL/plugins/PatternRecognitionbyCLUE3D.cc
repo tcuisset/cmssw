@@ -176,11 +176,16 @@ void PatternRecognitionbyCLUE3D<TILES>::makeTracksters(
 
   clusters_.clear();
   clusters_.resize(2 * rhtools_.lastLayer(false));
-  std::vector<std::pair<int, int>> layerIdx2layerandSoa;  //used everywhere also to propagate cluster masking
+  /**
+   * Vector holding (layer ID; ID of cluster on layer) indexed by input.layerClusters ID
+   * ID of cluster on layer is only unique per layer
+   * used everywhere also to propagate cluster masking
+  */
+  std::vector<std::pair<int, int>> layerIdx2layerandSoa;
 
   layerIdx2layerandSoa.reserve(input.layerClusters.size());
   unsigned int layerIdx = 0;
-  for (auto const &lc : input.layerClusters) {
+  for (auto const &lc : input.layerClusters) { //lc is reco::CaloCluster const&
     if (input.mask[layerIdx] == 0.) {
       if (PatternRecognitionAlgoBaseT<TILES>::algo_verbosity_ > VerbosityLevel::Advanced) {
         edm::LogVerbatim("PatternRecognitionbyCLUE3D") << "Skipping masked cluster: " << layerIdx;
@@ -190,11 +195,13 @@ void PatternRecognitionbyCLUE3D<TILES>::makeTracksters(
       continue;
     }
     const auto firstHitDetId = lc.hitsAndFractions()[0].first;
+    //((rhtools_.zside(firstHitDetId) + 1) >> 1) is 0 in case zside = -1, or 1 in case zside = +1
     int layer = rhtools_.getLayerWithOffset(firstHitDetId) - 1 +
                 rhtools_.lastLayer(false) * ((rhtools_.zside(firstHitDetId) + 1) >> 1);
     assert(layer >= 0);
     auto detId = lc.hitsAndFractions()[0].first;
 
+    // Use clusters_[layer].x.size() to generate an id unique on each layer for the current layer cluster
     layerIdx2layerandSoa.emplace_back(layer, clusters_[layer].x.size());
     float sum_x = 0.;
     float sum_y = 0.;
@@ -203,7 +210,7 @@ void PatternRecognitionbyCLUE3D<TILES>::makeTracksters(
     float ref_x = lc.x();
     float ref_y = lc.y();
     float invClsize = 1. / lc.hitsAndFractions().size();
-    for (auto const &hitsAndFractions : lc.hitsAndFractions()) {
+    for (auto const &hitsAndFractions : lc.hitsAndFractions()) { //hitsAndFractions is std::pair<DetId, float=fraction of energy>
       auto const &point = rhtools_.getPosition(hitsAndFractions.first);
       sum_x += point.x() - ref_x;
       sum_sqr_x += (point.x() - ref_x) * (point.x() - ref_x);
@@ -494,7 +501,7 @@ void PatternRecognitionbyCLUE3D<TILES>::calculateLocalDensity(
     const TILES &tiles, const int layerId, const std::vector<std::pair<int, int>> &layerIdx2layerandSoa) {
   constexpr int nEtaBin = TILES::constants_type_t::nEtaBins;
   constexpr int nPhiBin = TILES::constants_type_t::nPhiBins;
-  auto &clustersOnLayer = clusters_[layerId];
+  auto &clustersOnLayer = clusters_[layerId]; ///< ClustersOnLayer for the current cluster
   unsigned int numberOfClusters = clustersOnLayer.x.size();
 
   auto isReachable = [](float r0, float r1, float phi0, float phi1, float delta_sqr) -> bool {
@@ -518,6 +525,7 @@ void PatternRecognitionbyCLUE3D<TILES>::calculateLocalDensity(
       maxLayer = std::min(layerId + densitySiblingLayers_, maxLayer);
     }
     float deltaLayersZ = std::abs(layersPosZ_[maxLayer % lastLayerPerSide] - layersPosZ_[minLayer % lastLayerPerSide]);
+    ///< depth in z where layer clusters are searched, taking into account boundaries of detector
 
     for (int currentLayer = minLayer; currentLayer <= maxLayer; currentLayer++) {
       if (PatternRecognitionAlgoBaseT<TILES>::algo_verbosity_ > VerbosityLevel::Advanced) {
@@ -554,7 +562,13 @@ void PatternRecognitionbyCLUE3D<TILES>::calculateLocalDensity(
                 << "Entries in tileBin: " << tileOnLayer[offset + iphi].size();
           }
           for (auto otherClusterIdx : tileOnLayer[offset + iphi]) {
+            /**
+             * std::pair<layer ID, ID of cluster on layer> of the otherCluster
+             * Thus layerandSoa.first is the layer of the other cluster
+             * layerandSoa.second is the other cluster ID (in the per-layer ID system)
+            */
             auto const &layerandSoa = layerIdx2layerandSoa[otherClusterIdx];
+
             // Skip masked layer clusters
             if ((layerandSoa.first == -1) && (layerandSoa.second == -1)) {
               if (PatternRecognitionAlgoBaseT<TILES>::algo_verbosity_ > VerbosityLevel::Advanced) {
@@ -562,7 +576,12 @@ void PatternRecognitionbyCLUE3D<TILES>::calculateLocalDensity(
               }
               continue;
             }
-            auto const &clustersLayer = clusters_[layerandSoa.first];
+            auto const &clustersLayer = clusters_[layerandSoa.first]; ///< ClustersOnLayer struct for the other cluster's layer
+            /*
+            clustersOnLayer.member[i] corresponds to the current layer cluster (the one of the outer loop)
+            clustersLayer.member[layerandSoa.second] corresponds to the other layer cluster (the one of the outer loop)
+            */
+
             if (PatternRecognitionAlgoBaseT<TILES>::algo_verbosity_ > VerbosityLevel::Advanced) {
               edm::LogVerbatim("PatternRecognitionbyCLUE3D")
                   << "OtherLayer: " << layerandSoa.first << " SoaIDX: " << layerandSoa.second;
@@ -570,22 +589,22 @@ void PatternRecognitionbyCLUE3D<TILES>::calculateLocalDensity(
               edm::LogVerbatim("PatternRecognitionbyCLUE3D") << "OtherPhi: " << clustersLayer.phi[layerandSoa.second];
             }
             bool reachable = false;
-            if (useAbsoluteProjectiveScale_) {
-              if (useClusterDimensionXY_) {
-                reachable = isReachable(clustersOnLayer.r_over_absz[i] * clustersOnLayer.z[i],
-                                        clustersLayer.r_over_absz[layerandSoa.second] * clustersOnLayer.z[i],
-                                        clustersOnLayer.phi[i],
-                                        clustersLayer.phi[layerandSoa.second],
-                                        clustersOnLayer.radius[i] * clustersOnLayer.radius[i]);
+            if (useAbsoluteProjectiveScale_) { // default is true. See https://indico.cern.ch/event/1127982/contributions/4734294/attachments/2393383/4091910/20220217_TICL_Core_CLUE3DProjective.pdf
+              if (useClusterDimensionXY_) { // default is false . See https://indico.cern.ch/event/1134760/contributions/4761067/attachments/2401593/4107240/20220303_TICL_Core_CLUE3DProjectiveAndClusterSize.pdf 
+                reachable = isReachable(clustersOnLayer.r_over_absz[i] * clustersOnLayer.z[i],                // r0
+                                        clustersLayer.r_over_absz[layerandSoa.second] * clustersOnLayer.z[i], // r1
+                                        clustersOnLayer.phi[i],                //phi0
+                                        clustersLayer.phi[layerandSoa.second], //phi1
+                                        clustersOnLayer.radius[i] * clustersOnLayer.radius[i]); //delta_sqr
               } else {
                 // Still differentiate between silicon and Scintillator.
                 // Silicon has yet to be studied further.
                 if (clustersOnLayer.isSilicon[i]) {
-                  reachable = isReachable(clustersOnLayer.r_over_absz[i] * clustersOnLayer.z[i],
-                                          clustersLayer.r_over_absz[layerandSoa.second] * clustersOnLayer.z[i],
-                                          clustersOnLayer.phi[i],
-                                          clustersLayer.phi[layerandSoa.second],
-                                          densityXYDistanceSqr_);
+                  reachable = isReachable(clustersOnLayer.r_over_absz[i] * clustersOnLayer.z[i],                // r0
+                                          clustersLayer.r_over_absz[layerandSoa.second] * clustersOnLayer.z[i], // r1
+                                          clustersOnLayer.phi[i],                //phi0
+                                          clustersLayer.phi[layerandSoa.second], //phi1
+                                          densityXYDistanceSqr_); //delta_sqr
                 } else {
                   reachable = isReachable(clustersOnLayer.r_over_absz[i] * clustersOnLayer.z[i],
                                           clustersLayer.r_over_absz[layerandSoa.second] * clustersOnLayer.z[i],
@@ -676,8 +695,13 @@ void PatternRecognitionbyCLUE3D<TILES>::calculateDistanceToHigher(
       maxLayer = std::min(layerId + densitySiblingLayers_, maxLayer);
     }
     constexpr float maxDelta = std::numeric_limits<float>::max();
-    float i_delta = maxDelta;
-    std::pair<int, int> i_nearestHigher(-1, -1);
+    float i_delta = maxDelta; ///< Minimum distance to nearest higher found so far
+    std::pair<int, int> i_nearestHigher(-1, -1); ///< (layer ID of nearest higher so far; ID of nearest higher layer cluster found so far)
+    /**
+     * Nearest higher found so far
+     * pair.first : distance to nearest higher (how it is computed depends on parameters)
+     * pair.second : number of layers of difference to the nearest higher
+    */
     std::pair<float, int> nearest_distances(maxDelta, std::numeric_limits<int>::max());
     for (int currentLayer = minLayer; currentLayer <= maxLayer; currentLayer++) {
       if (!nearestHigherOnSameLayer_ && (layerId == currentLayer))
@@ -699,19 +723,24 @@ void PatternRecognitionbyCLUE3D<TILES>::calculateDistanceToHigher(
                 << iphi << " " << offset << " " << (offset + iphi);
           }
           for (auto otherClusterIdx : tileOnLayer[offset + iphi]) {
-            auto const &layerandSoa = layerIdx2layerandSoa[otherClusterIdx];
+            auto const &layerandSoa = layerIdx2layerandSoa[otherClusterIdx]; ///< std::pair(layer ID; ID of cluster on layer) of the otherCluster
             // Skip masked layer clusters
             if ((layerandSoa.first == -1) && (layerandSoa.second == -1))
               continue;
             auto const &clustersOnOtherLayer = clusters_[layerandSoa.first];
+            /*
+            clustersOnLayer.member[i] corresponds to the current layer cluster (the one of the outer loop)
+            clustersOnOtherLayer.member[layerandSoa.second] corresponds to the other layer cluster (the one of the outer loop)
+            */
+
             auto dist = maxDelta;
             auto dist_transverse = maxDelta;
             int dist_layers = std::abs(layerandSoa.first - layerId);
             if (useAbsoluteProjectiveScale_) {
-              dist_transverse = distanceSqr(clustersOnLayer.r_over_absz[i] * clustersOnLayer.z[i],
-                                            clustersOnOtherLayer.r_over_absz[layerandSoa.second] * clustersOnLayer.z[i],
-                                            clustersOnLayer.phi[i],
-                                            clustersOnOtherLayer.phi[layerandSoa.second]);
+              dist_transverse = distanceSqr(clustersOnLayer.r_over_absz[i] * clustersOnLayer.z[i], // r0
+                                            clustersOnOtherLayer.r_over_absz[layerandSoa.second] * clustersOnLayer.z[i], // r1
+                                            clustersOnLayer.phi[i], // phi0
+                                            clustersOnOtherLayer.phi[layerandSoa.second]); // phi1
               // Add Z-scale to the final distance
               dist = dist_transverse;
             } else {
@@ -843,6 +872,11 @@ void PatternRecognitionbyCLUE3D<TILES>::fillPSetDescription(edm::ParameterSetDes
       ->setComment(
           "inclusive, layers to consider while computing local density and searching for nearestHigher higher");
   iDesc.add<double>("densityEtaPhiDistanceSqr", 0.0008);
+  /* Important note : if you increase this you need to also increase etaWindow and/or phiWindow in PatternRecognitionbyCLUE3D<TILES>::calculateDistanceToHigher
+  in order to make sure you include all possible points satisfying the distance condition are included.
+  Value of 2.6cm*2.6cm=3.24cm^2 reaches the minimum (etaWindow=2) at minimum eta on front of detector (320cm from z=0)
+  (phi has more margin)
+  */
   iDesc.add<double>("densityXYDistanceSqr", 3.24 /*6.76*/)
       ->setComment("in cm, 2.6*2.6, distance on the transverse plane to consider for local density");
   iDesc.add<double>("kernelDensityFactor", 0.2)

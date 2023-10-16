@@ -24,7 +24,7 @@
 #include <string>
 #include <vector>
 
-using Density = hgcal_clustering::Density;
+using Density = hgcal_clustering::Density; // std::map<DetId, float>
 
 template <typename TILE>
 class HGCalCLUEAlgoT : public HGCalClusteringAlgoBase {
@@ -63,7 +63,7 @@ public:
 
   void makeClusters() override;
 
-  // this is the method to get the cluster collection out
+  ///< this is the method to get the cluster collection out (parameter is ignored)
   std::vector<reco::BasicCluster> getClusters(bool) override;
 
   void reset() override {
@@ -125,11 +125,15 @@ public:
 private:
   // To compute the cluster position
   std::vector<double> thresholdW0_;
+  /**
+   * When computing layer cluster position,
+   *  ignore cells that have the distance squared to the highest energy cell in layer cluster greater than this squared distance
+  */
   const double positionDeltaRho2_;
 
   // The two parameters used to identify clusters
   std::vector<double> vecDeltas_;
-  double kappa_;
+  double kappa_; ///< Minimum value, in terms of sigma(noise), to promote a hit to become a seed candidate for cluster (default is 9)
 
   // The hit energy cutoff
   double ecut_;
@@ -157,7 +161,11 @@ private:
   // initialization bool
   bool initialized_;
 
-  float outlierDeltaFactor_ = 2.f;
+  /**
+   * Factor to multiply deltac to determine if hit is an outlier 
+   * Has to be greater than 1 (calculateDistanceToHigher works properly only when this is the case)
+  */
+  float outlierDeltaFactor_ = 2.f; 
 
   struct CellsOnLayer {
     std::vector<DetId> detid;
@@ -212,10 +220,14 @@ private:
     }
   };
 
-  std::vector<CellsOnLayer> cells_;
+  std::vector<CellsOnLayer> cells_; ///< List of CellsOnLayer indexed by layer ID
 
-  std::vector<int> numberOfClustersPerLayer_;
+  std::vector<int> numberOfClustersPerLayer_; ///< Computed by findAndAssignClusters
 
+  /**
+   * Compute distance squared between two cells on the same layer
+   * \param isEtaPhi if true, compute distance in (eta, phi) ie eta^2 + phi^2. If false, compute in (x;y)
+  */
   inline float distance2(int cell1, int cell2, int layerId, bool isEtaPhi) const {  // distance squared
     if (isEtaPhi) {
       const float dphi = reco::deltaPhi(cells_[layerId].phi[cell1], cells_[layerId].phi[cell2]);
@@ -228,18 +240,49 @@ private:
     }
   }
 
-  inline float distance(int cell1, int cell2, int layerId, bool isEtaPhi) const {  // 2-d distance on the layer (x-y)
+  ///< Compute 2D distance between two cells on the same layer. Square root of \a HCCalCLUEAlgoT::distance2
+  inline float distance(int cell1, int cell2, int layerId, bool isEtaPhi) const {
     return std::sqrt(distance2(cell1, cell2, layerId, isEtaPhi));
   }
 
   void prepareDataStructures(const unsigned int layerId);
+
+  /**
+   * Compute rho, the local energy density, for all cells in a given layer (ie fill cells_[layerId].rho[all cells])
+   * Computed differently for sillicon and scintillator cells 
+   * \param delta_c distance parameter for sillicon
+   * \param delta_r distance parameter for scintillator
+  */
   void calculateLocalDensity(const TILE& lt,
                              const unsigned int layerId,
                              float delta_c,
-                             float delta_r);  // return max density
+                             float delta_r);
+  
+  /**
+   * Compute delta (distance to nearest higher) and nearestHigher (ID of nearest higher) for all cells in given layer
+   * (ie fills cells_[layerId].delta[all cells] and cells_[layerId].nearestHigher[all cells])
+   * The range to search for is outlierDeltaFactor_ * delta_* (depends on sillicon/scintillator)
+   * \param delta_c distance parameter for sillicon
+   * \param delta_r distance parameter for scintillator
+  */
   void calculateDistanceToHigher(const TILE& lt, const unsigned int layerId, float delta_c, float delta_r);
+
+  /**
+   * For all hits on a given layer, compute whether it is a seed, outlier, or follower (in this case register to the nearest higher)
+   * Then expand clusters from seeds (setting point.clusterIndex for all points in each cluster)
+   * \param delta_c distance parameter for sillicon
+   * \param delta_r distance parameter for scintillator
+   * Depends also on \a kappa_ , sigmaNoise of each cell, and outlierDeltaFactor_
+  */
   int findAndAssignClusters(const unsigned int layerId, float delta_c, float delta_r);
+
+  /**
+   * COmpute layer cluster position
+   * \param v list of cells id in a cluster
+  */
   math::XYZPoint calculatePosition(const std::vector<int>& v, const unsigned int layerId) const;
+
+  ///< Fill density_ from computed rho (computed in calculateLocalDensity) for a given layer
   void setDensity(const unsigned int layerId);
 };
 

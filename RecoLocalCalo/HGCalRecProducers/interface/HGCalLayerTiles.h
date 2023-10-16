@@ -17,7 +17,7 @@
 template <typename T>
 class HGCalLayerTilesT {
 public:
-  typedef T type;
+  typedef T type; ///< TilesConstants (can be HGCalTilesConstants or HFNoseTilesConstants)
   void fill(const std::vector<float>& x,
             const std::vector<float>& y,
             const std::vector<float>& eta,

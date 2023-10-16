@@ -101,7 +101,7 @@ void HGCalCLUEAlgoT<T>::makeClusters() {
   tbb::this_task_arena::isolate([&] {
     tbb::parallel_for(size_t(0), size_t(2 * maxlayer_ + 2), [&](size_t i) {
       prepareDataStructures(i);
-      T lt;
+      T lt; // will be of type HGCalLayerTilesT<HGCalTilesConstants or HFNoseTilesConstants>
       lt.clear();
       lt.fill(cells_[i].x, cells_[i].y, cells_[i].eta, cells_[i].phi, cells_[i].isSi);
       float delta_c;  // maximum search distance (critical distance) for local
@@ -267,14 +267,14 @@ void HGCalCLUEAlgoT<T>::calculateLocalDensity(const T& lt, const unsigned int la
             unsigned int otherId = lt[binId][j];
             bool otherSi = isOnlySi || cellsOnLayer.isSi[otherId];
             if (otherSi) {  //silicon cells cannot talk to scintillator cells
-              if (distance(i, otherId, layerId, false) < delta) {
+              if (distance(i, otherId, layerId, false) < delta) { //Compute distance in (x;y)
                 cellsOnLayer.rho[i] += (i == otherId ? 1.f : 0.5f) * cellsOnLayer.weight[otherId];
               }
             }
           }
         }
       }
-    } else {
+    } else { //Scintillator
       float delta = delta_r;
       std::array<int, 4> search_box = lt.searchBoxEtaPhi(cellsOnLayer.eta[i] - delta,
                                                          cellsOnLayer.eta[i] + delta,
@@ -292,7 +292,7 @@ void HGCalCLUEAlgoT<T>::calculateLocalDensity(const T& lt, const unsigned int la
           for (unsigned int j = 0; j < binSize; j++) {
             unsigned int otherId = lt[binId][j];
             if (!cellsOnLayer.isSi[otherId]) {  //scintillator cells cannot talk to silicon cells
-              if (distance(i, otherId, layerId, true) < delta) {
+              if (distance(i, otherId, layerId, true) < delta) { //Distance in (eta; phi)
                 int iPhi = HGCScintillatorDetId(cellsOnLayer.detid[i]).iphi();
                 int otherIPhi = HGCScintillatorDetId(cellsOnLayer.detid[otherId]).iphi();
                 int iEta = HGCScintillatorDetId(cellsOnLayer.detid[i]).ieta();
@@ -379,12 +379,24 @@ void HGCalCLUEAlgoT<T>::calculateDistanceToHigher(const T& lt,
             unsigned int otherId = lt[binId][j];
             bool otherSi = isOnlySi || cellsOnLayer.isSi[otherId];
             if (otherSi) {  //silicon cells cannot talk to scintillator cells
-              float dist = distance(i, otherId, layerId, false);
+              float dist = distance(i, otherId, layerId, false); //Use (x;y) distance
               bool foundHigher = (cellsOnLayer.rho[otherId] > cellsOnLayer.rho[i]) ||
                                  (cellsOnLayer.rho[otherId] == cellsOnLayer.rho[i] &&
                                   cellsOnLayer.detid[otherId] > cellsOnLayer.detid[i]);
               // if dist == i_delta, then last comer being the nearest higher
               if (foundHigher && dist <= i_delta) {
+                /* Here the algorithm differs slightly from standalone CLUE.
+                In standalone CLUE, only points with dist <= range are considered.
+                Here, we consider all points in search box. This will lead to a change in the distribution of delta,
+                in the range [outlierDeltaFactor_*delta; +infinity].
+                However it should not have any influence on the output of the algorithm, ad in findAndAssignClusters there are only 2 conditions regarding delta:
+                cellsOnLayer.delta[i] > delta_c and cellsOnLayer.delta[i] > outlierDeltaFactor_ * delta
+                So there is no effect
+                (that is, as long as outlierDeltaFactor_ is greater than 1)
+
+                But if you use delta values in the range [outlierDeltaFactor_*delta; +infinity] you should expect results
+                that depend on binning size and position of point whithin the bin.
+                */
                 // update i_delta
                 i_delta = dist;
                 // update i_nearestHigher
@@ -405,8 +417,7 @@ void HGCalCLUEAlgoT<T>::calculateDistanceToHigher(const T& lt,
         cellsOnLayer.delta[i] = maxDelta;
         cellsOnLayer.nearestHigher[i] = -1;
       }
-    } else {
-      //similar to silicon
+    } else { //Scintillator : similar to silicon
       float delta = delta_r;
       auto range = outlierDeltaFactor_ * delta;
       std::array<int, 4> search_box = lt.searchBoxEtaPhi(cellsOnLayer.eta[i] - range,
@@ -426,6 +437,7 @@ void HGCalCLUEAlgoT<T>::calculateDistanceToHigher(const T& lt,
           for (unsigned int j = 0; j < binSize; j++) {
             unsigned int otherId = lt[binId][j];
             if (!cellsOnLayer.isSi[otherId]) {  //scintillator cells cannot talk to silicon cells
+              /* Same comment about delta distance check as in sillicon applied here */
               float dist = distance(i, otherId, layerId, true);
               bool foundHigher = (cellsOnLayer.rho[otherId] > cellsOnLayer.rho[i]) ||
                                  (cellsOnLayer.rho[otherId] == cellsOnLayer.rho[i] &&
@@ -474,13 +486,16 @@ int HGCalCLUEAlgoT<T>::findAndAssignClusters(const unsigned int layerId, float d
   std::vector<int> localStack;
   // find cluster seeds and outlier
   for (unsigned int i = 0; i < numberOfCells; i++) {
-    float rho_c = kappa_ * cellsOnLayer.sigmaNoise[i];
+    float rho_c = kappa_ * cellsOnLayer.sigmaNoise[i]; ///< Critical energy density to become a seed candidate
     bool isSi = rhtools_.isOnlySilicon(layerId) || cellsOnLayer.isSi[i];
     float delta = isSi ? delta_c : delta_r;
 
     // initialize clusterIndex
     cellsOnLayer.clusterIndex[i] = -1;
+
+    // Seed if : far enough from nearest higher && enough energy density
     bool isSeed = (cellsOnLayer.delta[i] > delta) && (cellsOnLayer.rho[i] >= rho_c);
+    // Outlier if : very far from nearest higher && low energy density
     bool isOutlier = (cellsOnLayer.delta[i] > outlierDeltaFactor_ * delta) && (cellsOnLayer.rho[i] < rho_c);
     if (isSeed) {
       cellsOnLayer.clusterIndex[i] = nClustersOnLayer;
