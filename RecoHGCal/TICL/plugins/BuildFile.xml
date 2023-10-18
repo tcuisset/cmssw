@@ -32,4 +32,5 @@
 <use name="fastjet"/>
 <library file="*.cc" name="RecoHGCalTICLPlugins">
   <flags EDM_PLUGIN="1"/>
+  <Flags CPPDEFINES="EDM_ML_DEBUG"/>
 </library>
