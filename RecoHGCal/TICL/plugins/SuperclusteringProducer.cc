@@ -69,13 +69,53 @@ public:
 
 class PlaceholderNNInput{
 public:
-  PlaceholderNNInput() : featureCount(1) {}
+  PlaceholderNNInput() {};
 
-  const int featureCount;
+  static constexpr int featureCount{9};
+  // SCaling values for network input, taken from Alessandro's notebook
+  static constexpr std::array<float, featureCount>  scalingFactorTensor{{5.009924761018587,
+  1.0018188597242355,
+  0.010292174692060528,
+  0.16288265085698453,
+  0.04559109321673852,
+  0.1682473240927026,
+  0.15967887456557378,
+  0.0015586544595969428,
+  0.010722259319073196}};
+  static constexpr std::array<float, featureCount> scalingMinTensor{{0.49977842782898685,
+  0.4994941706919238,
+  -0.020606080641338675,
+  0.5002919753099604,
+  -0.009400341457049127,
+  0.49997065712986616,
+  0.4996155459607123,
+  -0.033067499716928135,
+  -0.05139944510782373}};
 
-  void fillFeatures(Eigen::TensorMap<Eigen::Tensor<float, 2, 1, Eigen::DenseIndex>, 16> eigenTensor, int batchIndex, Trackster const& ts_base, Trackster const& ts_toCluster) {
-    float deltaEta = (ts_toCluster.eigenvectors(0) - ts_base.eigenvectors(0)).Eta();
-    eigenTensor(batchIndex, 0) = deltaEta; //dummy feature
+//Eigen::TensorFixedSize<float, Eigen::Sizes<featureCount>>
+  void fillFeatures(tensorflow::Tensor& inputTensor, int batchIndex, Trackster const& ts_base, Trackster const& ts_toCluster) {
+    //float deltaEta = (ts_toCluster.eigenvectors(0) - ts_base.eigenvectors(0)).Eta();
+    /*  We use the barycenter for most of the variables below as that is what seems to have been used by Alessandro Tarabini, 
+      but using PCA might be better. 
+     (It would need retraining of the DNN)
+    */
+    auto eigenTensor = inputTensor.tensor<float, 2>();
+    eigenTensor(batchIndex, 0) = std::abs(ts_toCluster.barycenter().Eta() - ts_base.barycenter().Eta());; //DeltaEtaBaryc
+    eigenTensor(batchIndex, 1) = std::abs(ts_toCluster.barycenter().Phi() - ts_base.barycenter().phi());; //DeltaPhiBaryc
+    eigenTensor(batchIndex, 2) = ts_toCluster.raw_energy(); //multi_en
+    eigenTensor(batchIndex, 3) = ts_toCluster.barycenter().Eta(); //multi_eta
+    eigenTensor(batchIndex, 4) = (ts_toCluster.raw_energy() * std::sin(ts_toCluster.barycenter().Theta())); //multi_pt
+    eigenTensor(batchIndex, 5) = ts_base.barycenter().Eta(); //seedEta
+    eigenTensor(batchIndex, 6) = ts_base.barycenter().Phi(); //seedPhi
+    eigenTensor(batchIndex, 7) = ts_base.raw_energy(); //seedEn
+    eigenTensor(batchIndex, 8) = (ts_base.raw_energy() * std::sin(ts_toCluster.barycenter().Theta())); //seedPt
+
+    // TODO replace this with proper matrix multiplication (probably outside trackster loop)
+    // or better : put inside tensorflow graph
+    for (int i = 0; i < featureCount; i++) {
+      eigenTensor(batchIndex, i) *= scalingFactorTensor[i];
+      eigenTensor(batchIndex, i) += scalingMinTensor[i];
+    }
   }
 };
 
@@ -93,10 +133,6 @@ void SuperclusteringProducer::produce(edm::Event &evt, const edm::EventSetup &es
   PlaceholderNNInput nnInput;
   const int feature_count = nnInput.featureCount;
   tensorflow::Tensor inputTensor(tensorflow::DT_FLOAT, {batch_size, feature_count});
-  Eigen::TensorMap<Eigen::Tensor<float, 2, 1, Eigen::DenseIndex>, 16> eigenTensor = inputTensor.tensor<float, 2>();
-  //for (Trackster const& ts_base : *inputTracksters) {
-  //  for (Trackster const& ts_toCluster : *inputTracksters) {
-  
 
   //Sorting tracksters by decreasing order of pT
   std::vector<std::size_t> trackstersIndicesPt(inputTracksters->size()); // Vector of indices into inputTracksters, sorted by decreasing order of pt
@@ -107,13 +143,13 @@ void SuperclusteringProducer::produce(edm::Event &evt, const edm::EventSetup &es
 
   for (std::size_t ts_base_idx = 0; ts_base_idx < tracksterCount; ts_base_idx++) {
     Trackster const& ts_base = (*inputTracksters)[trackstersIndicesPt[ts_base_idx]];
-    int ts_toCluster_idx_tensor = 0; // index of trackster in tensor, possibly shifted by one from ts_toCluster_idx
+    std::size_t ts_toCluster_idx_tensor = 0; // index of trackster in tensor, possibly shifted by one from ts_toCluster_idx
     for (std::size_t ts_toCluster_idx = 0; ts_toCluster_idx < tracksterCount; ts_toCluster_idx++) {
         
-        if (ts_base_idx != ts_toCluster_idx) { // Don't supercluster trackster with itself
+        if (trackstersIndicesPt[ts_base_idx] != ts_toCluster_idx) { // Don't supercluster trackster with itself
             Trackster const& ts_toCluster = (*inputTracksters)[ts_toCluster_idx]; // no need to sort by pt here
 
-            nnInput.fillFeatures(eigenTensor, ts_base_idx*(tracksterCount-1) + ts_toCluster_idx_tensor, ts_base, ts_toCluster);
+            nnInput.fillFeatures(inputTensor, ts_base_idx*(tracksterCount-1) + ts_toCluster_idx_tensor, ts_base, ts_toCluster);
             ts_toCluster_idx_tensor++; 
         }
     }
@@ -121,7 +157,7 @@ void SuperclusteringProducer::produce(edm::Event &evt, const edm::EventSetup &es
   LogDebug("HGCalTICLSuperclustering") << "Input tensor " << inputTensor.SummarizeValue(100);
 
   std::vector<tensorflow::Tensor> outputs;
-  tensorflow::run(tfSession, {{"input_1", inputTensor}}, {"sequential/dense/Sigmoid"}, &outputs);
+  tensorflow::run(tfSession, {{"input_11", inputTensor}}, {"sequential_10/dense_43/Sigmoid"}, &outputs);
   assert(outputs.size() == 1);
   tensorflow::Tensor& outputTensor = outputs[0];
   const auto eigenOutputTensor = outputTensor.flat<float>();
@@ -143,7 +179,7 @@ void SuperclusteringProducer::produce(edm::Event &evt, const edm::EventSetup &es
 
     for (std::size_t ts_toCluster_idx = 0; ts_toCluster_idx < tracksterCount; ts_toCluster_idx++) {
         
-        if (ts_base_idx != ts_toCluster_idx) { // Don't supercluster trackster with itself
+        if (trackstersIndicesPt[ts_base_idx] != ts_toCluster_idx) { // Don't supercluster trackster with itself
             if (!tracksterMask[ts_toCluster_idx] // candidate trackster is not already part of a supercluster
                  // Candidate trackster passes the neural network working point
                  && eigenOutputTensor(ts_base_idx*(tracksterCount-1) + ts_toCluster_idx_tensor) > nnWorkingPoint_) {

@@ -30,7 +30,8 @@ def customiseTICLFromReco(process):
                             process.TFESSource,
                             process.ticlLayerTileTask,
                             process.ticlIterationsTask,
-                            process.ticlTracksterMergeTask)
+                            process.ticlTracksterMergeTask,
+                            cms.Task(process.ticlTrackstersSuperclustering))
 # Validation
     process.TICL_ValidationProducers = cms.Task(process.hgcalRecHitMapProducer,
                                                 process.lcAssocByEnergyScoreProducer,
