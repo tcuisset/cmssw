@@ -72,6 +72,7 @@ public:
   PlaceholderNNInput() {};
 
   static constexpr int featureCount{9};
+  /*
   // SCaling values for network input, taken from Alessandro's notebook
   static constexpr std::array<float, featureCount>  scalingFactorTensor{{5.009924761018587,
   1.0018188597242355,
@@ -91,7 +92,7 @@ public:
   0.4996155459607123,
   -0.033067499716928135,
   -0.05139944510782373}};
-
+  */
 //Eigen::TensorFixedSize<float, Eigen::Sizes<featureCount>>
   void fillFeatures(tensorflow::Tensor& inputTensor, int batchIndex, Trackster const& ts_base, Trackster const& ts_toCluster) {
     //float deltaEta = (ts_toCluster.eigenvectors(0) - ts_base.eigenvectors(0)).Eta();
@@ -112,10 +113,10 @@ public:
 
     // TODO replace this with proper matrix multiplication (probably outside trackster loop)
     // or better : put inside tensorflow graph
-    for (int i = 0; i < featureCount; i++) {
+    /*for (int i = 0; i < featureCount; i++) {
       eigenTensor(batchIndex, i) *= scalingFactorTensor[i];
       eigenTensor(batchIndex, i) += scalingMinTensor[i];
-    }
+    }*/
   }
 };
 
@@ -157,7 +158,7 @@ void SuperclusteringProducer::produce(edm::Event &evt, const edm::EventSetup &es
   LogDebug("HGCalTICLSuperclustering") << "Input tensor " << inputTensor.SummarizeValue(100);
 
   std::vector<tensorflow::Tensor> outputs;
-  tensorflow::run(tfSession, {{"input_11", inputTensor}}, {"sequential_10/dense_43/Sigmoid"}, &outputs);
+  tensorflow::run(tfSession, {{"input", inputTensor}}, {"output_squeeze"}, &outputs);
   assert(outputs.size() == 1);
   tensorflow::Tensor& outputTensor = outputs[0];
   const auto eigenOutputTensor = outputTensor.flat<float>();
