@@ -16,7 +16,7 @@ from SimCalorimetry.HGCalAssociatorProducers.simTracksterAssociatorByEnergyScore
 from SimCalorimetry.HGCalAssociatorProducers.TSToSimTSAssociation_cfi import tracksterSimTracksterAssociationLinking, tracksterSimTracksterAssociationPR, tracksterSimTracksterAssociationLinkingbyCLUE3D, tracksterSimTracksterAssociationPRbyCLUE3D, tracksterSimTracksterAssociationLinkingPU, tracksterSimTracksterAssociationPRPU
 
 
-def customiseTICLFromReco(process):
+def customiseTICLFromReco(process, pileup=False):
     # TensorFlow ESSource
     process.TFESSource = cms.Task(process.trackdnn_source)
 
@@ -44,9 +44,10 @@ def customiseTICLFromReco(process):
                                                 process.tracksterSimTracksterAssociationPR,
                                                 process.tracksterSimTracksterAssociationLinkingbyCLUE3D,
                                                 process.tracksterSimTracksterAssociationPRbyCLUE3D,
-                                                process.tracksterSimTracksterAssociationLinkingPU,
-                                                process.tracksterSimTracksterAssociationPRPU
                                                 )
+    if pileup:
+        process.TICL_ValidationProducers.add(process.tracksterSimTracksterAssociationLinkingPU,
+                                                process.tracksterSimTracksterAssociationPRPU)
 
     process.TICL_Validator = cms.Task(process.hgcalValidator)
     process.TICL_Validation = cms.Path(process.TICL_ValidationProducers,
