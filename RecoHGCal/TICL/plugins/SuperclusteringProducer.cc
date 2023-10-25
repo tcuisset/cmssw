@@ -50,7 +50,7 @@ SuperclusteringProducer::SuperclusteringProducer(const edm::ParameterSet &ps)
       //clusters_token_(consumes<std::vector<reco::CaloCluster>>(ps.getParameter<edm::InputTag>("layer_clusters"))),
       tfDnnToken_(esConsumes(edm::ESInputTag("", ps.getParameter<std::string>("tfDnnLabel")))),
       nnWorkingPoint_(ps.getParameter<double>("nnWorkingPoint")) {
-  produces<std::vector<std::vector<std::size_t>>>("superclusteredTracksters"); // list of sets of indices of tracksters corresponding to a multicluster
+  produces<SuperclusteringResult>("superclusteredTracksters"); // list of sets of indices of tracksters corresponding to a multicluster
 }
 
 void SuperclusteringProducer::beginJob() {}
@@ -100,6 +100,8 @@ public:
       but using PCA might be better. 
      (It would need retraining of the DNN)
     */
+    assert(inputTensor.dims() == 2 && inputTensor.dim_size(1) == 9);
+    assert(batchIndex < inputTensor.dim_size(0));
     auto eigenTensor = inputTensor.tensor<float, 2>();
     eigenTensor(batchIndex, 0) = std::abs(ts_toCluster.barycenter().Eta() - ts_base.barycenter().Eta());; //DeltaEtaBaryc
     eigenTensor(batchIndex, 1) = std::abs(ts_toCluster.barycenter().Phi() - ts_base.barycenter().phi());; //DeltaPhiBaryc
@@ -124,16 +126,14 @@ void SuperclusteringProducer::produce(edm::Event &evt, const edm::EventSetup &es
   edm::Handle<std::vector<Trackster>> inputTracksters;
   evt.getByToken(tracksters_clue3d_token_, inputTracksters);
 
-  auto outputTracksters = std::make_unique<std::vector<Trackster>>();
-
   tensorflow::Session const* tfSession = es.getData(tfDnnToken_).getSession();
   
   const std::size_t tracksterCount = inputTracksters->size();
-  const int batch_size = tracksterCount * (tracksterCount - 1);
+  const int mainBatchSize = tracksterCount * (tracksterCount - 1);
 
   PlaceholderNNInput nnInput;
   const int feature_count = nnInput.featureCount;
-  tensorflow::Tensor inputTensor(tensorflow::DT_FLOAT, {batch_size, feature_count});
+  tensorflow::Tensor inputTensor(tensorflow::DT_FLOAT, {mainBatchSize, feature_count});
 
   //Sorting tracksters by decreasing order of pT
   std::vector<std::size_t> trackstersIndicesPt(inputTracksters->size()); // Vector of indices into inputTracksters, sorted by decreasing order of pt
@@ -157,17 +157,34 @@ void SuperclusteringProducer::produce(edm::Event &evt, const edm::EventSetup &es
   }
   LogDebug("HGCalTICLSuperclustering") << "Input tensor " << inputTensor.SummarizeValue(100);
 
-  std::vector<tensorflow::Tensor> outputs;
-  tensorflow::run(tfSession, {{"input", inputTensor}}, {"output_squeeze"}, &outputs);
-  assert(outputs.size() == 1);
-  tensorflow::Tensor& outputTensor = outputs[0];
-  const auto eigenOutputTensor = outputTensor.flat<float>();
-  LogDebug("HGCalTICLSuperclustering") << "Output tensor " << outputTensor.SummarizeValue(100);
+  /* Evaluate in minibatches since running with trackster count = 3000 leads to a short-lived ~15GB memory allocation
+  As 3000^2 = 9e6 using a 
+  */
+  const int miniBatchSize = 1e6;
+  std::vector<tensorflow::Tensor> miniBatchOutputs;
+  for (int miniBatchStart = 0; miniBatchStart < mainBatchSize; miniBatchStart += miniBatchSize) {
+    tensorflow::Tensor miniBatchInput = inputTensor.Slice(miniBatchStart, std::min(miniBatchStart+miniBatchSize, mainBatchSize));
+
+    std::vector<tensorflow::Tensor> outputs;
+    tensorflow::run(tfSession, {{"input", miniBatchInput}}, {"output_squeeze"}, &outputs);
+    assert(outputs.size() == 1);
+    miniBatchOutputs.push_back(std::move(outputs[0]));
+  }
+
+  // Helper function to access DNN results abstracting away the minibatches
+  auto accessOutputTensor = [&miniBatchOutputs](int batchNumber) -> float {
+    assert(static_cast<std::size_t>(batchNumber / miniBatchSize) < miniBatchOutputs.size());
+    assert(miniBatchOutputs.at(batchNumber / miniBatchSize).dims() == 1);
+    assert(static_cast<int>(batchNumber % miniBatchSize) < miniBatchOutputs.at(batchNumber / miniBatchSize).dim_size(0));
+
+    return miniBatchOutputs.at(batchNumber / miniBatchSize).tensor<float, 1>()(batchNumber % miniBatchSize);
+  };
+  LogDebug("HGCalTICLSuperclustering") << "First output tensor " << miniBatchOutputs.at(0).SummarizeValue(100);
 
   // Build mask of tracksters already superclustered
   std::vector<bool> tracksterMask(tracksterCount, false); // Mask of tracksters, indexed with same indices as inputTracksters
 
-  auto outputSuperclusters = std::make_unique<std::vector<std::vector<std::size_t>>>();
+  auto outputSuperclusters = std::make_unique<SuperclusteringResult>();
   // Supercluster tracksters
   for (std::size_t ts_base_idx = 0; ts_base_idx < tracksterCount; ts_base_idx++) {
     if (tracksterMask[trackstersIndicesPt[ts_base_idx]])
@@ -183,7 +200,7 @@ void SuperclusteringProducer::produce(edm::Event &evt, const edm::EventSetup &es
         if (trackstersIndicesPt[ts_base_idx] != ts_toCluster_idx) { // Don't supercluster trackster with itself
             if (!tracksterMask[ts_toCluster_idx] // candidate trackster is not already part of a supercluster
                  // Candidate trackster passes the neural network working point
-                 && eigenOutputTensor(ts_base_idx*(tracksterCount-1) + ts_toCluster_idx_tensor) > nnWorkingPoint_) {
+                 && accessOutputTensor(ts_base_idx*(tracksterCount-1) + ts_toCluster_idx_tensor) > nnWorkingPoint_) {
                 //float const& dnnScore = eigenOutputTensor(ts_base_idx*(tracksterCount-1) + ts_toCluster_idx_tensor);
 
                 superclusteredTracksterIndices.push_back(ts_toCluster_idx);
@@ -198,7 +215,7 @@ void SuperclusteringProducer::produce(edm::Event &evt, const edm::EventSetup &es
     outputSuperclusters->push_back(std::move(superclusteredTracksterIndices));
   }
 
-  evt.put(std::move(outputSuperclusters), "superclusteredTracksters"); // placeholder output
+  evt.put(std::move(outputSuperclusters), "superclusteredTracksters");
 }
 
 
