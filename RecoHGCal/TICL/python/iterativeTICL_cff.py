@@ -15,7 +15,7 @@ from RecoHGCal.TICL.trackstersMergeProducer_cfi import trackstersMergeProducer a
 from RecoHGCal.TICL.trackstersMergeProducerV3_cfi import trackstersMergeProducerV3 as _trackstersMergeProducerV3
 from RecoHGCal.TICL.tracksterSelectionTf_cfi import *
 from RecoHGCal.TICL.superclusteringProducer_cfi import superclusteringProducer as _superclusteringProducer
-from RecoHGCal.TICL.superclusteringTf_cfi import *
+from RecoHGCal.TICL.superclusteringTf_cff import *
 
 ticlLayerTileTask = cms.Task(ticlLayerTileProducer)
 
