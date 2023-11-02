@@ -14,8 +14,10 @@
   <class name="edm::Wrapper<ticl::Trackster>" />
   <class name="edm::Wrapper<std::vector<ticl::Trackster> >" />
 
-  <class name="std::vector<std::vector<std::size_t>>" /> <!-- for SuperclusteringProducer (trackster indices) -->
-  <class name="edm::Wrapper<std::vector<std::vector<std::size_t>>>" />
+  <class name="ticl::SuperclusteringResult" /> <!-- for SuperclusteringProducer (trackster indices) -->
+  <class name="edm::Wrapper<ticl::SuperclusteringResult>" />
+  <class name="ticl::SuperclusteringDNNScore" /> 
+  <class name="edm::Wrapper<ticl::SuperclusteringDNNScore>" />
  
   <class name="ticl::TICLLayerTile" persistent="false">
     <field name="tile_" transient="true"/>

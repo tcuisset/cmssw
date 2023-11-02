@@ -58,6 +58,9 @@ SuperclusteringProducer::SuperclusteringProducer(const edm::ParameterSet &ps)
       dnnVersion_(ps.getParameter<std::string>("dnnVersion")),
       nnWorkingPoint_(ps.getParameter<double>("nnWorkingPoint")) {
   produces<SuperclusteringResult>("superclusteredTracksters"); // list of sets of indices of tracksters corresponding to a multicluster
+#ifdef EDM_ML_DEBUG
+  produces<SuperclusteringDNNScore>("superclusteringTracksterDNNScore"); // DNN scores of trackster -> trackster
+#endif
 }
 
 void SuperclusteringProducer::beginJob() {}
@@ -252,8 +255,22 @@ void SuperclusteringProducer::produce(edm::Event &evt, const edm::EventSetup &es
   std::vector<bool> tracksterMask(tracksterCount, false); // Mask of tracksters, indexed with same indices as inputTracksters
 
   auto outputSuperclusters = std::make_unique<SuperclusteringResult>();
+#ifdef EDM_ML_DEBUG
+  auto outputTracksterDNNScore = std::make_unique<SuperclusteringDNNScore>();
+#endif
   // Supercluster tracksters
   for (std::size_t ts_base_idx = 0; ts_base_idx < tracksterCount; ts_base_idx++) {
+    #ifdef EDM_ML_DEBUG
+    int ts_inner_idx_tensor = 0; // index of trackster in tensor, possibly shifted by one from ts_toCluster_idx
+    for (std::size_t ts_toCluster_idx = 0; ts_toCluster_idx < tracksterCount; ts_toCluster_idx++) {
+        outputTracksterDNNScore->emplace_back();
+        if (trackstersIndicesPt[ts_base_idx] != ts_toCluster_idx) { // Don't supercluster trackster with itself
+          outputTracksterDNNScore->back().push_back(accessOutputTensor(ts_base_idx*(tracksterCount-1) + ts_inner_idx_tensor));
+          ts_inner_idx_tensor++;
+        }
+    }
+    #endif
+
     if (tracksterMask[trackstersIndicesPt[ts_base_idx]])
       continue;
     //Trackster const& ts_base = (*inputTracksters)[trackstersIndicesPt[ts_base_idx]];
@@ -284,6 +301,9 @@ void SuperclusteringProducer::produce(edm::Event &evt, const edm::EventSetup &es
   }
 
   evt.put(std::move(outputSuperclusters), "superclusteredTracksters");
+  #ifdef EDM_ML_DEBUG
+  evt.put(std::move(outputTracksterDNNScore), "superclusteringTracksterDNNScore");
+  #endif
 }
 
 

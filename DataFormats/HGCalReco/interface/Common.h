@@ -31,6 +31,7 @@ namespace ticl {
 namespace ticl {
   typedef std::vector<std::pair<unsigned int, float> > TICLClusterFilterMask;
   typedef std::vector<std::vector<std::size_t>> SuperclusteringResult;
+  typedef std::vector<std::vector<float>> SuperclusteringDNNScore;
 }  // namespace ticl
 
 #endif  // DataFormats_HGCalReco_Common_h
