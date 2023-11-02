@@ -114,6 +114,7 @@ private:
   const edm::EDGetTokenT<hgcal::RecoToSimCollectionSimTracksters> MergeRecoToSimPU_token_;
   const edm::EDGetTokenT<hgcal::SimToRecoCollectionSimTracksters> MergeSimToRecoPU_token_;
   const edm::EDGetTokenT<ticl::SuperclusteringResult> superclustering_token_;
+  const edm::EDGetTokenT<ticl::SuperclusteringDNNScore> superclustering_DNNScore_token_;
   const edm::EDGetTokenT<std::vector<SimCluster>> simclusters_token_;
   const edm::EDGetTokenT<std::vector<CaloParticle>> caloparticles_token_;
 
@@ -394,6 +395,7 @@ private:
   std::vector<std::vector<float>> MergeTracksters_simToReco_PU_sharedE;
 
   ticl::SuperclusteringResult superclusteredTracksters;
+  ticl::SuperclusteringDNNScore superclusteringDNNScore;
 
   std::vector<uint32_t> cluster_seedID;
   std::vector<float> cluster_energy;
@@ -767,6 +769,8 @@ TICLDumper::TICLDumper(const edm::ParameterSet& ps)
           ps.getParameter<edm::InputTag>("MergesimToRecoAssociatorPU"))),
       superclustering_token_(consumes<ticl::SuperclusteringResult>(
           ps.getParameter<edm::InputTag>("superclustering"))),
+      superclustering_DNNScore_token_(consumes<ticl::SuperclusteringDNNScore>(
+          ps.getParameter<edm::InputTag>("superclusteringDNNScore"))),
       simclusters_token_(consumes(ps.getParameter<edm::InputTag>("simclusters"))),
       caloparticles_token_(consumes(ps.getParameter<edm::InputTag>("caloparticles"))),
       geometry_token_(esConsumes<CaloGeometry, CaloGeometryRecord, edm::Transition::BeginRun>()),
@@ -1073,6 +1077,7 @@ void TICLDumper::beginJob() {
   if (saveSuperclustering_) {
     superclustering_tree_ = fs->make<TTree>("superclustering", "Superclustering in HGCAL CE-E");
     superclustering_tree_->Branch("superclusteredTracksters", &superclusteredTracksters);
+    superclustering_tree_->Branch("superclusteredTracksters", &superclusteringDNNScore);
   }
 
   if (saveTracks_) {
@@ -1265,6 +1270,12 @@ void TICLDumper::analyze(const edm::Event& event, const edm::EventSetup& setup) 
   edm::Handle<ticl::SuperclusteringResult> superclustering_h;
   event.getByToken(superclustering_token_, superclustering_h);
   superclusteredTracksters = *superclustering_h;
+
+  edm::Handle<ticl::SuperclusteringDNNScore> superclustering_DNNScore_h;
+  event.getByToken(superclustering_DNNScore_token_, superclustering_DNNScore_h);
+  // superclustering DNN score is not always saved
+  if (superclustering_DNNScore_h.isValid())
+    superclusteringDNNScore = *superclustering_DNNScore_h;
   
   edm::Handle<std::vector<CaloParticle>> caloparticles_h;
   event.getByToken(caloparticles_token_, caloparticles_h);
@@ -2105,6 +2116,7 @@ void TICLDumper::fillDescriptions(edm::ConfigurationDescriptions& descriptions) 
   desc.add<edm::InputTag>("MergesimToRecoAssociatorPU",
                           edm::InputTag("tracksterSimTracksterAssociationLinkingPU", "simToReco"));
   desc.add<edm::InputTag>("superclustering", edm::InputTag("ticlTrackstersSuperclustering", "superclusteredTracksters"));
+  desc.add<edm::InputTag>("superclusteringDNNScore", edm::InputTag("ticlTrackstersSuperclustering", "superclusteringTracksterDNNScore"));
   desc.add<edm::InputTag>("simclusters", edm::InputTag("mix", "MergedCaloTruth"));
   desc.add<edm::InputTag>("caloparticles", edm::InputTag("mix", "MergedCaloTruth"));
   desc.add<std::string>("detector", "HGCAL");
