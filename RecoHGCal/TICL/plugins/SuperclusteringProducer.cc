@@ -261,6 +261,7 @@ void SuperclusteringProducer::produce(edm::Event &evt, const edm::EventSetup &es
 
     // Build indices of tracksters in supercluster, starting with current trackster
     std::vector<std::size_t> superclusteredTracksterIndices{{trackstersIndicesPt[ts_base_idx]}};
+    tracksterMask[trackstersIndicesPt[ts_base_idx]] = true; // Mask seed of trackster
 
     for (std::size_t ts_toCluster_idx = 0; ts_toCluster_idx < tracksterCount; ts_toCluster_idx++) {
         
