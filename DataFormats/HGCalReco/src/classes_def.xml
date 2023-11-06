@@ -16,6 +16,10 @@
 
   <class name="ticl::SuperclusteringResult" /> <!-- for SuperclusteringProducer (trackster indices) -->
   <class name="edm::Wrapper<ticl::SuperclusteringResult>" />
+  <class name="ticl::SuperclusteringDNNScoreElement">
+    <field name="dnnScore_" comment="[0,1,8]" /> <!-- store in 8 bits integer, range [0, 1] -->
+  </class>
+  <!--  <class name="std::tuple<std::size_t, std::size_t, float>" /> for ticl::SuperclusteringDNNScore -->
   <class name="ticl::SuperclusteringDNNScore" /> 
   <class name="edm::Wrapper<ticl::SuperclusteringDNNScore>" />
  
