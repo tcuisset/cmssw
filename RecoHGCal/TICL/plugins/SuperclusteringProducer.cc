@@ -1,5 +1,6 @@
 #include <numeric>      // std::iota
-#include <algorithm>    // std::sort, std::stable_sort
+#include <algorithm>    // std::sort, std::stable_sort, std::copy
+#include <sstream>      // std::stringstream
 
 #include <Math/Vector2D.h>
 #include <Math/Vector3D.h>
@@ -21,6 +22,7 @@
 #include "PhysicsTools/TensorFlow/interface/TensorFlow.h"
 #include "PhysicsTools/TensorFlow/interface/TfGraphDefWrapper.h"
 
+#include "DataFormats/Math/interface/deltaPhi.h"
 #include "DataFormats/CaloRecHit/interface/CaloCluster.h"
 #include "DataFormats/HGCalReco/interface/Common.h"
 #include "DataFormats/HGCalReco/interface/Trackster.h"
@@ -194,16 +196,13 @@ void SuperclusteringProducer::produce(edm::Event &evt, const edm::EventSetup &es
   tensorflow::Session const* tfSession = es.getData(tfDnnToken_).getSession();
   
   const std::size_t tracksterCount = inputTracksters->size();
-  const int mainBatchSize = tracksterCount * (tracksterCount - 1);
+  //const int mainBatchSize = tracksterCount * (tracksterCount - 1);
 
   std::unique_ptr<AbstractDNNInput> nnInput;
   if (dnnVersion_ == "alessandro-v1")
     nnInput = std::make_unique<DNNInputAlessandroV1>();
   else if (dnnVersion_ == "alessandro-v2")
     nnInput = std::make_unique<DNNInputAlessandroV2>();
-
-  const int feature_count = nnInput->featureCount();
-  tensorflow::Tensor inputTensor(tensorflow::DT_FLOAT, {mainBatchSize, feature_count});
 
   //Sorting tracksters by decreasing order of pT
   std::vector<std::size_t> trackstersIndicesPt(inputTracksters->size()); // Vector of indices into inputTracksters, sorted by decreasing order of pt
@@ -212,92 +211,127 @@ void SuperclusteringProducer::produce(edm::Event &evt, const edm::EventSetup &es
     return (*inputTracksters)[i1].raw_pt() > (*inputTracksters)[i2].raw_pt();
   });
 
-  for (std::size_t ts_base_idx = 0; ts_base_idx < tracksterCount; ts_base_idx++) {
-    Trackster const& ts_base = (*inputTracksters)[trackstersIndicesPt[ts_base_idx]];
-    std::size_t ts_toCluster_idx_tensor = 0; // index of trackster in tensor, possibly shifted by one from ts_toCluster_idx
-    for (std::size_t ts_toCluster_idx = 0; ts_toCluster_idx < tracksterCount; ts_toCluster_idx++) {
-        
-        if (trackstersIndicesPt[ts_base_idx] != ts_toCluster_idx) { // Don't supercluster trackster with itself
-            Trackster const& ts_toCluster = (*inputTracksters)[ts_toCluster_idx]; // no need to sort by pt here
-
-            nnInput->fillFeatures(inputTensor, ts_base_idx*(tracksterCount-1) + ts_toCluster_idx_tensor, ts_base, ts_toCluster);
-            ts_toCluster_idx_tensor++; 
-        }
-    }
-  }
-  LogDebug("HGCalTICLSuperclustering") << "Input tensor " << inputTensor.SummarizeValue(100);
+  const int feature_count = nnInput->featureCount();
 
   /* Evaluate in minibatches since running with trackster count = 3000 leads to a short-lived ~15GB memory allocation
-  As 3000^2 = 9e6 using a 
+  Also we do not know in advance how many superclustering candidate pairs there are going to be
   */
-  const int miniBatchSize = 1e6;
-  std::vector<tensorflow::Tensor> miniBatchOutputs;
-  for (int miniBatchStart = 0; miniBatchStart < mainBatchSize; miniBatchStart += miniBatchSize) {
-    tensorflow::Tensor miniBatchInput = inputTensor.Slice(miniBatchStart, std::min(miniBatchStart+miniBatchSize, mainBatchSize));
+  const unsigned long miniBatchSize = 1e6;
 
-    std::vector<tensorflow::Tensor> outputs;
-    tensorflow::run(tfSession, {{"input", miniBatchInput}}, {"output_squeeze"}, &outputs);
-    assert(outputs.size() == 1);
-    miniBatchOutputs.push_back(std::move(outputs[0]));
+  std::vector<tensorflow::Tensor> inputTensorBatches; 
+  // How far along in the latest tensor of inputTensorBatches are we. Set to miniBatchSize to trigger the creation of the tensor batch on first run
+  std::size_t candidateIndexInCurrentBatch = miniBatchSize;
+  // List of all (ts_seed_id; ts_cand_id) selected for DNN inference (same layout as inputTensorBatches) 
+  // Index is in global trackster collection (not pt ordered)
+  std::vector<std::vector<std::pair<std::size_t, std::size_t>>> tracksterIndicesUsedInDNN; 
+
+  // First loop on all tracksters
+  for (std::size_t ts_seed_idx = 0; ts_seed_idx < tracksterCount; ts_seed_idx++) {
+    Trackster const& ts_seed = (*inputTracksters)[trackstersIndicesPt[ts_seed_idx]];
+
+    // Second loop on superclustering candidates tracksters
+    // Only look at one pair (seed, toCluster) once where the seed pT is higher (and don't supercluster trackster with itself)
+    for (std::size_t ts_cand_idx = ts_seed_idx+1; ts_cand_idx < tracksterCount; ts_cand_idx++) {
+      Trackster const& ts_cand = (*inputTracksters)[trackstersIndicesPt[ts_cand_idx]];
+      // Check that the two tracksters could reasonnably be superclustered (no need to run DNN inference otherwise)
+      // Using delta eta and delta phi windows
+      if (std::abs(ts_seed.barycenter().Eta() - ts_cand.barycenter().Eta()) < 0.1
+          && deltaPhi(ts_seed.barycenter().Phi(), ts_cand.barycenter().Phi()) < 0.5) { 
+        // Add candidate pair for DNN
+
+        // First check if we need to add an additional batch
+        if (candidateIndexInCurrentBatch >= miniBatchSize) {
+          // Create new batch
+          assert(candidateIndexInCurrentBatch == miniBatchSize);
+          //Estimate how much is remaining and don't allocate a full batch in this case
+          // static_cast<long> is required to avoid narrowing error
+          inputTensorBatches.emplace_back(tensorflow::DT_FLOAT, 
+              tensorflow::TensorShape({static_cast<long>(std::min(miniBatchSize, (tracksterCount-ts_seed_idx) * (tracksterCount - ts_seed_idx - 1u))), feature_count})); // TODO probably tracksterCount * (tracksterCount - 1)/2 is enough
+          candidateIndexInCurrentBatch = 0;
+          tracksterIndicesUsedInDNN.emplace_back();
+        }
+
+        nnInput->fillFeatures(inputTensorBatches.back(), candidateIndexInCurrentBatch, ts_seed, ts_cand);
+        candidateIndexInCurrentBatch++;
+        tracksterIndicesUsedInDNN.back().emplace_back(trackstersIndicesPt[ts_seed_idx], trackstersIndicesPt[ts_cand_idx]);
+      }
+    }
   }
 
-  // Helper function to access DNN results abstracting away the minibatches
-  auto accessOutputTensor = [&miniBatchOutputs](int batchNumber) -> float {
-    assert(static_cast<std::size_t>(batchNumber / miniBatchSize) < miniBatchOutputs.size());
-    assert(miniBatchOutputs.at(batchNumber / miniBatchSize).dims() == 1);
-    assert(static_cast<int>(batchNumber % miniBatchSize) < miniBatchOutputs.at(batchNumber / miniBatchSize).dim_size(0));
+  /* The last batch of inputTensorBatches will be larger than necessary. The end of it will be uninitialized, then passed to the DNN
+  We do not look at the output of the DNN on this so it should not matter.
+  TODO consider slicing the last batch to avoid unneeded inference */
 
-    return miniBatchOutputs.at(batchNumber / miniBatchSize).tensor<float, 1>()(batchNumber % miniBatchSize);
-  };
-  LogDebug("HGCalTICLSuperclustering") << "First output tensor " << miniBatchOutputs.at(0).SummarizeValue(100);
+  if (inputTensorBatches.size() == 0) {
+    LogDebug("HGCalTICLSuperclustering") << "No superclustering candidate pairs passed preselection before DNN. There are " << tracksterCount << " tracksters in this event.";
+    evt.put(std::make_unique<SuperclusteringResult>(), "superclusteredTracksters");
+    #ifdef EDM_ML_DEBUG
+    evt.put(std::make_unique<SuperclusteringDNNScore>(), "superclusteringTracksterDNNScore");
+    #endif
+    return;
+  }
 
-  // Build mask of tracksters already superclustered
-  std::vector<bool> tracksterMask(tracksterCount, false); // Mask of tracksters, indexed with same indices as inputTracksters
+  LogDebug("HGCalTICLSuperclustering") << "Input tensor " << inputTensorBatches[0].SummarizeValue(100);
+
+  // Run the DNN inference
+  std::vector<tensorflow::Tensor> batchOutputs;
+  for (tensorflow::Tensor& singleBatch : inputTensorBatches) {
+    std::vector<tensorflow::Tensor> outputs;
+    tensorflow::run(tfSession, {{"input", singleBatch}}, {"output_squeeze"}, &outputs);
+    assert(outputs.size() == 1);
+    batchOutputs.push_back(std::move(outputs[0]));
+  }
 
   auto outputSuperclusters = std::make_unique<SuperclusteringResult>();
 #ifdef EDM_ML_DEBUG
   auto outputTracksterDNNScore = std::make_unique<SuperclusteringDNNScore>();
 #endif
-  // Supercluster tracksters
-  for (std::size_t ts_base_idx = 0; ts_base_idx < tracksterCount; ts_base_idx++) {
-    #ifdef EDM_ML_DEBUG
-    int ts_inner_idx_tensor = 0; // index of trackster in tensor, possibly shifted by one from ts_toCluster_idx
-    for (std::size_t ts_toCluster_idx = 0; ts_toCluster_idx < tracksterCount; ts_toCluster_idx++) {
-        outputTracksterDNNScore->emplace_back();
-        if (trackstersIndicesPt[ts_base_idx] != ts_toCluster_idx) { // Don't supercluster trackster with itself
-          outputTracksterDNNScore->back().push_back(accessOutputTensor(ts_base_idx*(tracksterCount-1) + ts_inner_idx_tensor));
-          ts_inner_idx_tensor++;
+
+  // Build mask of tracksters already superclustered. Uses global trackster ids
+  std::vector<bool> tracksterMask(tracksterCount, false);
+  // note that tracksterMask for the last seed trackster is never filled, as it is not needed.
+  std::size_t previousSeedTrackster_idx; // Index of the seed trackster of the previous iteration
+  std::vector<std::size_t> currentSupercluster; 
+  for (std::size_t batchIndex = 0; batchIndex < batchOutputs.size(); batchIndex++) {
+    auto outputEigenTensor = batchOutputs[batchIndex].tensor<float, 1>();
+    for (std::size_t indexInBatch = 0; indexInBatch < tracksterIndicesUsedInDNN[batchIndex].size(); indexInBatch++) {
+      assert(indexInBatch < static_cast<std::size_t>(batchOutputs[batchIndex].dim_size(0)));
+
+      std::size_t currentSeedTrackster_idx = tracksterIndicesUsedInDNN[batchIndex][indexInBatch].first;
+      if (currentSeedTrackster_idx != previousSeedTrackster_idx) {
+        // There is a transition from one seed to the next
+        // Register the seed as part of a supercluster if needed
+        if (!currentSupercluster.empty()) {
+          assert(!tracksterMask[previousSeedTrackster_idx]);
+
+          #ifdef EDM_ML_DEBUG
+          std::ostringstream s;
+          std::copy(currentSupercluster.begin(), currentSupercluster.end(), std::ostream_iterator<float>(s, " "));
+          LogDebug("HGCalTICLSuperclustering") << "Created supercluster of size " << currentSupercluster.size() << " holding tracksters (first one is seed) " << s.str();
+          #endif
+          
+          tracksterMask[previousSeedTrackster_idx] = true;
+          outputSuperclusters->push_back(std::move(currentSupercluster));
+          currentSupercluster.clear(); // bring the vector from moved-from state to empty state
         }
-    }
-    #endif
+        previousSeedTrackster_idx = currentSeedTrackster_idx;
+      }
+      #ifdef EDM_ML_DEBUG
+      outputTracksterDNNScore->emplace_back(currentSeedTrackster_idx, tracksterIndicesUsedInDNN[batchIndex][indexInBatch].second, outputEigenTensor(indexInBatch));
+      #endif
 
-    if (tracksterMask[trackstersIndicesPt[ts_base_idx]])
-      continue;
-    //Trackster const& ts_base = (*inputTracksters)[trackstersIndicesPt[ts_base_idx]];
-    int ts_toCluster_idx_tensor = 0; // index of trackster in tensor, possibly shifted by one from ts_toCluster_idx
-
-    // Build indices of tracksters in supercluster, starting with current trackster
-    std::vector<std::size_t> superclusteredTracksterIndices{{trackstersIndicesPt[ts_base_idx]}};
-    tracksterMask[trackstersIndicesPt[ts_base_idx]] = true; // Mask seed of trackster
-
-    for (std::size_t ts_toCluster_idx = 0; ts_toCluster_idx < tracksterCount; ts_toCluster_idx++) {
-        
-        if (trackstersIndicesPt[ts_base_idx] != ts_toCluster_idx) { // Don't supercluster trackster with itself
-            if (!tracksterMask[ts_toCluster_idx] // candidate trackster is not already part of a supercluster
-                 // Candidate trackster passes the neural network working point
-                 && accessOutputTensor(ts_base_idx*(tracksterCount-1) + ts_toCluster_idx_tensor) > nnWorkingPoint_) {
-                //float const& dnnScore = eigenOutputTensor(ts_base_idx*(tracksterCount-1) + ts_toCluster_idx_tensor);
-
-                superclusteredTracksterIndices.push_back(ts_toCluster_idx);
-                tracksterMask[ts_toCluster_idx] = true;
-
-                LogDebug("HGCalTICLSuperclustering") << "Added trackster nb " << ts_toCluster_idx << " to supercluster (seed trackster nb " << trackstersIndicesPt[ts_base_idx] << ")";
-            }
-            ts_toCluster_idx_tensor++; 
+      if (outputEigenTensor(indexInBatch) > nnWorkingPoint_) {
+        std::size_t ts_cand_idx = tracksterIndicesUsedInDNN[batchIndex][indexInBatch].second;
+        if (!tracksterMask[currentSeedTrackster_idx] && !tracksterMask[ts_cand_idx]) { // Check that the seed and candidates are not in a supercluster (we do not supercluster recursively)
+          // Note that the seed is added to the trackster mask only after all candidates for the given seed have been studied
+          if (currentSupercluster.size() == 0) {
+            currentSupercluster.push_back(currentSeedTrackster_idx); // only add the seed once to the supercluster
+          }
+          currentSupercluster.push_back(ts_cand_idx);
+          tracksterMask[ts_cand_idx] = true;
         }
+      }
     }
-
-    outputSuperclusters->push_back(std::move(superclusteredTracksterIndices));
   }
 
   evt.put(std::move(outputSuperclusters), "superclusteredTracksters");
