@@ -395,6 +395,7 @@ private:
   std::vector<std::vector<float>> MergeTracksters_simToReco_PU_sharedE;
 
   ticl::SuperclusteringResult superclusteredTracksters;
+  ticl::SuperclusteringResult superclusteredTrackstersAll;
   ticl::SuperclusteringDNNScore superclusteringDNNScore;
 
   std::vector<uint32_t> cluster_seedID;
@@ -582,6 +583,7 @@ void TICLDumper::clearVariables() {
   stsCP_trackster_vertices_multiplicity.clear();
 
   superclusteredTracksters.clear();
+  superclusteredTrackstersAll.clear();
 
   simTICLCandidate_raw_energy.clear();
   simTICLCandidate_regressed_energy.clear();
@@ -1077,7 +1079,9 @@ void TICLDumper::beginJob() {
   if (saveSuperclustering_) {
     superclustering_tree_ = fs->make<TTree>("superclustering", "Superclustering in HGCAL CE-E");
     superclustering_tree_->Branch("superclusteredTracksters", &superclusteredTracksters);
-    superclustering_tree_->Branch("superclusteredTracksters", &superclusteringDNNScore);
+    // Puts all tracksters that are not in a supercluster in their own one-trackster supercluster (for analysis convenience)
+    superclustering_tree_->Branch("superclusteredTrackstersAll", &superclusteredTrackstersAll); 
+    superclustering_tree_->Branch("superclusteringDNNScore", &superclusteringDNNScore);
   }
 
   if (saveTracks_) {
@@ -2023,6 +2027,26 @@ void TICLDumper::analyze(const edm::Event& event, const edm::EventSetup& setup) 
       }
     }
   }
+
+  // Building superclusteredTrackstersAll to contain all superclusters as well as a one-trackster supercluster for all tracksters not already in a supercluster
+  // (for convenience in analysis scripts)
+  superclusteredTrackstersAll = superclusteredTracksters;
+  std::vector<std::size_t> trackstersInASupercluster; // All trackster indices that are in a supercluster (flattening superclusteredTracksters)
+  for (std::vector<std::size_t> const& supercluster : superclusteredTracksters) {
+    trackstersInASupercluster.insert(trackstersInASupercluster.end(), supercluster.begin(), supercluster.end());
+  }
+
+  // Look for 
+  std::sort(trackstersInASupercluster.begin(), trackstersInASupercluster.end());
+  for (std::size_t ts_id = 0, superclsTsIdx = 0; ts_id < tracksters.size(); ts_id++) {
+    if (superclsTsIdx == trackstersInASupercluster.size() || ts_id < trackstersInASupercluster[superclsTsIdx]) {
+      superclusteredTrackstersAll.emplace_back(std::initializer_list<std::size_t>{ts_id});
+    } else /* ts_id == trackstersInASupercluster[superclsTsIdx] */ {
+      // Go to the next trackster in a supercluster
+      superclsTsIdx++;
+    }
+  }
+
 
   //Tracks
   for (size_t i = 0; i < tracks.size(); i++) {
