@@ -31,7 +31,10 @@ namespace ticl {
 namespace ticl {
   typedef std::vector<std::pair<unsigned int, float> > TICLClusterFilterMask;
   typedef std::vector<std::vector<std::size_t>> SuperclusteringResult;
-  typedef std::vector<std::tuple<std::size_t, std::size_t, float>> SuperclusteringDNNScore;
+  typedef unsigned short SuperclusteringDNNScoreValuePacked;
+  // the DNN score is mapped from float in [0, 1] to unsigned char for storage space. Divide by 2**16=65536 to get the float value back
+  // Use std::numeric_limits<SuperclusteringDNNScoreValuePacked>::max()
+  typedef std::vector<std::tuple<std::size_t, std::size_t, SuperclusteringDNNScoreValuePacked>> SuperclusteringDNNScore; 
 }  // namespace ticl
 
 #endif  // DataFormats_HGCalReco_Common_h

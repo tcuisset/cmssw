@@ -140,6 +140,7 @@ private:
   bool saveTracks_;
   bool saveAssociations_;
   bool saveSuperclustering_;
+  bool saveSuperclusteringDNNScore_;
 
   // Output tree
   TTree* tree_;
@@ -790,7 +791,8 @@ TICLDumper::TICLDumper(const edm::ParameterSet& ps)
       saveSimTICLCandidate_(ps.getParameter<bool>("saveSimTICLCandidate")),
       saveTracks_(ps.getParameter<bool>("saveTracks")),
       saveAssociations_(ps.getParameter<bool>("saveAssociations")),
-      saveSuperclustering_(ps.getParameter<bool>("saveSuperclustering")) {
+      saveSuperclustering_(ps.getParameter<bool>("saveSuperclustering")),
+      saveSuperclusteringDNNScore_(ps.getParameter<bool>("saveSuperclusteringDNNScore")) {
   std::string detectorName_ = (detector_ == "HFNose") ? "HGCalHFNoseSensitive" : "HGCalEESensitive";
   hdc_token_ =
       esConsumes<HGCalDDDConstants, IdealGeometryRecord, edm::Transition::BeginRun>(edm::ESInputTag("", detectorName_));
@@ -1076,11 +1078,14 @@ void TICLDumper::beginJob() {
     simtrackstersCP_tree_->Branch("vertices_multiplicity", &stsCP_trackster_vertices_multiplicity);
   }
 
-  if (saveSuperclustering_) {
+  if (saveSuperclustering_ || saveSuperclusteringDNNScore_)
     superclustering_tree_ = fs->make<TTree>("superclustering", "Superclustering in HGCAL CE-E");
+  if (saveSuperclustering_) {
     superclustering_tree_->Branch("superclusteredTracksters", &superclusteredTracksters);
     // Puts all tracksters that are not in a supercluster in their own one-trackster supercluster (for analysis convenience)
     superclustering_tree_->Branch("superclusteredTrackstersAll", &superclusteredTrackstersAll); 
+  }
+  if (saveSuperclusteringDNNScore_) {
     superclustering_tree_->Branch("superclusteringDNNScore", &superclusteringDNNScore);
   }
 
@@ -2036,7 +2041,7 @@ void TICLDumper::analyze(const edm::Event& event, const edm::EventSetup& setup) 
     trackstersInASupercluster.insert(trackstersInASupercluster.end(), supercluster.begin(), supercluster.end());
   }
 
-  // Look for 
+  // Look for tracksters not in list of superclustered tracksters ( n*log(n) algorithm )
   std::sort(trackstersInASupercluster.begin(), trackstersInASupercluster.end());
   for (std::size_t ts_id = 0, superclsTsIdx = 0; ts_id < tracksters.size(); ts_id++) {
     if (superclsTsIdx == trackstersInASupercluster.size() || ts_id < trackstersInASupercluster[superclsTsIdx]) {
@@ -2098,7 +2103,7 @@ void TICLDumper::analyze(const edm::Event& event, const edm::EventSetup& setup) 
     tracks_tree_->Fill();
   if (saveSimTICLCandidate_)
     simTICLCandidate_tree->Fill();
-  if (saveSuperclustering_)
+  if (saveSuperclustering_ || saveSuperclusteringDNNScore_)
     superclustering_tree_->Fill();
 }
 
@@ -2156,6 +2161,8 @@ void TICLDumper::fillDescriptions(edm::ConfigurationDescriptions& descriptions) 
   desc.add<bool>("saveTracks", true);
   desc.add<bool>("saveAssociations", true);
   desc.add<bool>("saveSuperclustering", true);
+  desc.add<bool>("saveSuperclusteringDNNScore", false)
+    ->setComment("Save the superclustering DNN score for all the evaluations made. Takes a large amount of disk space. Make sure the DNN score is also saved into the event as well (otherwise it won't dump anything)");
   descriptions.add("ticlDumper", desc);
 }
 
