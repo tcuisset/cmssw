@@ -16,6 +16,7 @@
 
   <class name="ticl::SuperclusteringResult" /> <!-- for SuperclusteringProducer (trackster indices) -->
   <class name="edm::Wrapper<ticl::SuperclusteringResult>" />
+  <class name="std::tuple<std::size_t, std::size_t, ticl::SuperclusteringDNNScoreValuePacked>" /> <!-- for SuperclusteringDNNScore -->
   <class name="ticl::SuperclusteringDNNScore" /> 
   <class name="edm::Wrapper<ticl::SuperclusteringDNNScore>" />
  

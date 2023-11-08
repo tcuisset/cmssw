@@ -317,7 +317,8 @@ void SuperclusteringProducer::produce(edm::Event &evt, const edm::EventSetup &es
         previousSeedTrackster_idx = currentSeedTrackster_idx;
       }
       #ifdef EDM_ML_DEBUG
-      outputTracksterDNNScore->emplace_back(currentSeedTrackster_idx, tracksterIndicesUsedInDNN[batchIndex][indexInBatch].second, outputEigenTensor(indexInBatch));
+      // Map the DNN score from float in [0, 1] to unsigned char
+      outputTracksterDNNScore->emplace_back(currentSeedTrackster_idx, tracksterIndicesUsedInDNN[batchIndex][indexInBatch].second, static_cast<ticl::SuperclusteringDNNScoreValuePacked>(outputEigenTensor(indexInBatch)*std::numeric_limits<SuperclusteringDNNScoreValuePacked>::max()));
       #endif
 
       if (outputEigenTensor(indexInBatch) > nnWorkingPoint_) {
@@ -344,7 +345,7 @@ void SuperclusteringProducer::produce(edm::Event &evt, const edm::EventSetup &es
 void SuperclusteringProducer::fillDescriptions(edm::ConfigurationDescriptions &descriptions) {
   edm::ParameterSetDescription desc;
   desc.add<std::string>("tfDnnLabel", "superclusteringTf");
-  desc.add<std::string>("dnnVersion", "alessandro-v1");
+  desc.add<std::string>("dnnVersion", "alessandro-v2");
   desc.add<edm::InputTag>("trackstersclue3d", edm::InputTag("ticlTrackstersCLUE3DHigh"));
   desc.add<double>("nnWorkingPoint", 0.51);
   descriptions.add("superclusteringProducer", desc);
