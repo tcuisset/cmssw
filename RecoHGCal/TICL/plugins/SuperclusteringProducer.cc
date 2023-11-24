@@ -1,3 +1,12 @@
+// Author : Theo Cuisset - theo.cuisset@polytechnique.edu
+// Date : 11/2023
+/*
+Electron superclustering in HGCAL using a DNN. 
+DNN designed and trained by Alessandro Tarabini.
+
+Consumes TICL tracksters, outputs superclusters (as vectors of IDs of tracksters)
+Tracksters are ordered by decreasing pT, 
+*/
 #include <numeric>      // std::iota
 #include <algorithm>    // std::sort, std::stable_sort, std::copy
 #include <sstream>      // std::stringstream
@@ -24,8 +33,8 @@
 
 #include "DataFormats/Math/interface/deltaPhi.h"
 #include "DataFormats/CaloRecHit/interface/CaloCluster.h"
-#include "DataFormats/HGCalReco/interface/Common.h"
 #include "DataFormats/HGCalReco/interface/Trackster.h"
+#include "DataFormats/HGCalReco/interface/Supercluster.h"
 
 #include "RecoHGCal/TICL/interface/GlobalCache.h"
 
@@ -195,7 +204,7 @@ void SuperclusteringProducer::produce(edm::Event &evt, const edm::EventSetup &es
 
   tensorflow::Session const* tfSession = es.getData(tfDnnToken_).getSession();
   
-  const std::size_t tracksterCount = inputTracksters->size();
+  const unsigned int tracksterCount = inputTracksters->size();
   //const int mainBatchSize = tracksterCount * (tracksterCount - 1);
 
   std::unique_ptr<AbstractDNNInput> nnInput;
@@ -205,9 +214,9 @@ void SuperclusteringProducer::produce(edm::Event &evt, const edm::EventSetup &es
     nnInput = std::make_unique<DNNInputAlessandroV2>();
 
   //Sorting tracksters by decreasing order of pT
-  std::vector<std::size_t> trackstersIndicesPt(inputTracksters->size()); // Vector of indices into inputTracksters, sorted by decreasing order of pt
+  std::vector<unsigned int> trackstersIndicesPt(inputTracksters->size()); // Vector of indices into inputTracksters, sorted by decreasing order of pt
   std::iota(trackstersIndicesPt.begin(), trackstersIndicesPt.end(), 0);
-  std::stable_sort(trackstersIndicesPt.begin(), trackstersIndicesPt.end(), [&inputTracksters](std::size_t i1, std::size_t i2) {
+  std::stable_sort(trackstersIndicesPt.begin(), trackstersIndicesPt.end(), [&inputTracksters](unsigned int i1, unsigned int i2) {
     return (*inputTracksters)[i1].raw_pt() > (*inputTracksters)[i2].raw_pt();
   });
 
@@ -216,22 +225,22 @@ void SuperclusteringProducer::produce(edm::Event &evt, const edm::EventSetup &es
   /* Evaluate in minibatches since running with trackster count = 3000 leads to a short-lived ~15GB memory allocation
   Also we do not know in advance how many superclustering candidate pairs there are going to be
   */
-  const unsigned long miniBatchSize = 1e6;
+  const unsigned int miniBatchSize = 1e6;
 
   std::vector<tensorflow::Tensor> inputTensorBatches; 
   // How far along in the latest tensor of inputTensorBatches are we. Set to miniBatchSize to trigger the creation of the tensor batch on first run
-  std::size_t candidateIndexInCurrentBatch = miniBatchSize;
+  unsigned int candidateIndexInCurrentBatch = miniBatchSize;
   // List of all (ts_seed_id; ts_cand_id) selected for DNN inference (same layout as inputTensorBatches) 
   // Index is in global trackster collection (not pt ordered)
-  std::vector<std::vector<std::pair<std::size_t, std::size_t>>> tracksterIndicesUsedInDNN; 
+  std::vector<std::vector<std::pair<unsigned int, unsigned int>>> tracksterIndicesUsedInDNN; 
 
   // First loop on all tracksters
-  for (std::size_t ts_seed_idx = 0; ts_seed_idx < tracksterCount; ts_seed_idx++) {
+  for (unsigned int ts_seed_idx = 0; ts_seed_idx < tracksterCount; ts_seed_idx++) {
     Trackster const& ts_seed = (*inputTracksters)[trackstersIndicesPt[ts_seed_idx]];
 
     // Second loop on superclustering candidates tracksters
     // Only look at one pair (seed, toCluster) once where the seed pT is higher (and don't supercluster trackster with itself)
-    for (std::size_t ts_cand_idx = ts_seed_idx+1; ts_cand_idx < tracksterCount; ts_cand_idx++) {
+    for (unsigned int ts_cand_idx = ts_seed_idx+1; ts_cand_idx < tracksterCount; ts_cand_idx++) {
       Trackster const& ts_cand = (*inputTracksters)[trackstersIndicesPt[ts_cand_idx]];
       // Check that the two tracksters could reasonnably be superclustered (no need to run DNN inference otherwise)
       // Using delta eta and delta phi windows
@@ -290,14 +299,14 @@ void SuperclusteringProducer::produce(edm::Event &evt, const edm::EventSetup &es
   // Build mask of tracksters already superclustered. Uses global trackster ids
   std::vector<bool> tracksterMask(tracksterCount, false);
   // note that tracksterMask for the last seed trackster is never filled, as it is not needed.
-  std::size_t previousSeedTrackster_idx; // Index of the seed trackster of the previous iteration
-  std::vector<std::size_t> currentSupercluster; 
-  for (std::size_t batchIndex = 0; batchIndex < batchOutputs.size(); batchIndex++) {
+  unsigned int previousSeedTrackster_idx; // Index of the seed trackster of the previous iteration
+  ticl::Supercluster currentSupercluster; 
+  for (unsigned int batchIndex = 0; batchIndex < batchOutputs.size(); batchIndex++) {
     auto outputEigenTensor = batchOutputs[batchIndex].tensor<float, 1>();
-    for (std::size_t indexInBatch = 0; indexInBatch < tracksterIndicesUsedInDNN[batchIndex].size(); indexInBatch++) {
-      assert(indexInBatch < static_cast<std::size_t>(batchOutputs[batchIndex].dim_size(0)));
+    for (unsigned int indexInBatch = 0; indexInBatch < tracksterIndicesUsedInDNN[batchIndex].size(); indexInBatch++) {
+      assert(indexInBatch < static_cast<unsigned int>(batchOutputs[batchIndex].dim_size(0)));
 
-      std::size_t currentSeedTrackster_idx = tracksterIndicesUsedInDNN[batchIndex][indexInBatch].first;
+      unsigned int currentSeedTrackster_idx = tracksterIndicesUsedInDNN[batchIndex][indexInBatch].first;
       if (currentSeedTrackster_idx != previousSeedTrackster_idx) {
         // There is a transition from one seed to the next
         // Register the seed as part of a supercluster if needed
@@ -306,7 +315,8 @@ void SuperclusteringProducer::produce(edm::Event &evt, const edm::EventSetup &es
 
           #ifdef EDM_ML_DEBUG
           std::ostringstream s;
-          std::copy(currentSupercluster.begin(), currentSupercluster.end(), std::ostream_iterator<float>(s, " "));
+          for (ticl::Supercluster::const_iterator it = currentSupercluster.begin(); it != currentSupercluster.end(); it++)
+            s << it->key() << " ";
           LogDebug("HGCalTICLSuperclustering") << "Created supercluster of size " << currentSupercluster.size() << " holding tracksters (first one is seed) " << s.str();
           #endif
           
@@ -322,13 +332,13 @@ void SuperclusteringProducer::produce(edm::Event &evt, const edm::EventSetup &es
       #endif
 
       if (outputEigenTensor(indexInBatch) > nnWorkingPoint_) {
-        std::size_t ts_cand_idx = tracksterIndicesUsedInDNN[batchIndex][indexInBatch].second;
+        unsigned int ts_cand_idx = tracksterIndicesUsedInDNN[batchIndex][indexInBatch].second;
         if (!tracksterMask[currentSeedTrackster_idx] && !tracksterMask[ts_cand_idx]) { // Check that the seed and candidates are not in a supercluster (we do not supercluster recursively)
           // Note that the seed is added to the trackster mask only after all candidates for the given seed have been studied
           if (currentSupercluster.size() == 0) {
-            currentSupercluster.push_back(currentSeedTrackster_idx); // only add the seed once to the supercluster
+            currentSupercluster.push_back({inputTracksters, currentSeedTrackster_idx}); // only add the seed once to the supercluster
           }
-          currentSupercluster.push_back(ts_cand_idx);
+          currentSupercluster.push_back({inputTracksters, ts_cand_idx});
           tracksterMask[ts_cand_idx] = true;
         }
       }
