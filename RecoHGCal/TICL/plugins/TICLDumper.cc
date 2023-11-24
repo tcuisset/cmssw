@@ -30,6 +30,7 @@
 #include "DataFormats/Math/interface/Point3D.h"
 #include "DataFormats/GeometrySurface/interface/BoundDisk.h"
 #include "DataFormats/HGCalReco/interface/Common.h"
+#include "DataFormats/HGCalReco/interface/Supercluster.h"
 #include "SimDataFormats/CaloAnalysis/interface/CaloParticle.h"
 #include "SimDataFormats/CaloAnalysis/interface/SimCluster.h"
 
@@ -395,8 +396,8 @@ private:
   std::vector<std::vector<float>> MergeTracksters_simToReco_PU_score;
   std::vector<std::vector<float>> MergeTracksters_simToReco_PU_sharedE;
 
-  ticl::SuperclusteringResult superclusteredTracksters;
-  ticl::SuperclusteringResult superclusteredTrackstersAll;
+  std::vector<std::vector<unsigned int>> superclusteredTracksters; // Outer vector : superclusters, inner vector : indices in ticlTrackstersCLUE3DHigh collection
+  std::vector<std::vector<unsigned int>> superclusteredTrackstersAll; // same as superclusteredTracksters but includes tracksters not in a supercluster as a one-trackster supercluster (for convenience in analysis)
   ticl::SuperclusteringDNNScore superclusteringDNNScore;
 
   std::vector<uint32_t> cluster_seedID;
@@ -1278,7 +1279,13 @@ void TICLDumper::analyze(const edm::Event& event, const edm::EventSetup& setup) 
   // superclustering
   edm::Handle<ticl::SuperclusteringResult> superclustering_h;
   event.getByToken(superclustering_token_, superclustering_h);
-  superclusteredTracksters = *superclustering_h;
+  // Translate edm::RefVector to raw indices
+  for (ticl::SuperclusteringResult::const_iterator it_sc = superclustering_h->begin(); it_sc != superclustering_h->end(); it_sc++) {
+    superclusteredTracksters.emplace_back();
+    for (ticl::Supercluster::const_iterator it_ts = it_sc->begin(); it_ts != it_sc->end(); it_ts++) {
+      superclusteredTracksters.back().push_back(it_ts->key());
+    }
+  }
 
   edm::Handle<ticl::SuperclusteringDNNScore> superclustering_DNNScore_h;
   event.getByToken(superclustering_DNNScore_token_, superclustering_DNNScore_h);
@@ -2036,16 +2043,16 @@ void TICLDumper::analyze(const edm::Event& event, const edm::EventSetup& setup) 
   // Building superclusteredTrackstersAll to contain all superclusters as well as a one-trackster supercluster for all tracksters not already in a supercluster
   // (for convenience in analysis scripts)
   superclusteredTrackstersAll = superclusteredTracksters;
-  std::vector<std::size_t> trackstersInASupercluster; // All trackster indices that are in a supercluster (flattening superclusteredTracksters)
-  for (std::vector<std::size_t> const& supercluster : superclusteredTracksters) {
+  std::vector<unsigned int> trackstersInASupercluster; // All trackster indices that are in a supercluster (flattening superclusteredTracksters)
+  for (std::vector<unsigned int> const& supercluster : superclusteredTracksters) {
     trackstersInASupercluster.insert(trackstersInASupercluster.end(), supercluster.begin(), supercluster.end());
   }
 
   // Look for tracksters not in list of superclustered tracksters ( n*log(n) algorithm )
   std::sort(trackstersInASupercluster.begin(), trackstersInASupercluster.end());
-  for (std::size_t ts_id = 0, superclsTsIdx = 0; ts_id < tracksters.size(); ts_id++) {
+  for (unsigned int ts_id = 0, superclsTsIdx = 0; ts_id < tracksters.size(); ts_id++) {
     if (superclsTsIdx == trackstersInASupercluster.size() || ts_id < trackstersInASupercluster[superclsTsIdx]) {
-      superclusteredTrackstersAll.emplace_back(std::initializer_list<std::size_t>{ts_id});
+      superclusteredTrackstersAll.emplace_back(std::initializer_list<unsigned int>{ts_id});
     } else /* ts_id == trackstersInASupercluster[superclsTsIdx] */ {
       // Go to the next trackster in a supercluster
       superclsTsIdx++;
