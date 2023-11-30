@@ -295,7 +295,9 @@ void SuperclusteringProducer::produce(edm::Event &evt, const edm::EventSetup &es
   // Build mask of tracksters already superclustered as candidates (seeds are not added). Uses global trackster ids
   std::vector<bool> tracksterMask(tracksterCount, false);
   // note that tracksterMask for the last seed trackster is never filled, as it is not needed.
-  unsigned int previousSeedTrackster_idx; // Index of the seed trackster of the previous iteration
+  /* Index of the seed trackster of the previous iteration 
+  Initialized with an id that cannot be obtained in input */
+  unsigned int previousSeedTrackster_idx = std::numeric_limits<unsigned int>::max(); 
   ticl::Supercluster currentSupercluster; 
   //Iterate over minibatches
   for (unsigned int batchIndex = 0; batchIndex < batchOutputs.size(); batchIndex++) {
