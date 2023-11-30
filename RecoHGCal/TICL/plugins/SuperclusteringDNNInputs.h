@@ -171,7 +171,7 @@ public:
   }
 
   std::vector<std::string> featureNames() const override {
-    return {"DeltaEtaBaryc", "DeltaPhiBaryc", "multi_en", "multi_eta", "multi_pt", "seedEta", "seedPhi", "seedEn", "seedPt", "theta", "theta_xz_seedFrame", "theta_yz_seedFrame", "theta_xy_cmsFrame", "theta_yz_cmsFrame", "theta_xz_cmsFrame"};
+    return {"DeltaEtaBaryc", "DeltaPhiBaryc", "multi_en", "multi_eta", "multi_pt", "seedEta", "seedPhi", "seedEn", "seedPt", "theta", "theta_xz_seedFrame", "theta_yz_seedFrame", "theta_xy_cmsFrame", "theta_yz_cmsFrame", "theta_xz_cmsFrame", "explVar", "explVarRatio"};
   }
 };
 
