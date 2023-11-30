@@ -58,6 +58,7 @@ private:
   double nnWorkingPoint_; // Working point for neural network (above this score, consider the trackster candidate for superclustering)
   float deltaEtaWindow_; // Delta eta window to consider trackster seed-candidate pairs for inference
   float deltaPhiWindow_; // Delta phi window
+  float seedPtThreshold_; // Min pT for a trackster to be considered as supercluster seed
 };
 
 
@@ -67,7 +68,8 @@ SuperclusteringProducer::SuperclusteringProducer(const edm::ParameterSet &ps)
       dnnVersion_(ps.getParameter<std::string>("dnnVersion")),
       nnWorkingPoint_(ps.getParameter<double>("nnWorkingPoint")),
       deltaEtaWindow_(ps.getParameter<double>("deltaEtaWindow")),
-      deltaPhiWindow_(ps.getParameter<double>("deltaPhiWindow")) {
+      deltaPhiWindow_(ps.getParameter<double>("deltaPhiWindow")),
+      seedPtThreshold_(ps.getParameter<double>("seedPtThreshold")) {
   produces<SuperclusteringResult>("superclusteredTracksters"); // Produces std::vector<edm::RefVector<std::vector<Trackster>>>
 #ifdef EDM_ML_DEBUG
   produces<SuperclusteringDNNScore>("superclusteringTracksterDNNScore"); // DNN scores of trackster -> trackster
@@ -231,6 +233,8 @@ void SuperclusteringProducer::produce(edm::Event &evt, const edm::EventSetup &es
   // First loop on seed tracksters
   for (unsigned int ts_seed_idx = 0; ts_seed_idx < tracksterCount; ts_seed_idx++) {
     Trackster const& ts_seed = (*inputTracksters)[trackstersIndicesPt[ts_seed_idx]];
+    if (ts_seed.raw_pt() < seedPtThreshold_)
+      break;
 
     // Second loop on superclustering candidates tracksters
     // Look only at candidate tracksters with lower pT than the seed (so all pairs are only looked at once)
@@ -361,6 +365,8 @@ void SuperclusteringProducer::fillDescriptions(edm::ConfigurationDescriptions &d
      ->setComment("Size of delta eta window to consider for superclustering. Seed-candidate pairs outside this window are not considered for DNN inference.");
   desc.add<double>("deltaPhiWindow", 0.5)
      ->setComment("Size of delta phi window to consider for superclustering. Seed-candidate pairs outside this window are not considered for DNN inference.");
+  desc.add<double>("seedPtThreshold", 1.)
+     ->setComment("Minimum transverse momentum of trackster to be considered as seed of a supercluster");
   descriptions.add("superclusteringProducer", desc);
 }
 
