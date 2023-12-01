@@ -113,6 +113,8 @@ void SuperclusteringSampleDumper::analyze(const edm::Event& evt, const edm::Even
     return (*inputTracksters)[i1].raw_pt() > (*inputTracksters)[i2].raw_pt();
   });
 
+  // Order of loops are reversed compared to SuperclusteringProducer (here outer is seed, inner is candidate), for performance reasons. 
+  // The same pairs seed-candidate should be present, just in a different order
   // First loop on seed tracksters
   for (unsigned int ts_seed_idx = 0; ts_seed_idx < inputTracksters->size(); ts_seed_idx++) {
     const unsigned int ts_seed_idx_input = trackstersIndicesPt[ts_seed_idx]; // Index of seed trackster in input collection (not in pT sorted collection)

@@ -113,16 +113,18 @@ void SuperclusteringProducer::produce(edm::Event &evt, const edm::EventSetup &es
   // Index is in global trackster collection (not pt ordered collection)
   std::vector<std::vector<std::pair<unsigned int, unsigned int>>> tracksterIndicesUsedInDNN; 
 
-  // First loop on seed tracksters
-  for (unsigned int ts_seed_idx = 0; ts_seed_idx < tracksterCount; ts_seed_idx++) {
-    Trackster const& ts_seed = (*inputTracksters)[trackstersIndicesPt[ts_seed_idx]];
-    if (ts_seed.raw_pt() < seedPtThreshold_)
-      break;
+  // First loop on candidate tracksters
+  for (unsigned int ts_cand_idx = 0; ts_cand_idx < tracksterCount; ts_cand_idx++) {
+    Trackster const& ts_cand = (*inputTracksters)[trackstersIndicesPt[ts_cand_idx]];
 
-    // Second loop on superclustering candidates tracksters
-    // Look only at candidate tracksters with lower pT than the seed (so all pairs are only looked at once)
-    for (unsigned int ts_cand_idx = ts_seed_idx+1; ts_cand_idx < tracksterCount; ts_cand_idx++) {
-      Trackster const& ts_cand = (*inputTracksters)[trackstersIndicesPt[ts_cand_idx]];
+    // Second loop on superclustering seed tracksters
+    // Look only at seed tracksters with higher pT than the candidate (so all pairs are only looked at once)
+    for (unsigned int ts_seed_idx = 0; ts_seed_idx < ts_cand_idx; ts_seed_idx++) {
+      Trackster const& ts_seed = (*inputTracksters)[trackstersIndicesPt[ts_seed_idx]];
+
+      if (ts_seed.raw_pt() < seedPtThreshold_)
+        break;
+
       // Check that the two tracksters are geometrically compatible for superclustering (using deltaEta, deltaPhi window)
       // There is no need to run inference for tracksters very far apart
       if (std::abs(ts_seed.barycenter().Eta() - ts_cand.barycenter().Eta()) < deltaEtaWindow_
@@ -180,8 +182,33 @@ void SuperclusteringProducer::produce(edm::Event &evt, const edm::EventSetup &es
   // note that tracksterMask for the last seed trackster is never filled, as it is not needed.
   /* Index of the seed trackster of the previous iteration 
   Initialized with an id that cannot be obtained in input */
-  unsigned int previousSeedTrackster_idx = std::numeric_limits<unsigned int>::max(); 
-  ticl::Supercluster currentSupercluster; 
+  unsigned int previousCandTrackster_idx = std::numeric_limits<unsigned int>::max(); 
+  unsigned int bestSeedForCurrentCandidate_idx = std::numeric_limits<unsigned int>::max(); 
+  float bestSeedForCurrentCandidate_dnnScore = nnWorkingPoint_;
+
+  // Lambda to be called when there is a transition from one candidate to the next (as well as after the last iteration)
+  auto onCandidateTransition = [&](unsigned ts_cand_idx) {
+    if (bestSeedForCurrentCandidate_idx < std::numeric_limits<unsigned int>::max()) {
+      // At least one seed can be superclustered with the candidate
+      tracksterMask[ts_cand_idx] = true; // Mask the candidate so it is not considered as seed in later iterations
+
+      // Look for a supercluster of the seed
+      SuperclusteringResult::iterator seed_supercluster_it = std::find_if(outputSuperclusters->begin(), outputSuperclusters->end(), [bestSeedForCurrentCandidate_idx](Supercluster const& sc){
+        return sc[0].key() == bestSeedForCurrentCandidate_idx;
+      });
+      if (seed_supercluster_it == outputSuperclusters->end()) {
+        // No supercluster exists yet for the seed. Create one.
+        outputSuperclusters->emplace_back();
+        outputSuperclusters->back().push_back({inputTracksters, bestSeedForCurrentCandidate_idx});
+        seed_supercluster_it = outputSuperclusters->end()-1;
+      }
+      seed_supercluster_it->push_back({inputTracksters, ts_cand_idx});
+      // Reset variables
+      bestSeedForCurrentCandidate_idx = std::numeric_limits<unsigned int>::max(); 
+      bestSeedForCurrentCandidate_dnnScore = nnWorkingPoint_;
+    }
+  };
+
   //Iterate over minibatches
   for (unsigned int batchIndex = 0; batchIndex < batchOutputs.size(); batchIndex++) {
     auto outputEigenTensor = batchOutputs[batchIndex].tensor<float, 1>(); // 1D-tensor of DNN score outputs
@@ -189,45 +216,36 @@ void SuperclusteringProducer::produce(edm::Event &evt, const edm::EventSetup &es
     for (unsigned int indexInBatch = 0; indexInBatch < tracksterIndicesUsedInDNN[batchIndex].size(); indexInBatch++) {
       assert(indexInBatch < static_cast<unsigned int>(batchOutputs[batchIndex].dim_size(0)));
 
-      unsigned int currentSeedTrackster_idx = tracksterIndicesUsedInDNN[batchIndex][indexInBatch].first;
-      if (currentSeedTrackster_idx != previousSeedTrackster_idx) {
-        // There is a transition from one seed to the next
-        if (!currentSupercluster.empty()) {
-          // Register the seed as part of a supercluster if at least one candidate got superclustered
-          assert(!tracksterMask[previousSeedTrackster_idx]);
+      unsigned int ts_seed_idx = tracksterIndicesUsedInDNN[batchIndex][indexInBatch].first;
+      unsigned int ts_cand_idx = tracksterIndicesUsedInDNN[batchIndex][indexInBatch].second;
 
-          #ifdef EDM_ML_DEBUG
-          std::ostringstream s;
-          for (ticl::Supercluster::const_iterator it = currentSupercluster.begin(); it != currentSupercluster.end(); it++)
-            s << it->key() << " ";
-          LogDebug("HGCalTICLSuperclustering") << "Created supercluster of size " << currentSupercluster.size() << " holding tracksters (first one is seed) " << s.str();
-          #endif
-          
-          // tracksterMask[previousSeedTrackster_idx] = true; // no need to mask seeds as they will not be considered again in the loop
-          outputSuperclusters->push_back(std::move(currentSupercluster));
-          currentSupercluster.clear(); // bring the vector from moved-from state to empty state
-        }
-        previousSeedTrackster_idx = currentSeedTrackster_idx;
+      if (previousCandTrackster_idx != std::numeric_limits<unsigned int>::max() && ts_cand_idx != previousCandTrackster_idx) {
+        // There is a transition from one seed to the next (don't make a transition for the first iteration)
+        onCandidateTransition(previousCandTrackster_idx);
       }
       #ifdef EDM_ML_DEBUG
       // Map the DNN score from float in [0, 1] to unsigned short
-      outputTracksterDNNScore->emplace_back(currentSeedTrackster_idx, tracksterIndicesUsedInDNN[batchIndex][indexInBatch].second, static_cast<ticl::SuperclusteringDNNScoreValuePacked>(outputEigenTensor(indexInBatch)*std::numeric_limits<SuperclusteringDNNScoreValuePacked>::max()));
+      outputTracksterDNNScore->emplace_back(ts_seed_idx, ts_cand_idx, static_cast<ticl::SuperclusteringDNNScoreValuePacked>(outputEigenTensor(indexInBatch)*std::numeric_limits<SuperclusteringDNNScoreValuePacked>::max()));
       #endif
 
-      if (outputEigenTensor(indexInBatch) > nnWorkingPoint_) {
-        unsigned int ts_cand_idx = tracksterIndicesUsedInDNN[batchIndex][indexInBatch].second;
-        if (!tracksterMask[currentSeedTrackster_idx] && !tracksterMask[ts_cand_idx]) { // Check that the seed and candidates are not in a supercluster
-          // Note that the seed is not added to the trackster mask
-          if (currentSupercluster.size() == 0) {
-             // only add the seed once to the supercluster
-            currentSupercluster.push_back({inputTracksters, currentSeedTrackster_idx});
-          }
-          currentSupercluster.push_back({inputTracksters, ts_cand_idx});
-          tracksterMask[ts_cand_idx] = true; // Mask the candidate
-        }
+      if (outputEigenTensor(indexInBatch) > bestSeedForCurrentCandidate_dnnScore && !tracksterMask[ts_seed_idx]) {
+        // Check that the DNN suggests superclustering, that this seed-candidate assoc is better than previous ones, and that the seed is not already in a supercluster as candidate
+        bestSeedForCurrentCandidate_idx = ts_seed_idx;
+        bestSeedForCurrentCandidate_dnnScore = outputEigenTensor(indexInBatch);
       }
+      previousCandTrackster_idx = ts_cand_idx;
     }
   }
+  onCandidateTransition(previousCandTrackster_idx);
+
+  #ifdef EDM_ML_DEBUG
+  for (Supercluster const& sc : *outputSuperclusters) {
+    std::ostringstream s;
+    for (auto trackster_it = sc.begin(); trackster_it != sc.end(); trackster_it++)
+      s << trackster_it->key() << " ";
+    LogDebug("HGCalTICLSuperclustering") << "Created supercluster of size " << sc.size() << " holding tracksters (first one is seed) " << s.str();
+  }
+  #endif
 
   evt.put(std::move(outputSuperclusters), "superclusteredTracksters");
   #ifdef EDM_ML_DEBUG
