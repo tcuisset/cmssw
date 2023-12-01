@@ -123,7 +123,7 @@ void SuperclusteringProducer::produce(edm::Event &evt, const edm::EventSetup &es
       Trackster const& ts_seed = (*inputTracksters)[trackstersIndicesPt[ts_seed_idx]];
 
       if (ts_seed.raw_pt() < seedPtThreshold_)
-        break;
+        break; // All further seeds will have lower pT than threshold (due to pT sorting)
 
       // Check that the two tracksters are geometrically compatible for superclustering (using deltaEta, deltaPhi window)
       // There is no need to run inference for tracksters very far apart

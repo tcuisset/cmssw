@@ -57,6 +57,7 @@ private:
   //const edm::EDGetTokenT<hgcal::SimToRecoCollectionSimTracksters> tsSimToRecoCP_token_;
   float deltaEtaWindow_;
   float deltaPhiWindow_;
+  float seedPtThreshold_;
 
   TTree* output_tree_;
   unsigned int eventNb_;
@@ -76,6 +77,7 @@ SuperclusteringSampleDumper::SuperclusteringSampleDumper(const edm::ParameterSet
        //   consumes<hgcal::RecoToSimCollectionSimTracksters>(ps.getParameter<edm::InputTag>("simToRecoAssociatorCP"))),
       deltaEtaWindow_(ps.getParameter<double>("deltaEtaWindow")),
       deltaPhiWindow_(ps.getParameter<double>("deltaPhiWindow")),
+      seedPtThreshold_(ps.getParameter<double>("seedPtThreshold")),
       eventNb_(0),
       dnnInput_(makeDNNInputFromString(ps.getParameter<std::string>("dnnVersion"))),
       features_(dnnInput_->featureCount()) {
@@ -119,6 +121,9 @@ void SuperclusteringSampleDumper::analyze(const edm::Event& evt, const edm::Even
   for (unsigned int ts_seed_idx = 0; ts_seed_idx < inputTracksters->size(); ts_seed_idx++) {
     const unsigned int ts_seed_idx_input = trackstersIndicesPt[ts_seed_idx]; // Index of seed trackster in input collection (not in pT sorted collection)
     Trackster const& ts_seed = (*inputTracksters)[ts_seed_idx_input];
+
+    if (ts_seed.raw_pt() < seedPtThreshold_)
+        break; // All further seeds will have lower pT than threshold (due to pT sorting)
 
     // Find best associated CaloParticle
     auto seed_assocs = assoc_CP_recoToSim->find({inputTracksters, ts_seed_idx_input});
@@ -195,6 +200,8 @@ void SuperclusteringSampleDumper::fillDescriptions(edm::ConfigurationDescription
      ->setComment("Size of delta eta window to consider for superclustering. Seed-candidate pairs outside this window are not considered for DNN inference.");
   desc.add<double>("deltaPhiWindow", 0.5)
      ->setComment("Size of delta phi window to consider for superclustering. Seed-candidate pairs outside this window are not considered for DNN inference.");
+  desc.add<double>("seedPtThreshold", 1.)
+     ->setComment("Minimum transverse momentum of trackster to be considered as seed of a supercluster");
   descriptions.add("superclusteringSampleSumper", desc);
 }
 
