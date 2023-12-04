@@ -31,9 +31,7 @@ If macro EDM_ML_DEBUG is set, will also produce DNN score in the event (as ticl:
 #include "FWCore/ParameterSet/interface/ParameterSetDescription.h"
 #include "FWCore/Framework/interface/ConsumesCollector.h"
 
-#include "PhysicsTools/TensorFlow/interface/TfGraphRecord.h"
-#include "PhysicsTools/TensorFlow/interface/TensorFlow.h"
-#include "PhysicsTools/TensorFlow/interface/TfGraphDefWrapper.h"
+#include "PhysicsTools/ONNXRuntime/interface/ONNXRuntime.h"
 
 #include "DataFormats/Math/interface/deltaPhi.h"
 #include "DataFormats/HGCalReco/interface/Trackster.h"
@@ -42,6 +40,7 @@ If macro EDM_ML_DEBUG is set, will also produce DNN score in the event (as ticl:
 #include "RecoHGCal/TICL/plugins/SuperclusteringDNNInputs.h"
 
 using namespace ticl;
+using namespace cms::Ort; // ONNX runtime
 
 std::unique_ptr<AbstractDNNInput> makeDNNInputFromString(std::string dnnVersion) {
   if (dnnVersion == "alessandro-v1")
@@ -51,16 +50,17 @@ std::unique_ptr<AbstractDNNInput> makeDNNInputFromString(std::string dnnVersion)
   assert(false);
 }
 
-class SuperclusteringProducer : public edm::stream::EDProducer<> {
+class SuperclusteringProducer : public edm::stream::EDProducer<edm::GlobalCache<ONNXRuntime>> {
 public:
-  explicit SuperclusteringProducer(const edm::ParameterSet &ps);
+  explicit SuperclusteringProducer(const edm::ParameterSet &, const ONNXRuntime *);
   ~SuperclusteringProducer() override{};
   void produce(edm::Event &, const edm::EventSetup &) override;
   static void fillDescriptions(edm::ConfigurationDescriptions &descriptions);
+  static std::unique_ptr<ONNXRuntime> initializeGlobalCache(const edm::ParameterSet &);
+  static void globalEndJob(const ONNXRuntime *cache);
 
 private:
   const edm::EDGetTokenT<std::vector<Trackster>> tracksters_clue3d_token_;
-  const edm::ESGetToken<TfGraphDefWrapper, TfGraphRecord> tfDnnToken_; // ES Token to obtain tensorflow session and graph
   const std::string dnnVersion_; // Version identifier of the DNN (to choose which inputs to use)
   double nnWorkingPoint_; // Working point for neural network (above this score, consider the trackster candidate for superclustering)
   float deltaEtaWindow_; // Delta eta window to consider trackster seed-candidate pairs for inference
@@ -69,9 +69,8 @@ private:
 };
 
 
-SuperclusteringProducer::SuperclusteringProducer(const edm::ParameterSet &ps)
+SuperclusteringProducer::SuperclusteringProducer(const edm::ParameterSet &ps, const ONNXRuntime*)
     : tracksters_clue3d_token_(consumes<std::vector<Trackster>>(ps.getParameter<edm::InputTag>("tracksters"))),
-      tfDnnToken_(esConsumes(edm::ESInputTag("", ps.getParameter<std::string>("tfDnnLabel")))),
       dnnVersion_(ps.getParameter<std::string>("dnnVersion")),
       nnWorkingPoint_(ps.getParameter<double>("nnWorkingPoint")),
       deltaEtaWindow_(ps.getParameter<double>("deltaEtaWindow")),
@@ -83,14 +82,16 @@ SuperclusteringProducer::SuperclusteringProducer(const edm::ParameterSet &ps)
 #endif
 }
 
+std::unique_ptr<ONNXRuntime> SuperclusteringProducer::initializeGlobalCache(const edm::ParameterSet &iConfig) {
+  return std::make_unique<ONNXRuntime>(iConfig.getParameter<edm::FileInPath>("dnn_model_path").fullPath());
+}
 
+void SuperclusteringProducer::globalEndJob(const ONNXRuntime *cache) {}
 
 void SuperclusteringProducer::produce(edm::Event &evt, const edm::EventSetup &es) {
   edm::Handle<std::vector<Trackster>> inputTracksters;
   evt.getByToken(tracksters_clue3d_token_, inputTracksters);
   const unsigned int tracksterCount = inputTracksters->size();
-
-  tensorflow::Session const* tfSession = es.getData(tfDnnToken_).getSession();
 
   std::unique_ptr<AbstractDNNInput> nnInput = makeDNNInputFromString(dnnVersion_);
 
@@ -103,18 +104,19 @@ void SuperclusteringProducer::produce(edm::Event &evt, const edm::EventSetup &es
 
   /* Evaluate in minibatches since running with trackster count = 3000 leads to a short-lived ~15GB memory allocation
   Also we do not know in advance how many superclustering candidate pairs there are going to be
+  So we pick (arbitrarily) a batch size of 10^5. It needs to be rounded to featureCount
   */
-  const unsigned int miniBatchSize = 1e6;
+  const unsigned int miniBatchSize = static_cast<unsigned int>(1e5) / nnInput->featureCount() * nnInput->featureCount();
 
-  std::vector<tensorflow::Tensor> inputTensorBatches; // DNN input features tensors, in minibatches
+  std::vector<std::vector<float>> inputTensorBatches; // DNN input features tensors, in minibatches. Outer array : minibatches, inner array : 2D (flattened) array of features (indexed by batchIndex, featureId)
   // How far along in the latest tensor of inputTensorBatches are we. Set to miniBatchSize to trigger the creation of the tensor batch on first run
   unsigned int candidateIndexInCurrentBatch = miniBatchSize;
   // List of all (ts_seed_id; ts_cand_id) selected for DNN inference (same layout as inputTensorBatches) 
   // Index is in global trackster collection (not pt ordered collection)
   std::vector<std::vector<std::pair<unsigned int, unsigned int>>> tracksterIndicesUsedInDNN; 
 
-  // First loop on candidate tracksters
-  for (unsigned int ts_cand_idx = 0; ts_cand_idx < tracksterCount; ts_cand_idx++) {
+  // First loop on candidate tracksters (start at 1 since the highest pt trackster can only be a seed, not a candidate)
+  for (unsigned int ts_cand_idx = 1; ts_cand_idx < tracksterCount; ts_cand_idx++) {
     Trackster const& ts_cand = (*inputTracksters)[trackstersIndicesPt[ts_cand_idx]];
 
     // Second loop on superclustering seed tracksters
@@ -133,15 +135,21 @@ void SuperclusteringProducer::produce(edm::Event &evt, const edm::EventSetup &es
         if (candidateIndexInCurrentBatch >= miniBatchSize) {
           // Create new minibatch
           assert(candidateIndexInCurrentBatch == miniBatchSize);
-          //Estimate how many seed-candidate pairs are remaining and don't allocate a full batch in this case
-          // static_cast<long> is required to avoid narrowing error
-          inputTensorBatches.emplace_back(tensorflow::DT_FLOAT, 
-              tensorflow::TensorShape({static_cast<long>(std::min(miniBatchSize, (tracksterCount-ts_seed_idx) * (tracksterCount - ts_seed_idx - 1u)/2)), nnInput->featureCount()}));
+
+          //Estimate how many seed-candidate pairs are remaining and don't allocate a full batch in this case. Use worst-case scenario of all pairs passing geometrical window
+          // Also assume ts_seed_idx=0 (worst case) 
+          // TODO we could probably use std::vector::reserve with a basic estimate for less memory usage on last batch
+          inputTensorBatches.emplace_back(std::min(miniBatchSize, (tracksterCount*(tracksterCount-1) - ts_cand_idx*(ts_cand_idx-1))/2) * nnInput->featureCount());
+
           candidateIndexInCurrentBatch = 0;
           tracksterIndicesUsedInDNN.emplace_back();
         }
 
-        nnInput->fillTensor(inputTensorBatches.back(), candidateIndexInCurrentBatch, ts_seed, ts_cand);
+        std::vector<float> features = nnInput->computeVector(ts_seed, ts_cand); // Compute DNN features
+        assert(features.size() == nnInput->featureCount());
+        assert((candidateIndexInCurrentBatch+1)*nnInput->featureCount() <= inputTensorBatches.back().size());
+        // Copy the features into the batch (TODO : could probably avoid the copy and fill straight in the batch vector)
+        std::copy(features.begin(), features.end(), inputTensorBatches.back().begin() + candidateIndexInCurrentBatch*nnInput->featureCount());
         candidateIndexInCurrentBatch++;
         tracksterIndicesUsedInDNN.back().emplace_back(trackstersIndicesPt[ts_seed_idx], trackstersIndicesPt[ts_cand_idx]);
       }
@@ -161,15 +169,23 @@ void SuperclusteringProducer::produce(edm::Event &evt, const edm::EventSetup &es
     return;
   }
 
-  LogDebug("HGCalTICLSuperclustering") << "Input tensor " << inputTensorBatches[0].SummarizeValue(100);
+#ifdef EDM_ML_DEBUG
+  std::ostringstream s;
+  for (unsigned int i = 0; i < std::min(nnInput->featureCount()*20, static_cast<unsigned int>(inputTensorBatches[0].size())); i++) {
+    s << inputTensorBatches[0][i] << " ";
+    if (i != 0 && i % nnInput->featureCount() == 0)
+      s << "],\t[";
+  }
+  LogDebug("HGCalTICLSuperclustering") << inputTensorBatches.size() <<  " batches were created. First batch starts as follows : [" << s.str() << "]";
+#endif
 
   // Run the DNN inference
-  std::vector<tensorflow::Tensor> batchOutputs;
-  for (tensorflow::Tensor& singleBatch : inputTensorBatches) {
-    std::vector<tensorflow::Tensor> outputs;
-    tensorflow::run(tfSession, {{"input", singleBatch}}, {"output_squeeze"}, &outputs);
-    assert(outputs.size() == 1);
-    batchOutputs.push_back(std::move(outputs[0]));
+  std::vector<std::vector<float>> batchOutputs; // Outer index : minibatch, inner index : inference index in minibatch, value : DNN score
+  for (std::vector<float>& singleBatch : inputTensorBatches) {
+    // ONNXRuntime takes std::vector<std::vector<float>>& as input (non-const reference) so we have to make a new vector
+    std::vector<std::vector<float>> inputs_for_onnx{{std::move(singleBatch)}}; // Don't use singleBatch after this as it is in moved-from state
+    std::vector<float> outputs = globalCache()->run({"input"}, inputs_for_onnx, {}, {}, inputs_for_onnx[0].size()/nnInput->featureCount())[0];
+    batchOutputs.push_back(std::move(outputs));
   }
 
   auto outputSuperclusters = std::make_unique<SuperclusteringResult>();
@@ -211,13 +227,14 @@ void SuperclusteringProducer::produce(edm::Event &evt, const edm::EventSetup &es
 
   //Iterate over minibatches
   for (unsigned int batchIndex = 0; batchIndex < batchOutputs.size(); batchIndex++) {
-    auto outputEigenTensor = batchOutputs[batchIndex].tensor<float, 1>(); // 1D-tensor of DNN score outputs
+    std::vector<float> const& currentBatchOutputs = batchOutputs[batchIndex]; // DNN score outputs
     // Iterate over seed-candidate pairs inside current minibatch
     for (unsigned int indexInBatch = 0; indexInBatch < tracksterIndicesUsedInDNN[batchIndex].size(); indexInBatch++) {
-      assert(indexInBatch < static_cast<unsigned int>(batchOutputs[batchIndex].dim_size(0)));
+      assert(indexInBatch < static_cast<unsigned int>(batchOutputs[batchIndex].size()));
 
-      unsigned int ts_seed_idx = tracksterIndicesUsedInDNN[batchIndex][indexInBatch].first;
-      unsigned int ts_cand_idx = tracksterIndicesUsedInDNN[batchIndex][indexInBatch].second;
+      const unsigned int ts_seed_idx = tracksterIndicesUsedInDNN[batchIndex][indexInBatch].first;
+      const unsigned int ts_cand_idx = tracksterIndicesUsedInDNN[batchIndex][indexInBatch].second;
+      const float currentDnnScore = currentBatchOutputs[indexInBatch];
 
       if (previousCandTrackster_idx != std::numeric_limits<unsigned int>::max() && ts_cand_idx != previousCandTrackster_idx) {
         // There is a transition from one seed to the next (don't make a transition for the first iteration)
@@ -225,13 +242,13 @@ void SuperclusteringProducer::produce(edm::Event &evt, const edm::EventSetup &es
       }
       #ifdef EDM_ML_DEBUG
       // Map the DNN score from float in [0, 1] to unsigned short
-      outputTracksterDNNScore->emplace_back(ts_seed_idx, ts_cand_idx, static_cast<ticl::SuperclusteringDNNScoreValuePacked>(outputEigenTensor(indexInBatch)*std::numeric_limits<SuperclusteringDNNScoreValuePacked>::max()));
+      outputTracksterDNNScore->emplace_back(ts_seed_idx, ts_cand_idx, static_cast<ticl::SuperclusteringDNNScoreValuePacked>(currentDnnScore*std::numeric_limits<SuperclusteringDNNScoreValuePacked>::max()));
       #endif
 
-      if (outputEigenTensor(indexInBatch) > bestSeedForCurrentCandidate_dnnScore && !tracksterMask[ts_seed_idx]) {
+      if (currentDnnScore > bestSeedForCurrentCandidate_dnnScore && !tracksterMask[ts_seed_idx]) {
         // Check that the DNN suggests superclustering, that this seed-candidate assoc is better than previous ones, and that the seed is not already in a supercluster as candidate
         bestSeedForCurrentCandidate_idx = ts_seed_idx;
-        bestSeedForCurrentCandidate_dnnScore = outputEigenTensor(indexInBatch);
+        bestSeedForCurrentCandidate_dnnScore = currentDnnScore;
       }
       previousCandTrackster_idx = ts_cand_idx;
     }
@@ -256,8 +273,8 @@ void SuperclusteringProducer::produce(edm::Event &evt, const edm::EventSetup &es
 
 void SuperclusteringProducer::fillDescriptions(edm::ConfigurationDescriptions &descriptions) {
   edm::ParameterSetDescription desc;
-  desc.add<std::string>("tfDnnLabel", "superclusteringTf")
-    ->setComment("Name of an TfGraphDefWrapper (PhysicsTools/TensorFlow) in the event holding the DNN. It is ususally created by TfGraphDefProducer in RecoHGCal/TICL/python/superclusteringTf_cff.py");
+  desc.add<edm::FileInPath>("dnn_model_path", edm::FileInPath("RecoHGCal/TICL/data/tf_models/supercls_v2.onnx"))
+    ->setComment("Path to DNN (as ONNX model)");
   desc.add<std::string>("dnnVersion", "alessandro-v2")
     ->setComment("DNN version tag. Can be alessandro-v1 or alessandro-v2");
   desc.add<edm::InputTag>("tracksters", edm::InputTag("ticlTrackstersCLUE3DHigh"))
