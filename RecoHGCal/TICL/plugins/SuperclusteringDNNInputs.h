@@ -140,7 +140,7 @@ public:
       
     XYZVectorF pca_cand_seedFrame = rot(pca_cand_cmsFrame); // seed coordinates
 
-    float explVar_denominator = std::accumulate(std::begin(ts_toCluster.eigenvalues()), std::end(ts_toCluster.eigenvalues()), 0, std::plus<float>());
+    float explVar_denominator = std::accumulate(std::begin(ts_toCluster.eigenvalues()), std::end(ts_toCluster.eigenvalues()), 0.f, std::plus<float>());
     float explVarRatio = 0.;
     if (explVar_denominator != 0.) {
         explVarRatio = ts_toCluster.eigenvalues()[0] / explVar_denominator; // explVarRatio
