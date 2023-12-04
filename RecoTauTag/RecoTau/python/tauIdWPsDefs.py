@@ -56,6 +56,31 @@ WORKING_POINTS_v2p5 = {
     }
 }
 
+WORKING_POINTS_v2p7 = {
+    "e": {
+        "VVVLoose": 0.099,
+        "VVLoose": 0.2384,
+        "VLoose": 0.4136,
+        "Loose": 0.688,
+        "Medium": 0.8704,
+        "Tight": 0.9669,
+        "VTight": 0.9882,
+        "VVTight": 0.9951
+    },
+    "mu": {
+        "VLoose": 0.2949,
+        "Loose": 0.4746,
+        "Medium": 0.7454,
+        "Tight": 0.9172
+    },
+    "jet": {
+        "VLoose": 0.7700,
+        "Loose": 0.9350,
+        "Medium": 0.9910,
+        "Tight": 0.9977
+    }
+}
+
 WORKING_POINTS_PHASEII_v2p5 = {
     "e": {
         "VVVLoose": 0.2376,

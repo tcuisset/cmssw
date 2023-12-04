@@ -112,7 +112,7 @@ def nanoAOD_addTauIds(process, idsToRun=[]):
                                                   postfix = "ForNano",
             toKeep = idsToRun)
         tauIdEmbedder.runTauID()
-        process.finalTaus.src = updatedTauName
+        #process.finalTaus.src = updatedTauName
         #remember to adjust the selection and tables with added IDs
 
         process.tauTask.add( process.rerunMvaIsolationTaskForNano , process.patTauMVAIDsTask )
@@ -128,7 +128,7 @@ def nanoAOD_addBoostedTauIds(process, idsToRun=[]):
                                                          postfix = "BoostedForNano",
                                                          toKeep = idsToRun)
         boostedTauIdEmbedder.runTauID()
-        process.finalBoostedTaus.src = updatedBoostedTauName
+        #process.finalBoostedTaus.src = updatedBoostedTauName
         #remember to adjust the selection and tables with added IDs
 
         process.boostedTauTask.add( process.rerunMvaIsolationTaskBoostedForNano, getattr(process, updatedBoostedTauName))
@@ -137,7 +137,8 @@ def nanoAOD_addBoostedTauIds(process, idsToRun=[]):
 
 def nanoAOD_addPNetToTaus(process, addPNetInfo=False, runPNetCHSAK4=False):
     if addPNetInfo:
-        originalTauName = process.finalTaus.src.value()
+        #originalTauName = process.finalTaus.src.value()
+        originalTauName = "slimmedTausUpdated"
         updatedTauName = originalTauName+'WithPNet'
         jetCollection = "updatedJets"
         process.load('RecoBTag.ONNXRuntime.pfParticleNetFromMiniAODAK4_cff')
@@ -163,7 +164,7 @@ def nanoAOD_addPNetToTaus(process, addPNetInfo=False, runPNetCHSAK4=False):
             addGenJetMatch = False,
             genJetMatch = ""
         ))
-        process.finalTaus.src = updatedTauName
+        #process.finalTaus.src = updatedTauName
 
         # run PNet for CHS AK4 jets if requested
         if runPNetCHSAK4:
@@ -235,6 +236,7 @@ def nanoAOD_customizeCommon(process):
         idsToAdd = cms.vstring(),
         runPNetAK4 = cms.bool(False),
         addPNet = cms.bool(True)
+        #addPNet = cms.bool(False)
     )
     (run2_nanoAOD_106Xv2 | run3_nanoAOD_122).toModify(
         nanoAOD_tau_switch, idsToAdd = ["deepTau2018v2p5"]
@@ -256,7 +258,7 @@ def nanoAOD_customizeCommon(process):
         idsToAdd = cms.vstring()
     )
     run2_nanoAOD_106Xv2.toModify(
-        nanoAOD_boostedTau_switch, idsToAdd = ["2017v2", "dR0p32017v2", "newDM2017v2","againstEle2018"]
+        nanoAOD_boostedTau_switch, idsToAdd = ["2017v2", "dR0p32017v2", "newDM2017v2","againstEle2018","deepTau2018v2p7"]
     ).toModify(
         process, lambda p : nanoAOD_addBoostedTauIds(p, nanoAOD_boostedTau_switch.idsToAdd.value())
     )

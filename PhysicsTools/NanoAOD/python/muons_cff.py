@@ -78,13 +78,18 @@ slimmedMuonsWithUserData = cms.EDProducer("PATMuonUserDataEmbedder",
 
 finalMuons = cms.EDFilter("PATMuonRefSelector",
     src = cms.InputTag("slimmedMuonsWithUserData"),
-    cut = cms.string("pt > 15 || (pt > 3 && (passed('CutBasedIdLoose') || passed('SoftCutBasedId') || passed('SoftMvaId') || passed('CutBasedIdGlobalHighPt') || passed('CutBasedIdTrkHighPt')))")
+    #Changes by Ganesh
+    #cut = cms.string("pt > 15 || (pt > 3 && (passed('CutBasedIdLoose') || passed('SoftCutBasedId') || passed('SoftMvaId') || passed('CutBasedIdGlobalHighPt') || passed('CutBasedIdTrkHighPt')))")
+    cut = cms.string("pt > 15")
 )
 
 finalLooseMuons = cms.EDFilter("PATMuonRefSelector", # for isotrack cleaning
     src = cms.InputTag("slimmedMuonsWithUserData"),
-    cut = cms.string("pt > 3 && track.isNonnull && isLooseMuon")
+    #Changes by Ganesh
+    #cut = cms.string("pt > 3 && track.isNonnull && isLooseMuon")
+    cut = cms.string("pt > 3")
 )
+
 
 muonMVATTH= cms.EDProducer("MuonBaseMVAValueMapProducer",
     src = cms.InputTag("linkedObjects","muons"),

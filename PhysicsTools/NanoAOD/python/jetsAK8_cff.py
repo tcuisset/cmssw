@@ -91,7 +91,7 @@ fatJetTable = simpleCandidateFlatTableProducer.clone(
     src = cms.InputTag("finalJetsAK8"),
     cut = cms.string(" pt > 170"), #probably already applied in miniaod
     name = cms.string("FatJet"),
-    doc  = cms.string("slimmedJetsAK8, i.e. ak8 fat jets for boosted analysis"),
+    doc  = cms.string("slimmedJetsAK8, i.e. ak8 fat jets for boosted analysis with selection "+ "(" + finalJetsAK8.cut.value()+")"),
     variables = cms.PSet(P4Vars,
         jetId = Var("userInt('tightId')*2+4*userInt('tightIdLepVeto')", "uint8",doc="Jet ID flags bit1 is loose (always false in 2017 since it does not exist), bit2 is tight, bit3 is tightLepVeto"),
         area = Var("jetArea()", float, doc="jet catchment area, for JECs",precision=10),
