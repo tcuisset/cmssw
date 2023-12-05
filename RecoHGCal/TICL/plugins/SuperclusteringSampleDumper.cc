@@ -177,7 +177,8 @@ void SuperclusteringSampleDumper::analyze(const edm::Event& evt, const edm::Even
   }
 
   output_tree_->Fill();
-  features_.clear();
+  for (auto feats : features_)
+    feats.clear();
   seedTracksterIdx_.clear();
   candidateTracksterIdx_.clear();
   seedTracksterBestAssociationScore_.clear();
