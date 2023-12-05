@@ -90,6 +90,8 @@ void SuperclusteringSampleDumper::beginJob() {
   output_tree_->Branch("Event", &eventNb_);
   output_tree_->Branch("seedTracksterIdx", &seedTracksterIdx_);
   output_tree_->Branch("candidateTracksterIdx", &candidateTracksterIdx_);
+  output_tree_->Branch("seedTracksterBestAssociationScore", &seedTracksterBestAssociationScore_);
+  output_tree_->Branch("candidateTracksterAssociationScoreWithSeed", &candidateTracksterAssociationScoreWithSeed_);
   std::vector<std::string> featureNames = dnnInput_->featureNames();
   assert(featureNames.size() == dnnInput_->featureCount());
   for (unsigned int i = 0; i < dnnInput_->featureCount(); i++) {
@@ -130,7 +132,8 @@ void SuperclusteringSampleDumper::analyze(const edm::Event& evt, const edm::Even
     if (seed_assocs == assoc_CP_recoToSim->end())
       continue; // No CaloParticle associations for the current trackster (should not happen in theory)
     
-    hgcal::RecoToSimCollectionSimTracksters::data_type const& assocWithMaxScore = *std::max_element(seed_assocs->val.begin(), seed_assocs->val.end(), 
+    // Best score is smallest score
+    hgcal::RecoToSimCollectionSimTracksters::data_type const& assocWithBestScore = *std::min_element(seed_assocs->val.begin(), seed_assocs->val.end(), 
       [](hgcal::RecoToSimCollectionSimTracksters::data_type const& assoc_1, hgcal::RecoToSimCollectionSimTracksters::data_type const& assoc_2) {
         // assoc_* is of type : std::pair<edmRefIntoSimTracksterCollection, std::pair<sharedEnergy, associationScore>>
         return assoc_1.second.second < assoc_2.second.second; 
@@ -162,22 +165,23 @@ void SuperclusteringSampleDumper::analyze(const edm::Event& evt, const edm::Even
         if (cand_assocCP != assoc_CP_recoToSim->end()) {
           // find the association with 
           auto cand_assocWithSeedCP = std::find_if(cand_assocCP->val.begin(), cand_assocCP->val.end(), 
-            [&assocWithMaxScore](hgcal::RecoToSimCollectionSimTracksters::data_type const& assoc) {
+            [&assocWithBestScore](hgcal::RecoToSimCollectionSimTracksters::data_type const& assoc) {
               // assoc is of type : std::pair<edmRefIntoSimTracksterCollection, std::pair<sharedEnergy, associationScore>>
-              return assoc.first == assocWithMaxScore.first; 
+              return assoc.first == assocWithBestScore.first; 
             });
           if (cand_assocWithSeedCP != cand_assocCP->val.end()) {
             cand_assocToSeedCP_score = cand_assocWithSeedCP->second.second;
           }
         }
-        seedTracksterBestAssociationScore_.push_back(assocWithMaxScore.second.second);
+        seedTracksterBestAssociationScore_.push_back(assocWithBestScore.second.second);
         candidateTracksterAssociationScoreWithSeed_.push_back(cand_assocToSeedCP_score);
       }
     }
   }
 
   output_tree_->Fill();
-  features_.clear();
+  for (auto& feats : features_)
+    feats.clear();
   seedTracksterIdx_.clear();
   candidateTracksterIdx_.clear();
   seedTracksterBestAssociationScore_.clear();
