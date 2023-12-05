@@ -90,6 +90,8 @@ void SuperclusteringSampleDumper::beginJob() {
   output_tree_->Branch("Event", &eventNb_);
   output_tree_->Branch("seedTracksterIdx", &seedTracksterIdx_);
   output_tree_->Branch("candidateTracksterIdx", &candidateTracksterIdx_);
+  output_tree_->Branch("seedTracksterBestAssociationScore", &seedTracksterBestAssociationScore_);
+  output_tree_->Branch("candidateTracksterAssociationScoreWithSeed", &candidateTracksterAssociationScoreWithSeed_);
   std::vector<std::string> featureNames = dnnInput_->featureNames();
   assert(featureNames.size() == dnnInput_->featureCount());
   for (unsigned int i = 0; i < dnnInput_->featureCount(); i++) {
