@@ -80,8 +80,8 @@ public:
      (It would need retraining of the DNN)
     */
     return {{
-        std::abs(ts_toCluster.barycenter().Eta() - ts_base.barycenter().Eta()), //DeltaEtaBaryc
-        std::abs(ts_toCluster.barycenter().Phi() - ts_base.barycenter().phi()), //DeltaPhiBaryc
+        std::abs(ts_toCluster.barycenter().Eta()) - std::abs(ts_base.barycenter().Eta()), //DeltaEtaBaryc
+        ts_toCluster.barycenter().Phi() - ts_base.barycenter().phi(), //DeltaPhiBaryc
         ts_toCluster.raw_energy(), //multi_en
         ts_toCluster.barycenter().Eta(), //multi_eta
         (ts_toCluster.raw_energy() * std::sin(ts_toCluster.barycenter().Theta())), //multi_pt
@@ -150,8 +150,8 @@ public:
     }
 
     return {{
-        std::abs(ts_toCluster.barycenter().Eta() - ts_base.barycenter().Eta()), //DeltaEtaBaryc
-        std::abs(ts_toCluster.barycenter().Phi() - ts_base.barycenter().phi()), //DeltaPhiBaryc
+        std::abs(ts_toCluster.barycenter().Eta()) - std::abs(ts_base.barycenter().Eta()), //DeltaEtaBaryc
+        ts_toCluster.barycenter().Phi() - ts_base.barycenter().phi(), //DeltaPhiBaryc
         ts_toCluster.raw_energy(), //multi_en
         ts_toCluster.barycenter().Eta(), //multi_eta
         (ts_toCluster.raw_energy() * std::sin(ts_toCluster.barycenter().Theta())), //multi_pt
