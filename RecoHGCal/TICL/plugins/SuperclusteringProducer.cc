@@ -12,7 +12,7 @@ DNN inference results are then iterated over in the same way as tracksters were.
 the candidate is added to the supercluster of the seed (creating it if it does not exist yet), and the candidate is masked.
 Masked candidates are not considered further (thus trackster are preferentially superclustered to higher pT seeds).
 
-If macro EDM_ML_DEBUG is set, will also produce DNN score in the event (as ticl::SuperclusteringDNNScore)
+If macro SUPERCLUSTERING_DNN_SAVESCORE is set, will also produce DNN score in the event (as ticl::SuperclusteringDNNScore)
 */
 #include <numeric>      // std::iota
 #include <algorithm>    // std::sort, std::stable_sort, std::copy
@@ -79,7 +79,7 @@ SuperclusteringProducer::SuperclusteringProducer(const edm::ParameterSet &ps, co
       seedPtThreshold_(ps.getParameter<double>("seedPtThreshold")),
       candidateEnergyThreshold_(ps.getParameter<double>("candidateEnergyThreshold")) {
   produces<SuperclusteringResult>("superclusteredTracksters"); // Produces std::vector<edm::RefVector<std::vector<Trackster>>>
-#ifdef EDM_ML_DEBUG
+#ifdef SUPERCLUSTERING_DNN_SAVESCORE
   produces<SuperclusteringDNNScore>("superclusteringTracksterDNNScore"); // DNN scores of trackster -> trackster
 #endif
 }
@@ -180,7 +180,7 @@ void SuperclusteringProducer::produce(edm::Event &evt, const edm::EventSetup &es
   if (inputTensorBatches.size() == 0) {
     LogDebug("HGCalTICLSuperclustering") << "No superclustering candidate pairs passed preselection before DNN. There are " << tracksterCount << " tracksters in this event.";
     evt.put(std::make_unique<SuperclusteringResult>(), "superclusteredTracksters");
-    #ifdef EDM_ML_DEBUG
+    #ifdef SUPERCLUSTERING_DNN_SAVESCORE
     evt.put(std::make_unique<SuperclusteringDNNScore>(), "superclusteringTracksterDNNScore");
     #endif
     return;
@@ -206,7 +206,7 @@ void SuperclusteringProducer::produce(edm::Event &evt, const edm::EventSetup &es
   }
 
   auto outputSuperclusters = std::make_unique<SuperclusteringResult>();
-#ifdef EDM_ML_DEBUG
+#ifdef SUPERCLUSTERING_DNN_SAVESCORE
   auto outputTracksterDNNScore = std::make_unique<SuperclusteringDNNScore>();
 #endif
 
@@ -257,7 +257,7 @@ void SuperclusteringProducer::produce(edm::Event &evt, const edm::EventSetup &es
         // There is a transition from one seed to the next (don't make a transition for the first iteration)
         onCandidateTransition(previousCandTrackster_idx);
       }
-      #ifdef EDM_ML_DEBUG
+      #ifdef SUPERCLUSTERING_DNN_SAVESCORE
       // Map the DNN score from float in [0, 1] to unsigned short
       outputTracksterDNNScore->emplace_back(ts_seed_idx, ts_cand_idx, static_cast<ticl::SuperclusteringDNNScoreValuePacked>(currentDnnScore*std::numeric_limits<SuperclusteringDNNScoreValuePacked>::max()));
       #endif
@@ -282,7 +282,7 @@ void SuperclusteringProducer::produce(edm::Event &evt, const edm::EventSetup &es
   #endif
 
   evt.put(std::move(outputSuperclusters), "superclusteredTracksters");
-  #ifdef EDM_ML_DEBUG
+  #ifdef SUPERCLUSTERING_DNN_SAVESCORE
   evt.put(std::move(outputTracksterDNNScore), "superclusteringTracksterDNNScore");
   #endif
 }
