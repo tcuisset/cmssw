@@ -66,6 +66,7 @@ private:
   float deltaEtaWindow_; // Delta eta window to consider trackster seed-candidate pairs for inference
   float deltaPhiWindow_; // Delta phi window
   float seedPtThreshold_; // Min pT for a trackster to be considered as supercluster seed
+  float candidateEnergyThreshold_; // Min energy for a trackster to be superclustered as candidate
 };
 
 
@@ -75,7 +76,8 @@ SuperclusteringProducer::SuperclusteringProducer(const edm::ParameterSet &ps, co
       nnWorkingPoint_(ps.getParameter<double>("nnWorkingPoint")),
       deltaEtaWindow_(ps.getParameter<double>("deltaEtaWindow")),
       deltaPhiWindow_(ps.getParameter<double>("deltaPhiWindow")),
-      seedPtThreshold_(ps.getParameter<double>("seedPtThreshold")) {
+      seedPtThreshold_(ps.getParameter<double>("seedPtThreshold")),
+      candidateEnergyThreshold_(ps.getParameter<double>("candidateEnergyThreshold")) {
   produces<SuperclusteringResult>("superclusteredTracksters"); // Produces std::vector<edm::RefVector<std::vector<Trackster>>>
 #ifdef EDM_ML_DEBUG
   produces<SuperclusteringDNNScore>("superclusteringTracksterDNNScore"); // DNN scores of trackster -> trackster
@@ -119,6 +121,10 @@ void SuperclusteringProducer::produce(edm::Event &evt, const edm::EventSetup &es
   for (unsigned int ts_cand_idx = 1; ts_cand_idx < tracksterCount; ts_cand_idx++) {
     Trackster const& ts_cand = (*inputTracksters)[trackstersIndicesPt[ts_cand_idx]];
 
+    // Cut on candidate trackster energy, to match what was used for training by Alessandro
+    if (ts_cand.raw_energy() < candidateEnergyThreshold_)
+      continue;
+
     // Second loop on superclustering seed tracksters
     // Look only at seed tracksters with higher pT than the candidate (so all pairs are only looked at once)
     for (unsigned int ts_seed_idx = 0; ts_seed_idx < ts_cand_idx; ts_seed_idx++) {
@@ -131,7 +137,6 @@ void SuperclusteringProducer::produce(edm::Event &evt, const edm::EventSetup &es
       // There is no need to run inference for tracksters very far apart
       if (std::abs(ts_seed.barycenter().Eta() - ts_cand.barycenter().Eta()) < deltaEtaWindow_
           && deltaPhi(ts_seed.barycenter().Phi(), ts_cand.barycenter().Phi()) < deltaPhiWindow_) { 
-        
         /* Cut on explained variance ratio. The DNN was trained by Alessandro Tarabini using this cut on the explained variance ratio.
         Therefore we reproduce it here. It is expected that this cut will be removed when the network for EM/hadronic differentitation is in place
         (would need retraining of the superclustering DNN) */
@@ -299,6 +304,8 @@ void SuperclusteringProducer::fillDescriptions(edm::ConfigurationDescriptions &d
      ->setComment("Size of delta phi window to consider for superclustering. Seed-candidate pairs outside this window are not considered for DNN inference.");
   desc.add<double>("seedPtThreshold", 1.)
      ->setComment("Minimum transverse momentum of trackster to be considered as seed of a supercluster");
+  desc.add<double>("candidateEnergyThreshold", 2.) // set the same as Alessandro
+     ->setComment("Minimum energy of trackster to be considered as candidate for superclustering");
   descriptions.add("superclusteringProducer", desc);
 }
 
