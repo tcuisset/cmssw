@@ -131,6 +131,18 @@ void SuperclusteringProducer::produce(edm::Event &evt, const edm::EventSetup &es
       // There is no need to run inference for tracksters very far apart
       if (std::abs(ts_seed.barycenter().Eta() - ts_cand.barycenter().Eta()) < deltaEtaWindow_
           && deltaPhi(ts_seed.barycenter().Phi(), ts_cand.barycenter().Phi()) < deltaPhiWindow_) { 
+        
+        /* Cut on explained variance ratio. The DNN was trained by Alessandro Tarabini using this cut on the explained variance ratio.
+        Therefore we reproduce it here. It is expected that this cut will be removed when the network for EM/hadronic differentitation is in place
+        (would need retraining of the superclustering DNN) */
+        float explVar_denominator = std::accumulate(std::begin(ts_cand.eigenvalues()), std::end(ts_cand.eigenvalues()), 0.f, std::plus<float>());
+        if (explVar_denominator != 0.) {
+          float explVarRatio = ts_cand.eigenvalues()[0] / explVar_denominator; // explVarRatio
+          if ((ts_cand.raw_energy() > 50 && explVarRatio <= 0.95) || (ts_cand.raw_energy() <= 50 && explVarRatio <= 0.92))
+            continue;
+        } else
+          continue;
+
         // First check if we need to add an additional minibatch
         if (candidateIndexInCurrentBatch >= miniBatchSize) {
           // Create new minibatch
