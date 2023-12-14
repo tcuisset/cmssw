@@ -13,7 +13,8 @@ TICL_AOD = cms.PSet(
 TICL_RECO = cms.PSet(
     outputCommands = cms.untracked.vstring(
       trackstersIters +
-      [
+      ['keep *_ticlTracksterLinks_*_*',
+       'keep *_ticlTracksterLinksSuperclustering_*_*',
        'keep *_ticlTrackstersHFNoseTrkEM_*_*',
        'keep *_ticlTrackstersHFNoseEM_*_*',
        'keep *_ticlTrackstersHFNoseTrk_*_*',
