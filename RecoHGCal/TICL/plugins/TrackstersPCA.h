@@ -17,7 +17,7 @@ namespace ticl {
 			     const hgcal::RecHitTools = hgcal::RecHitTools(), 
 			     int minLayer = 10,
 			     int maxLayer = 10,
-			     bool clean = false);
+			     bool clean = true);
   
   inline unsigned getLayerFromLC(const reco::CaloCluster LC, hgcal::RecHitTools rhtools) {
     std::vector<std::pair<DetId, float>> thisclusterHits = LC.hitsAndFractions();
