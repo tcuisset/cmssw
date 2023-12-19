@@ -46,12 +46,20 @@ std::unique_ptr<AbstractDNNInput> makeDNNInputFromString(std::string dnnVersion)
 void TracksterLinkingbySuperClustering::linkTracksters(const Inputs& input, std::vector<Trackster>& resultTracksters,
                     std::vector<std::vector<unsigned int>>& outputSuperclusters,
                     std::vector<std::vector<unsigned int>>& linkedTracksterIdToInputTracksterId) {
-  auto const& inputTracksters = input.tracksters;
+  // For now we use all input tracksters for superclustering. At some point there might be a filter here for EM tracksters (electromagnetic identification with DNN ?)
+  resultTracksters = std::vector<Trackster>(input.tracksters.begin(), input.tracksters.end());
+  auto const& inputTracksters = resultTracksters;
   const unsigned int tracksterCount = inputTracksters.size();
+
+  // Since we keep the same input trackster collection, linkedTracksterIdToInputTracksterId is a trivial 1:1 mapping 
+  linkedTracksterIdToInputTracksterId.resize(tracksterCount, {0});
+  for (unsigned int i = 0; i < tracksterCount; i++) {
+    linkedTracksterIdToInputTracksterId[i][0] = i;
+  }
 
   std::unique_ptr<AbstractDNNInput> nnInput = makeDNNInputFromString(dnnVersion_);
 
-  //Sorting tracksters by decreasing order of pT (out-of-place sort)
+  //Sorting tracksters by decreasing order of pT (out-of-place sort). We could instead in-place sort resultTracksters since we are making a copy anyway
   std::vector<unsigned int> trackstersIndicesPt(inputTracksters.size()); // Vector of indices into inputTracksters, to be sorted
   std::iota(trackstersIndicesPt.begin(), trackstersIndicesPt.end(), 0); // Fill trackstersIndicesPt with 0...tracksterCount-1
   std::stable_sort(trackstersIndicesPt.begin(), trackstersIndicesPt.end(), [&inputTracksters](unsigned int i1, unsigned int i2) {
