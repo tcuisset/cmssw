@@ -100,15 +100,15 @@ public:
 
 // Helper functions for angles. Adapted from ROOT (3D vectors -> 2D vectors)
 template <class Vector1, class Vector2>
-double CosTheta2D( const Vector1 &  v1, const Vector2  & v2) {
-  double arg;
-  double v1_r2 = v1.X()*v1.X() + v1.Y()*v1.Y();
-  double v2_r2 = v2.X()*v2.X() + v2.Y()*v2.Y();
-  double ptot2 = v1_r2*v2_r2;
+float CosTheta2D( const Vector1 &  v1, const Vector2  & v2) {
+  float arg;
+  float v1_r2 = v1.X()*v1.X() + v1.Y()*v1.Y();
+  float v2_r2 = v2.X()*v2.X() + v2.Y()*v2.Y();
+  float ptot2 = v1_r2*v2_r2;
   if(ptot2 <= 0) {
       arg = 0.0;
   }else{
-      double pdot = v1.X()*v2.X() + v1.Y()*v2.Y();
+      float pdot = v1.X()*v2.X() + v1.Y()*v2.Y();
       using std::sqrt;
       arg = pdot/sqrt(ptot2);
       if(arg >  1.0) arg =  1.0;
