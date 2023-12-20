@@ -9,26 +9,19 @@ namespace ticl {
 
 class TracksterLinkingbySuperClustering : public TracksterLinkingAlgoBase {
 public:
-  TracksterLinkingbySuperClustering(const edm::ParameterSet& ps, edm::ConsumesCollector iC)
-      : TracksterLinkingAlgoBase(ps, iC),
-      onnxRuntime_(ps.getParameter<edm::FileInPath>("dnn_model_path").fullPath()),
-      dnnVersion_(ps.getParameter<std::string>("dnnVersion")),
-      nnWorkingPoint_(ps.getParameter<double>("nnWorkingPoint")),
-      deltaEtaWindow_(ps.getParameter<double>("deltaEtaWindow")),
-      deltaPhiWindow_(ps.getParameter<double>("deltaPhiWindow")),
-      seedPtThreshold_(ps.getParameter<double>("seedPtThreshold")),
-      candidateEnergyThreshold_(ps.getParameter<double>("candidateEnergyThreshold"))
-  {}
+  TracksterLinkingbySuperClustering(const edm::ParameterSet& ps, edm::ConsumesCollector iC, cms::Ort::ONNXRuntime const* onnxRuntime = nullptr);
   virtual ~TracksterLinkingbySuperClustering() {}
   static void fillPSetDescription(edm::ParameterSetDescription& iDesc);
 
   void linkTracksters(const Inputs& input, std::vector<Trackster>& resultTracksters,
                       std::vector<std::vector<unsigned int>>& linkedResultTracksters,
                       std::vector<std::vector<unsigned int>>& linkedTracksterIdToInputTracksterId) override;
+  void initialize(const HGCalDDDConstants* hgcons,
+                    const hgcal::RecHitTools rhtools,
+                    const edm::ESHandle<MagneticField> bfieldH,
+                    const edm::ESHandle<Propagator> propH) override;
   
 private:
-  cms::Ort::ONNXRuntime onnxRuntime_; // TODO this only needs to be instantiated globally, but currently it 
-
   const std::string dnnVersion_; // Version identifier of the DNN (to choose which inputs to use)
   double nnWorkingPoint_; // Working point for neural network (above this score, consider the trackster candidate for superclustering)
   float deltaEtaWindow_; // Delta eta window to consider trackster seed-candidate pairs for inference

@@ -38,6 +38,24 @@ std::unique_ptr<AbstractDNNInput> makeDNNInputFromString(std::string dnnVersion)
   assert(false);
 }
 
+TracksterLinkingbySuperClustering::TracksterLinkingbySuperClustering(const edm::ParameterSet& ps, edm::ConsumesCollector iC, cms::Ort::ONNXRuntime const* onnxRuntime)
+      : TracksterLinkingAlgoBase(ps, iC, onnxRuntime),
+      dnnVersion_(ps.getParameter<std::string>("dnnVersion")),
+      nnWorkingPoint_(ps.getParameter<double>("nnWorkingPoint")),
+      deltaEtaWindow_(ps.getParameter<double>("deltaEtaWindow")),
+      deltaPhiWindow_(ps.getParameter<double>("deltaPhiWindow")),
+      seedPtThreshold_(ps.getParameter<double>("seedPtThreshold")),
+      candidateEnergyThreshold_(ps.getParameter<double>("candidateEnergyThreshold"))
+{
+  assert(onnxRuntime_ && "TracksterLinkingbySuperClustering : ONNXRuntime was not provided, the model should have been set in onnxModelPath in the plugin config");
+} 
+
+void TracksterLinkingbySuperClustering::initialize(const HGCalDDDConstants *hgcons,
+                                             const hgcal::RecHitTools rhtools,
+                                             const edm::ESHandle<MagneticField> bfieldH,
+                                             const edm::ESHandle<Propagator> propH) {
+}
+
 /**
  * resultTracksters : should be all EM tracksters (including those not in Superclusters)
  * outputSuperclusters : indices into resultsTracksters. Should include ts not in SC as one-element vectors
@@ -184,7 +202,7 @@ void TracksterLinkingbySuperClustering::linkTracksters(const Inputs& input, std:
   for (std::vector<float>& singleBatch : inputTensorBatches) {
     // ONNXRuntime takes std::vector<std::vector<float>>& as input (non-const reference) so we have to make a new vector
     std::vector<std::vector<float>> inputs_for_onnx{{std::move(singleBatch)}}; // Don't use singleBatch after this as it is in moved-from state
-    std::vector<float> outputs = onnxRuntime_.run({"input"}, inputs_for_onnx, {}, {}, inputs_for_onnx[0].size()/nnInput->featureCount())[0];
+    std::vector<float> outputs = onnxRuntime_->run({"input"}, inputs_for_onnx, {}, {}, inputs_for_onnx[0].size()/nnInput->featureCount())[0];
     batchOutputs.push_back(std::move(outputs));
   }
 
@@ -277,7 +295,7 @@ void TracksterLinkingbySuperClustering::linkTracksters(const Inputs& input, std:
 
 void TracksterLinkingbySuperClustering::fillPSetDescription(edm::ParameterSetDescription &desc) {
   TracksterLinkingAlgoBase::fillPSetDescription(desc); // adds algo_verbosity
-  desc.add<edm::FileInPath>("dnn_model_path", edm::FileInPath("RecoHGCal/TICL/data/tf_models/supercls_v2.onnx"))
+  desc.add<edm::FileInPath>("onnxModelPath", edm::FileInPath("RecoHGCal/TICL/data/tf_models/supercls_v2.onnx"))
     ->setComment("Path to DNN (as ONNX model)");
   desc.add<std::string>("dnnVersion", "alessandro-v2")
     ->setComment("DNN version tag. Can be alessandro-v1 or alessandro-v2");
