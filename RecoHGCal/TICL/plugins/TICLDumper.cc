@@ -758,8 +758,8 @@ TICLDumper::TICLDumper(const edm::ParameterSet& ps)
           consumes<std::vector<ticl::Trackster>>(ps.getParameter<edm::InputTag>("trackstersmerged"))),
       clustersTime_token_(
           consumes<edm::ValueMap<std::pair<float, float>>>(ps.getParameter<edm::InputTag>("layer_clustersTime"))),
-      superclustering_token_(consumes<std::vector<std::vector<unsigned int>>>(
-          ps.getParameter<edm::InputTag>("superclustering"))),
+      superclustering_token_(
+          consumes<std::vector<std::vector<unsigned int>>>(ps.getParameter<edm::InputTag>("superclustering"))),
       //superclustering_DNNScore_token_(consumes<ticl::SuperclusteringDNNScore>(
       //    ps.getParameter<edm::InputTag>("superclusteringDNNScore"))),
       caloGeometry_token_(esConsumes<CaloGeometry, CaloGeometryRecord, edm::Transition::BeginRun>()),

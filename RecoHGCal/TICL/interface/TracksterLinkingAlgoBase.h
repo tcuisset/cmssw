@@ -34,7 +34,7 @@ namespace cms {
   namespace Ort {
     class ONNXRuntime;
   }
-}
+}  // namespace cms
 
 namespace ticl {
   class TracksterLinkingAlgoBase {
@@ -42,9 +42,10 @@ namespace ticl {
     /** \param conf the configuration of the plugin
      * \param onnxRuntime the ONNXRuntime, if onnxModelPath was provided in plugin configuration (nullptr otherwise)
     */
-    TracksterLinkingAlgoBase(const edm::ParameterSet& conf, edm::ConsumesCollector, cms::Ort::ONNXRuntime const* onnxRuntime = nullptr)
-        : algo_verbosity_(conf.getParameter<int>("algo_verbosity")),
-          onnxRuntime_(onnxRuntime) {}
+    TracksterLinkingAlgoBase(const edm::ParameterSet& conf,
+                             edm::ConsumesCollector,
+                             cms::Ort::ONNXRuntime const* onnxRuntime = nullptr)
+        : algo_verbosity_(conf.getParameter<int>("algo_verbosity")), onnxRuntime_(onnxRuntime) {}
     virtual ~TracksterLinkingAlgoBase(){};
 
     struct Inputs {

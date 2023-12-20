@@ -178,7 +178,7 @@ void TracksterLinkingbySuperClustering::linkTracksters(const Inputs& input, std:
   We do not look at the output of the DNN on this so it should not matter.
   TODO consider slicing the last batch to avoid unneeded inference */
 
-  if (inputTensorBatches.size() == 0) {
+  if (inputTensorBatches.empty()) {
     LogDebug("HGCalTICLSuperclustering") << "No superclustering candidate pairs passed preselection before DNN. There are " << tracksterCount << " tracksters in this event.";
     //evt.put(std::make_unique<SuperclusteringResult>(), "superclusteredTracksters");
     //#ifdef SUPERCLUSTERING_DNN_SAVESCORE
