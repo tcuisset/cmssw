@@ -210,8 +210,8 @@ void TracksterLinkingbySuperClustering::linkTracksters(const Inputs& input, std:
   auto outputTracksterDNNScore = std::make_unique<SuperclusteringDNNScore>();
 #endif
 
-  /* Build mask of tracksters already superclustered as candidates (seeds are not added). Uses global trackster ids
-  note that tracksterMask for the last seed trackster is never filled, as it is not needed.
+  /* Build mask of tracksters already superclustered as candidates, as well as seeds (only needed to add tracksters not in a supercluster to the output).
+  Uses global trackster ids
   */
   std::vector<bool> tracksterMask(tracksterCount, false);
   
@@ -238,6 +238,7 @@ void TracksterLinkingbySuperClustering::linkTracksters(const Inputs& input, std:
         outputSuperclusters.emplace_back();
         outputSuperclusters.back().push_back(bestSeedForCurrentCandidate_idx);
         seed_supercluster_it = outputSuperclusters.end()-1;
+        tracksterMask[bestSeedForCurrentCandidate_idx] = true; // mask the seed as well (needed to find tracksters not in any supercluster)
       }
       seed_supercluster_it->push_back(ts_cand_idx);
       // Reset variables
@@ -275,6 +276,13 @@ void TracksterLinkingbySuperClustering::linkTracksters(const Inputs& input, std:
     }
   }
   onCandidateTransition(previousCandTrackster_idx);
+
+  // Adding one-trackster superclusters for all tracksters not in a supercluster already
+  for (unsigned int ts_id = 0; ts_id < tracksterCount; ts_id++) {
+    if (!tracksterMask[ts_id]) {
+      outputSuperclusters.emplace_back(std::initializer_list<unsigned int>{ts_id});
+    }
+  }
 
   #ifdef EDM_ML_DEBUG
   /*
