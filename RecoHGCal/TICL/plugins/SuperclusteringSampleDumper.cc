@@ -69,7 +69,7 @@ SuperclusteringSampleDumper::SuperclusteringSampleDumper(const edm::ParameterSet
       deltaEtaWindow_(ps.getParameter<double>("deltaEtaWindow")),
       deltaPhiWindow_(ps.getParameter<double>("deltaPhiWindow")),
       seedPtThreshold_(ps.getParameter<double>("seedPtThreshold")),
-      candidateEnergyThreshold_(ps.getParameter<double>("candidateEnergyThreshold_")),
+      candidateEnergyThreshold_(ps.getParameter<double>("candidateEnergyThreshold")),
       eventNb_(0),
       dnnInput_(makeDNNInputFromString(ps.getParameter<std::string>("dnnVersion"))),
       features_(dnnInput_->featureCount()) {
