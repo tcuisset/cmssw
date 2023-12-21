@@ -65,19 +65,13 @@ void TracksterLinkingbySuperClustering::linkTracksters(const Inputs& input, std:
                     std::vector<std::vector<unsigned int>>& outputSuperclusters,
                     std::vector<std::vector<unsigned int>>& linkedTracksterIdToInputTracksterId) {
   // For now we use all input tracksters for superclustering. At some point there might be a filter here for EM tracksters (electromagnetic identification with DNN ?)
-  resultTracksters = std::vector<Trackster>(input.tracksters.begin(), input.tracksters.end());
-  auto const& inputTracksters = resultTracksters;
+  //resultTracksters = std::vector<Trackster>(input.tracksters.begin(), input.tracksters.end());
+  auto const& inputTracksters = input.tracksters;
   const unsigned int tracksterCount = inputTracksters.size();
-
-  // Since we keep the same input trackster collection, linkedTracksterIdToInputTracksterId is a trivial 1:1 mapping 
-  linkedTracksterIdToInputTracksterId.resize(tracksterCount, {0});
-  for (unsigned int i = 0; i < tracksterCount; i++) {
-    linkedTracksterIdToInputTracksterId[i][0] = i;
-  }
 
   std::unique_ptr<AbstractDNNInput> nnInput = makeDNNInputFromString(dnnVersion_);
 
-  //Sorting tracksters by decreasing order of pT (out-of-place sort). We could instead in-place sort resultTracksters since we are making a copy anyway
+  //Sorting tracksters by decreasing order of pT (out-of-place sort). 
   std::vector<unsigned int> trackstersIndicesPt(inputTracksters.size()); // Vector of indices into inputTracksters, to be sorted
   std::iota(trackstersIndicesPt.begin(), trackstersIndicesPt.end(), 0); // Fill trackstersIndicesPt with 0...tracksterCount-1
   std::stable_sort(trackstersIndicesPt.begin(), trackstersIndicesPt.end(), [&inputTracksters](unsigned int i1, unsigned int i2) {
@@ -184,7 +178,7 @@ void TracksterLinkingbySuperClustering::linkTracksters(const Inputs& input, std:
     //#ifdef SUPERCLUSTERING_DNN_SAVESCORE
     //evt.put(std::make_unique<SuperclusteringDNNScore>(), "superclusteringTracksterDNNScore");
     //#endif
-    return;
+    //return;
   }
 
 #ifdef EDM_ML_DEBUG
@@ -237,10 +231,19 @@ void TracksterLinkingbySuperClustering::linkTracksters(const Inputs& input, std:
         // No supercluster exists yet for the seed. Create one.
         outputSuperclusters.emplace_back();
         outputSuperclusters.back().push_back(bestSeedForCurrentCandidate_idx);
+        resultTracksters.emplace_back(inputTracksters[trackstersIndicesPt[bestSeedForCurrentCandidate_idx]]);
+        linkedTracksterIdToInputTracksterId.emplace_back(std::initializer_list<unsigned int>{trackstersIndicesPt[bestSeedForCurrentCandidate_idx]});
         seed_supercluster_it = outputSuperclusters.end()-1;
         tracksterMask[bestSeedForCurrentCandidate_idx] = true; // mask the seed as well (needed to find tracksters not in any supercluster)
       }
+      // Index of the supercluster into resultTracksters, outputSuperclusters and linkedTracksterIdToInputTracksterId collections (the indices are the same)
+      unsigned int indexIntoOutputTracksters = seed_supercluster_it - outputSuperclusters.begin();
       seed_supercluster_it->push_back(ts_cand_idx);
+      resultTracksters[indexIntoOutputTracksters].mergeTracksters({inputTracksters[trackstersIndicesPt[ts_cand_idx]]});
+      linkedTracksterIdToInputTracksterId[indexIntoOutputTracksters].push_back(trackstersIndicesPt[ts_cand_idx]);
+      
+      assert(outputSuperclusters.size() == resultTracksters.size() && outputSuperclusters.size() == linkedTracksterIdToInputTracksterId.size());
+      assert(seed_supercluster_it->size() == linkedTracksterIdToInputTracksterId[indexIntoOutputTracksters].size());
       // Reset variables
       bestSeedForCurrentCandidate_idx = std::numeric_limits<unsigned int>::max(); 
       bestSeedForCurrentCandidate_dnnScore = nnWorkingPoint_;
