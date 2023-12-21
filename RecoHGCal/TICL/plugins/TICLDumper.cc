@@ -292,7 +292,8 @@ private:
   const edm::EDGetTokenT<std::vector<ticl::Trackster>> tracksters_merged_token_;
   const edm::EDGetTokenT<edm::ValueMap<std::pair<float, float>>> clustersTime_token_;
   const edm::EDGetTokenT<std::vector<int>> tracksterSeeds_token_;
-  const edm::EDGetTokenT<std::vector<std::vector<unsigned int>>> superclustering_token_;
+  const edm::EDGetTokenT<std::vector<ticl::Trackster>> superclustering_superclusteredTracksters_token;
+  const edm::EDGetTokenT<std::vector<std::vector<unsigned int>>> superclustering_linkedResultTracksters_token;
   //const edm::EDGetTokenT<ticl::SuperclusteringDNNScore> superclustering_DNNScore_token_;
   edm::ESGetToken<CaloGeometry, CaloGeometryRecord> caloGeometry_token_;
   const edm::EDGetTokenT<std::vector<ticl::Trackster>> simTracksters_SC_token_;
@@ -352,7 +353,8 @@ private:
 
   TracksterDumperHelper trackster_dumper;
 
-  std::vector<std::vector<unsigned int>> superclusteredTracksters; // Outer vector : superclusters, inner vector : indices in ticlTrackstersCLUE3DHigh collection
+  TracksterDumperHelper superclustering_superclusteredTracksters_dumper;
+  std::vector<std::vector<unsigned int>> superclustering_linkedResultTracksters; // Map of indices from superclusteredTracksters collection back into ticlTrackstersCLUE3DEM collection
   //ticl::SuperclusteringDNNScore superclusteringDNNScore;
 
   std::vector<float> stsSC_trackster_time;
@@ -587,7 +589,8 @@ void TICLDumper::clearVariables() {
 
   trackster_dumper.clearVariables();
 
-  superclusteredTracksters.clear();
+  superclustering_superclusteredTracksters_dumper.clearVariables();
+  superclustering_linkedResultTracksters.clear();
   // superclusteringDNNScore.clear();
 
   stsSC_trackster_time.clear();
@@ -814,7 +817,9 @@ TICLDumper::TICLDumper(const edm::ParameterSet& ps)
           consumes<std::vector<ticl::Trackster>>(ps.getParameter<edm::InputTag>("trackstersmerged"))),
       clustersTime_token_(
           consumes<edm::ValueMap<std::pair<float, float>>>(ps.getParameter<edm::InputTag>("layer_clustersTime"))),
-      superclustering_token_(
+      superclustering_superclusteredTracksters_token(
+          consumes<std::vector<ticl::Trackster>>(ps.getParameter<edm::InputTag>("superclustering"))),
+      superclustering_linkedResultTracksters_token(
           consumes<std::vector<std::vector<unsigned int>>>(ps.getParameter<edm::InputTag>("superclustering"))),
       //superclustering_DNNScore_token_(consumes<ticl::SuperclusteringDNNScore>(
       //    ps.getParameter<edm::InputTag>("superclusteringDNNScore"))),
@@ -930,7 +935,8 @@ void TICLDumper::beginJob() {
 
   if (saveSuperclustering_) {
     superclustering_tree_ = fs->make<TTree>("superclustering", "Superclustering in HGCAL CE-E");
-    superclustering_tree_->Branch("superclusteredTracksters", &superclusteredTracksters);
+    superclustering_superclusteredTracksters_dumper.initTree(superclustering_tree_, &ev_event_);
+    superclustering_tree_->Branch("linkedResultTracksters", &superclustering_linkedResultTracksters);
   }
   // if (saveSuperclusteringDNNScore_) {
   //   superclustering_tree_->Branch("superclusteringDNNScore", &superclusteringDNNScore);
@@ -1237,10 +1243,9 @@ void TICLDumper::analyze(const edm::Event& event, const edm::EventSetup& setup) 
   const auto& trackstersmerged = *tracksters_merged_h;
 
   // superclustering
-  edm::Handle<std::vector<std::vector<unsigned int>>> superclustering_h;
-  event.getByToken(superclustering_token_, superclustering_h);
-  superclusteredTracksters = *superclustering_h;
-
+  auto const& superclustering_superclusteredTracksters = event.get(superclustering_superclusteredTracksters_token);
+  superclustering_linkedResultTracksters = event.get(superclustering_linkedResultTracksters_token);
+  superclustering_superclusteredTracksters_dumper.fillFromEvent(superclustering_superclusteredTracksters, clusters, layerClustersTimes);
   /* edm::Handle<ticl::SuperclusteringDNNScore> superclustering_DNNScore_h;
   event.getByToken(superclustering_DNNScore_token_, superclustering_DNNScore_h);
   // superclustering DNN score is not always saved
@@ -2049,7 +2054,7 @@ void TICLDumper::fillDescriptions(edm::ConfigurationDescriptions& descriptions) 
   desc.add<bool>("saveSimTICLCandidate", true);
   desc.add<bool>("saveTracks", true);
   desc.add<bool>("saveAssociations", true);
-    desc.add<bool>("saveSuperclustering", true);
+  desc.add<bool>("saveSuperclustering", true);
   //desc.add<bool>("saveSuperclusteringDNNScore", false)
   //  ->setComment("Save the superclustering DNN score for all the evaluations made. Takes a large amount of disk space. Make sure the DNN score is also saved into the event as well (otherwise it won't dump anything)");
   descriptions.add("ticlDumper", desc);
