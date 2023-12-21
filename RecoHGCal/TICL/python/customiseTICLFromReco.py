@@ -13,7 +13,7 @@ from RecoTracker.IterativeTracking.iterativeTk_cff import trackdnn_source
 # Automatic addition of the customisation function from RecoHGCal.Configuration.RecoHGCal_EventContent_cff
 from RecoHGCal.Configuration.RecoHGCal_EventContent_cff import customiseHGCalOnlyEventContent
 from SimCalorimetry.HGCalAssociatorProducers.simTracksterAssociatorByEnergyScore_cfi import simTracksterAssociatorByEnergyScore as simTsAssocByEnergyScoreProducer
-from SimCalorimetry.HGCalAssociatorProducers.TSToSimTSAssociation_cfi import tracksterSimTracksterAssociationLinking, tracksterSimTracksterAssociationPR, tracksterSimTracksterAssociationLinkingbyCLUE3D, tracksterSimTracksterAssociationPRbyCLUE3D, tracksterSimTracksterAssociationLinkingPU, tracksterSimTracksterAssociationPRPU
+from SimCalorimetry.HGCalAssociatorProducers.TSToSimTSAssociation_cfi import tracksterSimTracksterAssociationLinking, tracksterSimTracksterAssociationPR, tracksterSimTracksterAssociationLinkingbyCLUE3D, tracksterSimTracksterAssociationPRbyCLUE3D, tracksterSimTracksterAssociationLinkingbyCLUE3DEM, tracksterSimTracksterAssociationPRbyCLUE3DEM, tracksterSimTracksterAssociationLinkingSuperclustering, tracksterSimTracksterAssociationPRSuperclustering, tracksterSimTracksterAssociationLinkingPU, tracksterSimTracksterAssociationPRPU
 
 
 def customiseTICLFromReco(process):
@@ -43,6 +43,10 @@ def customiseTICLFromReco(process):
                                                 process.tracksterSimTracksterAssociationPR,
                                                 process.tracksterSimTracksterAssociationLinkingbyCLUE3D,
                                                 process.tracksterSimTracksterAssociationPRbyCLUE3D,
+                                                process.tracksterSimTracksterAssociationLinkingbyCLUE3DEM,
+                                                process.tracksterSimTracksterAssociationPRbyCLUE3DEM,
+                                                process.tracksterSimTracksterAssociationLinkingSuperclustering,
+                                                process.tracksterSimTracksterAssociationPRSuperclustering,
                                                 process.tracksterSimTracksterAssociationLinkingPU,
                                                 process.tracksterSimTracksterAssociationPRPU
                                                 )
