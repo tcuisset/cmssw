@@ -141,7 +141,6 @@ void TracksterLinkingbySuperClustering::linkTracksters(const Inputs& input, std:
           // Check that the two tracksters are geometrically compatible for superclustering
           if (std::abs(ts_seed.barycenter().Eta() - ts_cand.barycenter().Eta()) < deltaEtaWindow_
               && deltaPhi(ts_seed.barycenter().Phi(), ts_cand.barycenter().Phi()) < deltaPhiWindow_) { 
-            // First check if we need to add an additional minibatch
             if (candidateIndexInCurrentBatch >= miniBatchSize) {
               // Create new minibatch
               assert(candidateIndexInCurrentBatch == miniBatchSize);
@@ -174,11 +173,6 @@ void TracksterLinkingbySuperClustering::linkTracksters(const Inputs& input, std:
 
   if (inputTensorBatches.empty()) {
     LogDebug("HGCalTICLSuperclustering") << "No superclustering candidate pairs passed preselection before DNN. There are " << tracksterCount << " tracksters in this event.";
-    //evt.put(std::make_unique<SuperclusteringResult>(), "superclusteredTracksters");
-    //#ifdef SUPERCLUSTERING_DNN_SAVESCORE
-    //evt.put(std::make_unique<SuperclusteringDNNScore>(), "superclusteringTracksterDNNScore");
-    //#endif
-    //return;
   }
 
 #ifdef EDM_ML_DEBUG
@@ -244,7 +238,7 @@ void TracksterLinkingbySuperClustering::linkTracksters(const Inputs& input, std:
       
       assert(outputSuperclusters.size() == resultTracksters.size() && outputSuperclusters.size() == linkedTracksterIdToInputTracksterId.size());
       assert(seed_supercluster_it->size() == linkedTracksterIdToInputTracksterId[indexIntoOutputTracksters].size());
-      // Reset variables
+      
       bestSeedForCurrentCandidate_idx = std::numeric_limits<unsigned int>::max(); 
       bestSeedForCurrentCandidate_dnnScore = nnWorkingPoint_;
     }
@@ -288,20 +282,13 @@ void TracksterLinkingbySuperClustering::linkTracksters(const Inputs& input, std:
   }
 
   #ifdef EDM_ML_DEBUG
-  /*
-  for (std::vector<unsigned int> const& sc : *outputSuperclusters) {
+  for (std::vector<unsigned int> const& sc : outputSuperclusters) {
     std::ostringstream s;
-    for (auto trackster_it = sc.begin(); trackster_it != sc.end(); trackster_it++)
-      s << trackster_it->key() << " ";
+    for (unsigned int trackster_id : sc)
+      s << trackster_id << " ";
     LogDebug("HGCalTICLSuperclustering") << "Created supercluster of size " << sc.size() << " holding tracksters (first one is seed) " << s.str();
   }
-  */
   #endif
-
-  //evt.put(std::move(outputSuperclusters), "superclusteredTracksters");
-  //#ifdef SUPERCLUSTERING_DNN_SAVESCORE
-  //evt.put(std::move(outputTracksterDNNScore), "superclusteringTracksterDNNScore");
-  //#endif
 }
 
 void TracksterLinkingbySuperClustering::fillPSetDescription(edm::ParameterSetDescription &desc) {
