@@ -29,7 +29,7 @@ void ticl::assignPCAtoTracksters(std::vector<Trackster> &tracksters,
 
   for (auto &trackster : tracksters) {
 
-    std::cout<<"start testing teackster with size:"<<trackster.vertices().size()<<std::endl;
+    LogDebug("TrackstersPCA_Eigen")<<"start testing teackster with size:"<<trackster.vertices().size()<<std::endl;
 
     Eigen::Vector3d point;
     point << 0., 0., 0.;
@@ -80,7 +80,7 @@ void ticl::assignPCAtoTracksters(std::vector<Trackster> &tracksters,
     if (energyWeight && trackster.raw_energy())
       barycenter /= trackster.raw_energy();
 
-    std::cout<<"cleaning is  :"<<clean<<std::endl;
+    LogDebug("TrackstersPCA_Eigen")<<"cleaning is  :"<<clean<<std::endl;
 
     std::vector<unsigned> filtered_idx;
     double filtered_energy = 0;
@@ -117,7 +117,7 @@ void ticl::assignPCAtoTracksters(std::vector<Trackster> &tracksters,
       
       filtered_barycenter /= filtered_energy;
     }
-    std::cout<<"min, max "<<minLayer<<"  "<<maxLayer<<std::endl;
+    LogDebug("TrackstersPCA_Eigen")<<"min, max "<<minLayer<<"  "<<maxLayer<<std::endl;
     
     
     auto calc_covM = [&](size_t i) {
@@ -125,7 +125,7 @@ void ticl::assignPCAtoTracksters(std::vector<Trackster> &tracksters,
       if (energyWeight && trackster.raw_energy()) {
         weight = (layerClusters[trackster.vertices(i)].energy() / trackster.vertex_multiplicity(i)) / (clean ? filtered_energy : trackster.raw_energy());
         if (trackster.vertex_multiplicity(i) > 1 )
-          std::cout<<"trackster.vertex_multiplicity(i)   :"<<trackster.vertex_multiplicity(i)<<std::endl;
+          LogDebug("TrackstersPCA_Eigen")<<"trackster.vertex_multiplicity(i)   :"<<trackster.vertex_multiplicity(i);
       }
       weights2_sum += weight * weight;
       for (size_t x = 0; x < 3; ++x) {
@@ -201,8 +201,8 @@ void ticl::assignPCAtoTracksters(std::vector<Trackster> &tracksters,
     trackster.fillPCAVariables(
         eigenvalues_fromEigen, eigenvectors_fromEigen, sigmas, sigmasEigen, 3, ticl::Trackster::PCAOrdering::ascending);
 
-    std::cout<<"covM:"<<covM <<" "<<covM.norm()<< std::endl;
-    std::cout<<"<-----------tested this trackster------->"<<std::endl;
+    LogDebug("TrackstersPCA_Eigen")<<"covM:"<<covM <<" "<<covM.norm()<< std::endl;
+    LogDebug("TrackstersPCA_Eigen")<<"<-----------tested this trackster------->"<<std::endl;
 
     LogDebug("TrackstersPCA") << "Use energy weighting: " << energyWeight << std::endl;
     LogDebug("TrackstersPCA") << "\nTrackster characteristics: " << std::endl;
