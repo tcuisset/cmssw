@@ -185,10 +185,10 @@ void SuperclusteringSampleDumper::analyze(const edm::Event& evt, const edm::Even
 
 void SuperclusteringSampleDumper::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
   edm::ParameterSetDescription desc;
-  desc.add<edm::InputTag>("tracksters", edm::InputTag("ticlTrackstersCLUE3DHigh"))
+  desc.add<edm::InputTag>("tracksters", edm::InputTag("ticlTrackstersCLUE3DEM"))
     ->setComment("Input trackster collection. Should be CLUE3D tracksters.");
   desc.add<edm::InputTag>("recoToSimAssociatorCP",
-                          edm::InputTag("tracksterSimTracksterAssociationLinkingbyCLUE3D", "recoToSim"));
+                          edm::InputTag("tracksterSimTracksterAssociationLinkingbyCLUE3DEM", "recoToSim"));
   //desc.add<edm::InputTag>("simToRecoAssociatorCP",
   //                        edm::InputTag("tracksterSimTracksterAssociationLinkingbyCLUE3D", "simToReco"));
   desc.add<std::string>("dnnVersion", "alessandro-v2")
