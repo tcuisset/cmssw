@@ -347,7 +347,13 @@ void PatternRecognitionbyCLUE3D<TILES>::makeTracksters(
                               input.layerClusters,
                               input.layerClustersTime,
                               rhtools_.getPositionLayer(rhtools_.lastLayerEE(false), false).z(),
-                              computeLocalTime_);
+                              computeLocalTime_,
+                              true, // energy weighting
+                              rhtools_,
+                              10, // min layer
+                              10, // max layer
+                              true // cleaning
+  );
 
   // run energy regression and ID
   energyRegressionAndID(input.layerClusters, input.tfSession, result);
