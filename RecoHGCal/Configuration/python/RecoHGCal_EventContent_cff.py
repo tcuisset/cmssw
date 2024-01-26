@@ -13,8 +13,7 @@ TICL_AOD = cms.PSet(
 TICL_RECO = cms.PSet(
     outputCommands = cms.untracked.vstring(
       trackstersIters +
-      ['keep *_ticlTracksterLinks_*_*',
-       'keep *_ticlTracksterLinksSuperclustering_*_*',
+      [
        'keep *_ticlTrackstersHFNoseTrkEM_*_*',
        'keep *_ticlTrackstersHFNoseEM_*_*',
        'keep *_ticlTrackstersHFNoseTrk_*_*',
@@ -26,9 +25,7 @@ TICL_RECO = cms.PSet(
       ['keep *_layerClusterSimClusterAssociationProducer_*_*','keep *_layerClusterCaloParticleAssociationProducer_*_*', 'keep *_layerClusterSimTracksterAssociationProducer_*_*'] + 
       ['keep *_tracksterSimTracksterAssociationLinking_*_*' ,'keep *_tracksterSimTracksterAssociationPR_*_*'] +
       ['keep *_tracksterSimTracksterAssociationLinkingPU_*_*' ,'keep *_tracksterSimTracksterAssociationPRPU_*_*'] +
-      ['keep *_tracksterSimTracksterAssociationLinkingbyCLUE3D_*_*', 'keep *_tracksterSimTracksterAssociationPRbyCLUE3D_*_*'] +
-      ['keep *_tracksterSimTracksterAssociationLinkingbyCLUE3DEM_*_*', 'keep *_tracksterSimTracksterAssociationPRbyCLUE3DEM_*_*'] +
-      ['keep *_tracksterSimTracksterAssociationLinkingSuperclustering_*_*', 'keep *_tracksterSimTracksterAssociationPRSuperclustering_*_*', ]
+      ['keep *_tracksterSimTracksterAssociationLinkingbyCLUE3D_*_*', 'keep *_tracksterSimTracksterAssociationPRbyCLUE3D_*_*'] 
       )
     )
 
@@ -39,6 +36,7 @@ TICLv5_RECO = cms.PSet(
             'keep *_ticlTrackstersCLUE3DEM_*_*',
             'keep *_ticlTrackstersCLUE3DHAD_*_*',
             'keep *_ticlTracksterLinks_*_*',
+            'keep *_ticlTracksterLinksSuperclustering_*_*',
             'keep *_ticlCandidate_*_*',
         ]
     )
@@ -62,6 +60,10 @@ TICLv5_FEVT = cms.PSet(
       'keep *_ticlSimTracksters_*_*',
       'keep *_ticlSimTICLCandidates_*_*',
       'keep *_ticlSimTrackstersFromCP_*_*',
+      'keep *_tracksterSimTracksterAssociationLinkingbyCLUE3DEM_*_*',
+      'keep *_tracksterSimTracksterAssociationPRbyCLUE3DEM_*_*',
+      'keep *_tracksterSimTracksterAssociationLinkingSuperclustering_*_*',
+      'keep *_tracksterSimTracksterAssociationPRSuperclustering_*_*', 
       )
     )
 
@@ -93,10 +95,6 @@ def customiseHGCalOnlyEventContent(process):
                                             'keep *_tracksterSimTracksterAssociationPRPU_*_*', 
                                             'keep *_tracksterSimTracksterAssociationLinkingbyCLUE3D_*_*',
                                             'keep *_tracksterSimTracksterAssociationPRbyCLUE3D_*_*', 
-                                            'keep *_tracksterSimTracksterAssociationLinkingbyCLUE3DEM_*_*',
-                                            'keep *_tracksterSimTracksterAssociationPRbyCLUE3DEM_*_*',
-                                            'keep *_tracksterSimTracksterAssociationLinkingSuperclustering_*_*',
-                                            'keep *_tracksterSimTracksterAssociationPRSuperclustering_*_*', 
                                             ])
 
     if hasattr(process, 'FEVTDEBUGEventContent'):

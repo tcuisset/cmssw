@@ -11,6 +11,7 @@ from RecoHGCal.TICL.pfTICLProducer_cfi import pfTICLProducer as _pfTICLProducer
 from RecoHGCal.TICL.tracksterSelectionTf_cfi import *
 
 from RecoHGCal.TICL.tracksterLinksProducer_cfi import tracksterLinksProducer as _tracksterLinksProducer
+from RecoHGCal.TICL.superclustering_cff import ticlTracksterLinksSuperclustering as _ticlTracksterLinksSuperclustering
 from RecoHGCal.TICL.ticlCandidateProducer_cfi import ticlCandidateProducer as _ticlCandidateProducer
 from RecoHGCal.Configuration.RecoHGCal_EventContent_cff import customiseForTICLv5EventContent
 from RecoHGCal.TICL.iterativeTICL_cff import ticlIterLabels, ticlIterLabelsMerge
@@ -67,7 +68,8 @@ def customiseForTICLv5(process, enableDumper = False):
     )
 
     process.ticlTracksterLinks = _tracksterLinksProducer.clone()
-    process.ticlTracksterLinksTask = cms.Task(process.ticlTracksterLinks)
+    process.ticlTracksterLinksSuperclustering = _ticlTracksterLinksSuperclustering.clone()
+    process.ticlTracksterLinksTask = cms.Task(process.ticlTracksterLinks, process.ticlTracksterLinksSuperclustering)
 
     process.ticlCandidate = _ticlCandidateProducer.clone()
     process.ticlCandidateTask = cms.Task(process.ticlCandidate)
@@ -83,6 +85,13 @@ def customiseForTICLv5(process, enableDumper = False):
         )
     process.tracksterSimTracksterAssociationPRbyCLUE3DHAD = _tracksterSimTracksterAssociationPRbyCLUE3D.clone(
         label_tst = cms.InputTag("ticlTrackstersCLUE3DHAD")
+        )
+    # Linking CaloParticleSimTrackster to EM superclusters
+    process.tracksterSimTracksterAssociationLinkingSuperclustering = _tracksterSimTracksterAssociationLinkingbyCLUE3D.clone(
+        label_tst = cms.InputTag("ticlTracksterLinksSuperclustering"),
+        )
+    process.tracksterSimTracksterAssociationPRSuperclustering = _tracksterSimTracksterAssociationPRbyCLUE3D.clone(
+        label_tst = cms.InputTag("ticlTracksterLinksSuperclustering"),
         )
 
     process.mergedTrackstersProducer = _mergedTrackstersProducer.clone()    
@@ -115,6 +124,7 @@ def customiseForTICLv5(process, enableDumper = False):
                             process.tracksterSimTracksterAssociationLinkingbyCLUE3D, process.tracksterSimTracksterAssociationPRbyCLUE3D,
                             process.tracksterSimTracksterAssociationLinkingbyCLUE3DEM, process.tracksterSimTracksterAssociationPRbyCLUE3DEM,
                             process.tracksterSimTracksterAssociationLinkingbyCLUE3DHAD, process.tracksterSimTracksterAssociationPRbyCLUE3DHAD,
+                            process.tracksterSimTracksterAssociationLinkingSuperclustering, process.tracksterSimTracksterAssociationPRSuperclustering,
                             process.tracksterSimTracksterAssociationLinkingPU, process.tracksterSimTracksterAssociationPRPU
                             )
 
