@@ -63,6 +63,7 @@ private:
   void dumpTrackster(const Trackster &) const;
 
   std::unique_ptr<TracksterLinkingAlgoBase> linkingAlgo_;
+  std::string algoType_;
 
   std::vector<edm::EDGetTokenT<std::vector<Trackster>>> tracksters_tokens_;
   const edm::EDGetTokenT<std::vector<reco::CaloCluster>> clusters_token_;
@@ -84,7 +85,8 @@ private:
 };
 
 TracksterLinksProducer::TracksterLinksProducer(const edm::ParameterSet &ps, const ONNXRuntime *onnxRuntime)
-    : clusters_token_(consumes<std::vector<reco::CaloCluster>>(ps.getParameter<edm::InputTag>("layer_clusters"))),
+    : algoType_(ps.getParameter<edm::ParameterSet>("linkingPSet").getParameter<std::string>("type")),
+      clusters_token_(consumes<std::vector<reco::CaloCluster>>(ps.getParameter<edm::InputTag>("layer_clusters"))),
       clustersTime_token_(
           consumes<edm::ValueMap<std::pair<float, float>>>(ps.getParameter<edm::InputTag>("layer_clustersTime"))),
       geometry_token_(esConsumes<CaloGeometry, CaloGeometryRecord, edm::Transition::BeginRun>()),
@@ -112,15 +114,14 @@ TracksterLinksProducer::TracksterLinksProducer(const edm::ParameterSet &ps, cons
   produces<std::vector<float>>();
 
   auto linkingPSet = ps.getParameter<edm::ParameterSet>("linkingPSet");
-  auto algoType = linkingPSet.getParameter<std::string>("type");
 
-  if (algoType == "Skeletons") {
+  if (algoType_ == "Skeletons") {
     std::string detectorName_ = (detector_ == "HFNose") ? "HGCalHFNoseSensitive" : "HGCalEESensitive";
     hdc_token_ = esConsumes<HGCalDDDConstants, IdealGeometryRecord, edm::Transition::BeginRun>(
         edm::ESInputTag("", detectorName_));
   }
 
-  linkingAlgo_ = TracksterLinkingPluginFactory::get()->create(algoType, linkingPSet, consumesCollector(), onnxRuntime);
+  linkingAlgo_ = TracksterLinkingPluginFactory::get()->create(algoType_, linkingPSet, consumesCollector(), onnxRuntime);
 }
 
 std::unique_ptr<ONNXRuntime> TracksterLinksProducer::initializeGlobalCache(const edm::ParameterSet &iConfig) {
@@ -138,8 +139,10 @@ void TracksterLinksProducer::endJob(){};
 void TracksterLinksProducer::globalEndJob(const ONNXRuntime *cache) {}
 
 void TracksterLinksProducer::beginRun(edm::Run const &iEvent, edm::EventSetup const &es) {
-  edm::ESHandle<HGCalDDDConstants> hdc = es.getHandle(hdc_token_);
-  hgcons_ = hdc.product();
+  if (algoType_ == "Skeletons") {
+    edm::ESHandle<HGCalDDDConstants> hdc = es.getHandle(hdc_token_);
+    hgcons_ = hdc.product();
+  }
 
   edm::ESHandle<CaloGeometry> geom = es.getHandle(geometry_token_);
   rhtools_.setGeometry(*geom);
