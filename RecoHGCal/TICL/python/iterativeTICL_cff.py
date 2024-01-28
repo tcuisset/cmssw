@@ -16,6 +16,7 @@ from RecoHGCal.TICL.trackstersMergeProducer_cfi import trackstersMergeProducer a
 from RecoHGCal.TICL.tracksterSelectionTf_cfi import *
 
 from RecoHGCal.TICL.tracksterLinksProducer_cfi import tracksterLinksProducer as _tracksterLinksProducer
+from RecoHGCal.TICL.superclustering_cff import ticlTracksterLinksSuperclustering
 from RecoHGCal.TICL.ticlCandidateProducer_cfi import ticlCandidateProducer as _ticlCandidateProducer
 
 
@@ -44,7 +45,8 @@ fastJetTICL.toModify(ticlIterationsTask, func=lambda x : x.add(ticlFastJetStepTa
 ticlIterLabels = ["CLUE3DEM", "CLUE3DHAD", "CLUE3DHigh"]
 
 ticlTracksterMergeTask = cms.Task(ticlTrackstersMerge)
-ticlTracksterLinksTask = cms.Task(ticlTracksterLinks)
+# added superclustering here since I could not manage to make it work by adding it to customiseForTICLv5_cff.py
+ticlTracksterLinksTask = cms.Task(ticlTracksterLinks, ticlTracksterLinksSuperclustering) 
 
 
 mergeTICLTask = cms.Task(ticlLayerTileTask

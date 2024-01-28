@@ -11,11 +11,10 @@ from RecoHGCal.TICL.pfTICLProducer_cfi import pfTICLProducer as _pfTICLProducer
 from RecoHGCal.TICL.tracksterSelectionTf_cfi import *
 
 from RecoHGCal.TICL.tracksterLinksProducer_cfi import tracksterLinksProducer as _tracksterLinksProducer
-from RecoHGCal.TICL.superclustering_cff import ticlTracksterLinksSuperclustering as _ticlTracksterLinksSuperclustering
 from RecoHGCal.TICL.ticlCandidateProducer_cfi import ticlCandidateProducer as _ticlCandidateProducer
 from RecoHGCal.Configuration.RecoHGCal_EventContent_cff import customiseForTICLv5EventContent
 from RecoHGCal.TICL.iterativeTICL_cff import ticlIterLabels, ticlIterLabelsMerge
-from RecoHGCal.TICL.ticlDumper_cfi import ticlDumper
+from RecoHGCal.TICL.ticlDumper_cff import ticlDumper
 from RecoHGCal.TICL.mergedTrackstersProducer_cfi import mergedTrackstersProducer as _mergedTrackstersProducer
 from SimCalorimetry.HGCalAssociatorProducers.TSToSimTSAssociation_cfi import tracksterSimTracksterAssociationLinkingbyCLUE3D as _tracksterSimTracksterAssociationLinkingbyCLUE3D
 from SimCalorimetry.HGCalAssociatorProducers.TSToSimTSAssociation_cfi import tracksterSimTracksterAssociationPRbyCLUE3D  as _tracksterSimTracksterAssociationPRbyCLUE3D 
@@ -68,7 +67,6 @@ def customiseForTICLv5(process, enableDumper = False):
     )
 
     process.ticlTracksterLinks = _tracksterLinksProducer.clone()
-    process.ticlTracksterLinksSuperclustering = _ticlTracksterLinksSuperclustering.clone()
     process.ticlTracksterLinksTask = cms.Task(process.ticlTracksterLinks, process.ticlTracksterLinksSuperclustering)
 
     process.ticlCandidate = _ticlCandidateProducer.clone()
@@ -138,18 +136,109 @@ def customiseForTICLv5(process, enableDumper = False):
     process.validation_step9 = cms.EndPath(process.globalValidationHGCal)
     if(enableDumper):
         process.ticlDumper = ticlDumper.clone(
-            saveLCs=True,
-            saveCLUE3DTracksters=True,
-            saveTrackstersMerged=True,
-            saveSimTrackstersSC=True,
-            saveSimTrackstersCP=True,
-            saveTICLCandidate=True,
-            saveSimTICLCandidate=True,
-            saveTracks=True,
-            saveAssociations=True,
-            trackstersclue3d = cms.InputTag('mergedTrackstersProducer'),
+            tracksterCollections=[
+                cms.PSet(
+                    treeName=cms.string("trackstersCLUE3DEM"),
+                    inputTag=cms.InputTag("ticlTrackstersCLUE3DEM")
+                ),
+                cms.PSet(
+                    treeName=cms.string("trackstersSuperclustering"),
+                    inputTag=cms.InputTag("ticlTracksterLinksSuperclustering")
+                ),
+                cms.PSet(
+                    treeName=cms.string("trackstersCLUE3DHAD"),
+                    inputTag=cms.InputTag("ticlTrackstersCLUE3DHAD")
+                ),
+                cms.PSet(
+                    treeName=cms.string("trackstersMerged"),
+                    inputTag=cms.InputTag("mergedTrackstersProducer")
+                ),
+                cms.PSet(
+                    treeName=cms.string("trackstersTiclCandidate"),
+                    inputTag=cms.InputTag("ticlCandidate")
+                ),
+
+                cms.PSet(
+                    treeName=cms.string("simtrackstersSC"),
+                    inputTag=cms.InputTag("ticlSimTracksters"),
+                    tracksterType=cms.string("SimTracksterSC")
+                ),
+                cms.PSet(
+                    treeName=cms.string("simtrackstersCP"),
+                    inputTag=cms.InputTag("ticlSimTracksters", "fromCPs"),
+                    tracksterType=cms.string("SimTracksterCP")
+                ),
+            ],
             ticlcandidates = cms.InputTag("ticlCandidate"),
-            trackstersmerged = cms.InputTag("ticlCandidate")
+                associators=[
+                    cms.PSet(
+                        branchName=cms.string("tsCLUE3DEM"),
+                        suffix=cms.string("SC"),
+                        associatorInputTag=cms.InputTag("tracksterSimTracksterAssociationPRbyCLUE3DEM"),
+                        tracksterCollection=cms.InputTag("ticlTrackstersCLUE3DEM"),
+                        simTracksterCollection=cms.InputTag("ticlSimTracksters")
+                    ),
+                    cms.PSet(
+                        branchName=cms.string("tsCLUE3DEM"),
+                        suffix=cms.string("CP"),
+                        associatorInputTag=cms.InputTag("tracksterSimTracksterAssociationLinkingbyCLUE3DEM"),
+                        tracksterCollection=cms.InputTag("ticlTrackstersCLUE3DEM"),
+                        simTracksterCollection=cms.InputTag("ticlSimTracksters", "fromCPs")
+                    ),
+
+                    cms.PSet(
+                        branchName=cms.string("tsCLUE3DHAD"),
+                        suffix=cms.string("SC"),
+                        associatorInputTag=cms.InputTag("tracksterSimTracksterAssociationPRbyCLUE3DHAD"),
+                        tracksterCollection=cms.InputTag("ticlTrackstersCLUE3DHAD"),
+                        simTracksterCollection=cms.InputTag("ticlSimTracksters")
+                    ),
+                    cms.PSet(
+                        branchName=cms.string("tsCLUE3DHAD"),
+                        suffix=cms.string("CP"),
+                        associatorInputTag=cms.InputTag("tracksterSimTracksterAssociationLinkingbyCLUE3DHAD"),
+                        tracksterCollection=cms.InputTag("ticlTrackstersCLUE3DHAD"),
+                        simTracksterCollection=cms.InputTag("ticlSimTracksters", "fromCPs")
+                    ),
+
+                    cms.PSet(
+                        branchName=cms.string("tsSuperclusters"),
+                        suffix=cms.string("SC"),
+                        associatorInputTag=cms.InputTag("tracksterSimTracksterAssociationPRSuperclustering"),
+                        tracksterCollection=cms.InputTag("ticlTracksterLinksSuperclustering"),
+                        simTracksterCollection=cms.InputTag("ticlSimTracksters")
+                    ),
+                    cms.PSet(
+                        branchName=cms.string("tsSuperclusters"),
+                        suffix=cms.string("CP"),
+                        associatorInputTag=cms.InputTag("tracksterSimTracksterAssociationLinkingSuperclustering"),
+                        tracksterCollection=cms.InputTag("ticlTracksterLinksSuperclustering"),
+                        simTracksterCollection=cms.InputTag("ticlSimTracksters", "fromCPs")
+                    ),
+
+                    cms.PSet(
+                        branchName=cms.string("Mergetracksters"),
+                        suffix=cms.string("SC"),
+                        associatorInputTag=cms.InputTag("tracksterSimTracksterAssociationPRbyCLUE3D"),
+                        tracksterCollection=cms.InputTag("mergedTrackstersProducer"),
+                        simTracksterCollection=cms.InputTag("ticlSimTracksters")
+                    ),
+                    cms.PSet(
+                        branchName=cms.string("Mergetracksters"),
+                        suffix=cms.string("CP"),
+                        associatorInputTag=cms.InputTag("tracksterSimTracksterAssociationLinkingbyCLUE3D"),
+                        tracksterCollection=cms.InputTag("mergedTrackstersProducer"),
+                        simTracksterCollection=cms.InputTag("ticlSimTracksters", "fromCPs")
+                    ),
+
+                    cms.PSet(
+                        branchName=cms.string("Mergetracksters"),
+                        suffix=cms.string("PU"),
+                        associatorInputTag=cms.InputTag("tracksterSimTracksterAssociationLinkingPU"),
+                        tracksterCollection=cms.InputTag("ticlTracksterLinks"),
+                        simTracksterCollection=cms.InputTag("ticlSimTracksters", "PU")
+                    ),
+                ]
         )
         process.TFileService = cms.Service("TFileService",
                                            fileName=cms.string("histo.root")

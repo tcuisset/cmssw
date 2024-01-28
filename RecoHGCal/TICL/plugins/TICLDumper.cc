@@ -11,6 +11,7 @@
 #include <memory>  // unique_ptr
 #include "FWCore/ParameterSet/interface/ConfigurationDescriptions.h"
 #include "FWCore/ParameterSet/interface/PluginDescription.h"
+#include "FWCore/ParameterSet/interface/allowedValues.h"
 #include "FWCore/MessageLogger/interface/MessageLogger.h"
 #include "FWCore/Utilities/interface/ESGetToken.h"
 #include "FWCore/Framework/interface/ESHandle.h"
@@ -56,11 +57,69 @@
 #include "FWCore/ServiceRegistry/interface/Service.h"
 #include "CommonTools/UtilAlgos/interface/TFileService.h"
 
-// Dumps a trackster collection 
+class DetectorTools {
+public:
+  DetectorTools(const HGCalDDDConstants& hgcons, const CaloGeometry& geom,
+                            const MagneticField& bfieldH,
+                            const Propagator& propH)
+    : hgcons(hgcons), rhtools(), bfield(bfieldH), propagator(propH)
+  {
+    rhtools.setGeometry(geom);
+
+      // build disks at HGCal front & EM-Had interface for track propagation
+    float zVal = hgcons.waferZ(1, true);
+    std::pair<float, float> rMinMax = hgcons.rangeR(zVal, true);
+
+    float zVal_interface = rhtools.getPositionLayer(rhtools.lastLayerEE()).z();
+    std::pair<float, float> rMinMax_interface = hgcons.rangeR(zVal_interface, true);
+
+    for (int iSide = 0; iSide < 2; ++iSide) {
+      float zSide = (iSide == 0) ? (-1. * zVal) : zVal;
+      firstDisk_[iSide] =
+          std::make_unique<GeomDet>(Disk::build(Disk::PositionType(0, 0, zSide),
+                                                Disk::RotationType(),
+                                                SimpleDiskBounds(rMinMax.first, rMinMax.second, zSide - 0.5, zSide + 0.5))
+                                        .get());
+
+      zSide = (iSide == 0) ? (-1. * zVal_interface) : zVal_interface;
+      interfaceDisk_[iSide] = std::make_unique<GeomDet>(
+          Disk::build(Disk::PositionType(0, 0, zSide),
+                      Disk::RotationType(),
+                      SimpleDiskBounds(rMinMax_interface.first, rMinMax_interface.second, zSide - 0.5, zSide + 0.5))
+              .get());
+    }
+  }
+
+  const HGCalDDDConstants& hgcons;
+  std::unique_ptr<GeomDet> firstDisk_[2];
+  std::unique_ptr<GeomDet> interfaceDisk_[2];
+  hgcal::RecHitTools rhtools;
+  const MagneticField& bfield;
+  const Propagator& propagator;
+};
+
+// Dumps a trackster collection. 
 class TracksterDumperHelper {
 public:
+  enum class TracksterType {
+    Trackster, ///< Regular trackster (from RECO)
+    SimTracksterCP, ///< SimTrackster from CaloParticle
+    SimTracksterSC ///< SimTrackster from SimCluster
+  };
+
+  static TracksterType tracksterTypeFromString(std::string str) {
+    if (str == "Trackster") return TracksterType::Trackster;
+    if (str == "SimTracksterCP") return TracksterType::SimTracksterCP;
+    if (str == "SimTracksterSC") return TracksterType::SimTracksterSC;
+    throw std::runtime_error("TICLDumper : TracksterDumperHelper : Invalid trackster type " + str);
+  }
+
+  /** isSimTrackster : set to false for regular trackster collection, true for SimTrackster collection (stores also calo truth information + track information) */
+  TracksterDumperHelper(TracksterType tracksterType=TracksterType::Trackster) 
+    : tracksterType_(tracksterType) {}
+  
   /**
-   * TO be called once after tree creation. ev_event_ should be a pointer to the event counter
+   * To be called once after tree creation. ev_event_ should be a pointer to the event counter. *Do not copy/move or resize vector holding object after calling this function*
   */
   void initTree(TTree* trackster_tree_, unsigned int* ev_event_) {
     trackster_tree_->Branch("event", ev_event_);
@@ -87,6 +146,28 @@ public:
     trackster_tree_->Branch("sigmaPCA1", &trackster_sigmaPCA1);
     trackster_tree_->Branch("sigmaPCA2", &trackster_sigmaPCA2);
     trackster_tree_->Branch("sigmaPCA3", &trackster_sigmaPCA3);
+    if (tracksterType_ != TracksterType::Trackster) {
+      trackster_tree_->Branch("regressed_pt", &simtrackster_regressed_pt);
+      trackster_tree_->Branch("pdgID", &simtrackster_pdgID);
+      trackster_tree_->Branch("trackIdx", &simtrackster_trackIdx);
+      trackster_tree_->Branch("trackTime", &simtrackster_trackTime);
+      trackster_tree_->Branch("boundaryX", &simtrackster_boundaryX);
+      trackster_tree_->Branch("boundaryY", &simtrackster_boundaryY);
+      trackster_tree_->Branch("boundaryZ", &simtrackster_boundaryZ);
+      trackster_tree_->Branch("boundaryEta", &simtrackster_boundaryEta);
+      trackster_tree_->Branch("boundaryPhi", &simtrackster_boundaryPhi);
+      trackster_tree_->Branch("boundaryPx", &simtrackster_boundaryPx);
+      trackster_tree_->Branch("boundaryPy", &simtrackster_boundaryPy);
+      trackster_tree_->Branch("boundaryPz", &simtrackster_boundaryPz);
+      trackster_tree_->Branch("track_boundaryX", &simtrackster_track_boundaryX);
+      trackster_tree_->Branch("track_boundaryY", &simtrackster_track_boundaryY);
+      trackster_tree_->Branch("track_boundaryZ", &simtrackster_track_boundaryZ);
+      trackster_tree_->Branch("track_boundaryEta", &simtrackster_track_boundaryEta);
+      trackster_tree_->Branch("track_boundaryPhi", &simtrackster_track_boundaryPhi);
+      trackster_tree_->Branch("track_boundaryPx", &simtrackster_track_boundaryPx);
+      trackster_tree_->Branch("track_boundaryPy", &simtrackster_track_boundaryPy);
+      trackster_tree_->Branch("track_boundaryPz", &simtrackster_track_boundaryPz);
+    }
     trackster_tree_->Branch("id_probabilities", &trackster_id_probabilities);
     trackster_tree_->Branch("vertices_indexes", &trackster_vertices_indexes);
     trackster_tree_->Branch("vertices_x", &trackster_vertices_x);
@@ -122,6 +203,28 @@ public:
     trackster_sigmaPCA1.clear();
     trackster_sigmaPCA2.clear();
     trackster_sigmaPCA3.clear();
+
+    simtrackster_regressed_pt.clear();
+    simtrackster_pdgID.clear();
+    simtrackster_trackIdx.clear();
+    simtrackster_trackTime.clear();
+    simtrackster_boundaryX.clear();
+    simtrackster_boundaryY.clear();
+    simtrackster_boundaryZ.clear();
+    simtrackster_boundaryEta.clear();
+    simtrackster_boundaryPhi.clear();
+    simtrackster_boundaryPx.clear();
+    simtrackster_boundaryPy.clear();
+    simtrackster_boundaryPz.clear();
+    simtrackster_track_boundaryX.clear();
+    simtrackster_track_boundaryY.clear();
+    simtrackster_track_boundaryZ.clear();
+    simtrackster_track_boundaryEta.clear();
+    simtrackster_track_boundaryPhi.clear();
+    simtrackster_track_boundaryPx.clear();
+    simtrackster_track_boundaryPy.clear();
+    simtrackster_track_boundaryPz.clear();
+
     trackster_barycenter_eta.clear();
     trackster_barycenter_phi.clear();
     trackster_id_probabilities.clear();
@@ -137,8 +240,9 @@ public:
     trackster_vertices_multiplicity.clear();
   }
 
-  void fillFromEvent(std::vector<ticl::Trackster> const& tracksters, std::vector<reco::CaloCluster> const& clusters,
-      edm::ValueMap<std::pair<float, float>>const& layerClustersTimes) {
+  void fillFromEvent(std::vector<ticl::Trackster> const& tracksters, std::vector<reco::CaloCluster> const& clusters, edm::ValueMap<std::pair<float, float>>const& layerClustersTimes,
+      DetectorTools const& detectorTools,
+      edm::Handle<std::vector<SimCluster>> simClusters_h, edm::Handle<std::vector<CaloParticle>> caloparticles_h, std::vector<reco::Track> tracks) {
     nTracksters = tracksters.size();
     nClusters = clusters.size();
     for (auto trackster_iterator = tracksters.begin(); trackster_iterator != tracksters.end(); ++trackster_iterator) {
@@ -164,6 +268,91 @@ public:
       trackster_sigmaPCA1.push_back(trackster_iterator->sigmasPCA()[0]);
       trackster_sigmaPCA2.push_back(trackster_iterator->sigmasPCA()[1]);
       trackster_sigmaPCA3.push_back(trackster_iterator->sigmasPCA()[2]);
+
+      if (tracksterType_ != TracksterType::Trackster) { // is simtrackster
+        auto const& simclusters = *simClusters_h;
+        auto const& caloparticles = *caloparticles_h;
+
+        if (tracksterType_ == TracksterType::SimTracksterCP)
+          simtrackster_pdgID.push_back(caloparticles[trackster_iterator->seedIndex()].pdgId());
+        else if (tracksterType_ == TracksterType::SimTracksterSC)
+          simtrackster_pdgID.push_back(simclusters[trackster_iterator->seedIndex()].pdgId());
+
+        using CaloObjectVariant = std::variant<CaloParticle, SimCluster>;
+        CaloObjectVariant caloObj;
+        if (trackster_iterator->seedID() == caloparticles_h.id()) {
+          caloObj = caloparticles[trackster_iterator->seedIndex()];
+        } else {
+          caloObj = simclusters[trackster_iterator->seedIndex()];
+        }
+
+        auto const& simTrack = std::visit([](auto&& obj) { return obj.g4Tracks()[0]; }, caloObj);
+        auto const& caloPt = std::visit([](auto&& obj) { return obj.pt(); }, caloObj);
+        simtrackster_regressed_pt.push_back(caloPt);
+        if (simTrack.crossedBoundary()) {
+          simtrackster_boundaryX.push_back(simTrack.getPositionAtBoundary().x());
+          simtrackster_boundaryY.push_back(simTrack.getPositionAtBoundary().y());
+          simtrackster_boundaryZ.push_back(simTrack.getPositionAtBoundary().z());
+          simtrackster_boundaryEta.push_back(simTrack.getPositionAtBoundary().eta());
+          simtrackster_boundaryPhi.push_back(simTrack.getPositionAtBoundary().phi());
+          simtrackster_boundaryPx.push_back(simTrack.getMomentumAtBoundary().x());
+          simtrackster_boundaryPy.push_back(simTrack.getMomentumAtBoundary().y());
+          simtrackster_boundaryPz.push_back(simTrack.getMomentumAtBoundary().z());
+        } else {
+          simtrackster_boundaryX.push_back(-999);
+          simtrackster_boundaryY.push_back(-999);
+          simtrackster_boundaryZ.push_back(-999);
+          simtrackster_boundaryEta.push_back(-999);
+          simtrackster_boundaryPhi.push_back(-999);
+          simtrackster_boundaryPx.push_back(-999);
+          simtrackster_boundaryPy.push_back(-999);
+          simtrackster_boundaryPz.push_back(-999);
+        }
+
+        auto const trackIdx = trackster_iterator->trackIdx();
+        simtrackster_trackIdx.push_back(trackIdx);
+        if (trackIdx != -1) {
+          const auto& track = tracks[trackIdx];
+
+          int iSide = int(track.eta() > 0);
+
+          const auto& fts = trajectoryStateTransform::outerFreeState((track), &detectorTools.bfield);
+          // to the HGCal front
+          const auto& tsos = detectorTools.propagator.propagate(fts, detectorTools.firstDisk_[iSide]->surface());
+          if (tsos.isValid()) {
+            const auto& globalPos = tsos.globalPosition();
+            const auto& globalMom = tsos.globalMomentum();
+            simtrackster_track_boundaryX.push_back(globalPos.x());
+            simtrackster_track_boundaryY.push_back(globalPos.y());
+            simtrackster_track_boundaryZ.push_back(globalPos.z());
+            simtrackster_track_boundaryEta.push_back(globalPos.eta());
+            simtrackster_track_boundaryPhi.push_back(globalPos.phi());
+            simtrackster_track_boundaryPx.push_back(globalMom.x());
+            simtrackster_track_boundaryPy.push_back(globalMom.y());
+            simtrackster_track_boundaryPz.push_back(globalMom.z());
+            simtrackster_trackTime.push_back(track.t0());
+          } else {
+            simtrackster_track_boundaryX.push_back(-999);
+            simtrackster_track_boundaryY.push_back(-999);
+            simtrackster_track_boundaryZ.push_back(-999);
+            simtrackster_track_boundaryEta.push_back(-999);
+            simtrackster_track_boundaryPhi.push_back(-999);
+            simtrackster_track_boundaryPx.push_back(-999);
+            simtrackster_track_boundaryPy.push_back(-999);
+            simtrackster_track_boundaryPz.push_back(-999);
+          }
+        } else {
+          simtrackster_track_boundaryX.push_back(-999);
+          simtrackster_track_boundaryY.push_back(-999);
+          simtrackster_track_boundaryZ.push_back(-999);
+          simtrackster_track_boundaryEta.push_back(-999);
+          simtrackster_track_boundaryPhi.push_back(-999);
+          simtrackster_track_boundaryPx.push_back(-999);
+          simtrackster_track_boundaryPy.push_back(-999);
+          simtrackster_track_boundaryPz.push_back(-999);
+        }
+      }
+
       std::vector<float> id_probs;
       for (size_t i = 0; i < 8; i++)
         id_probs.push_back(trackster_iterator->id_probabilities(i));
@@ -210,6 +399,8 @@ public:
     }
   }
 private:
+  TracksterType tracksterType_;
+
   unsigned int nTracksters;
   unsigned int nClusters;
   std::vector<float> trackster_time;
@@ -233,6 +424,29 @@ private:
   std::vector<float> trackster_sigmaPCA3;
   std::vector<float> trackster_barycenter_eta;
   std::vector<float> trackster_barycenter_phi;
+
+  // for simtrackster
+  std::vector<float> simtrackster_regressed_pt;
+  std::vector<int> simtrackster_pdgID;
+  std::vector<int> simtrackster_trackIdx;
+  std::vector<float> simtrackster_trackTime;
+  std::vector<float> simtrackster_boundaryX;
+  std::vector<float> simtrackster_boundaryY;
+  std::vector<float> simtrackster_boundaryZ;
+  std::vector<float> simtrackster_boundaryEta;
+  std::vector<float> simtrackster_boundaryPhi;
+  std::vector<float> simtrackster_boundaryPx;
+  std::vector<float> simtrackster_boundaryPy;
+  std::vector<float> simtrackster_boundaryPz;
+  std::vector<float> simtrackster_track_boundaryX;
+  std::vector<float> simtrackster_track_boundaryY;
+  std::vector<float> simtrackster_track_boundaryZ;
+  std::vector<float> simtrackster_track_boundaryEta;
+  std::vector<float> simtrackster_track_boundaryPhi;
+  std::vector<float> simtrackster_track_boundaryPx;
+  std::vector<float> simtrackster_track_boundaryPy;
+  std::vector<float> simtrackster_track_boundaryPz;
+
   std::vector<std::vector<float>> trackster_id_probabilities;
   std::vector<std::vector<uint32_t>> trackster_vertices_indexes;
   std::vector<std::vector<float>> trackster_vertices_x;
@@ -249,7 +463,7 @@ private:
 class TracksterToSimTracksterAssociationHelper {
 public:
   /**
-   * TO be called once after tree creation. branchPrefix : for example tsCLUE3D. branchSuffix : SC or CP
+   * TO be called once after tree creation. branchPrefix : for example tsCLUE3D. branchSuffix : SC or CP. *Do not copy/move or resize vector holding object after calling this function*
   */
   void initTree(TTree* tree, std::string branchPrefix, std::string branchSuffix) {
     tree->Branch((branchPrefix + "_recoToSim_" + branchSuffix).c_str(), &recoToSim);
@@ -333,12 +547,6 @@ private:
   void beginJob() override;
   void beginRun(const edm::Run&, const edm::EventSetup&) override;
 
-  void initialize(const HGCalDDDConstants* hgcons,
-                  const hgcal::RecHitTools rhtools,
-                  const edm::ESHandle<MagneticField> bfieldH,
-                  const edm::ESHandle<Propagator> propH);
-  void buildLayers();
-
   void analyze(const edm::Event&, const edm::EventSetup&) override;
   void endRun(edm::Run const& iEvent, edm::EventSetup const&) override{};
   void endJob() override;
@@ -346,7 +554,7 @@ private:
   // Define Tokens
   const std::vector<edm::ParameterSet> tracksters_parameterSets_; ///< A parameter set for each trackster collection to dump
   std::vector<edm::EDGetTokenT<std::vector<ticl::Trackster>>> tracksters_token_; ///< a token for each trackster collection to dump
-  std::vector<std::vector<ticl::Trackster>> tracksters_collection; ///< the trackster collection for each trackster collection to dump
+  // std::vector<std::vector<ticl::Trackster>> tracksters_collection; ///< the trackster collection for each trackster collection to dump
   std::vector<TracksterDumperHelper> tracksters_dumperHelpers_; ///< the dumper helpers for each trackster collection to dump
   std::vector<TTree*> tracksters_trees; ///< TTree for each trackster collection to dump
 
@@ -376,8 +584,7 @@ private:
   const edm::EDGetTokenT<std::vector<std::vector<unsigned int>>> superclustering_linkedResultTracksters_token;
   //const edm::EDGetTokenT<ticl::SuperclusteringDNNScore> superclustering_DNNScore_token_;
   edm::ESGetToken<CaloGeometry, CaloGeometryRecord> caloGeometry_token_;
-  const edm::EDGetTokenT<std::vector<ticl::Trackster>> simTracksters_SC_token_;
-  const edm::EDGetTokenT<std::vector<ticl::Trackster>> simTracksters_CP_token_;
+  const edm::EDGetTokenT<std::vector<ticl::Trackster>> simTracksters_SC_token_; ///< needed for simticlcandidate
   const edm::EDGetTokenT<std::vector<TICLCandidate>> simTICLCandidate_token_;
 
   // associators
@@ -397,18 +604,11 @@ private:
   const std::string propName_;
   const edm::ESGetToken<MagneticField, IdealMagneticFieldRecord> bfield_token_;
   const edm::ESGetToken<Propagator, TrackingComponentsRecord> propagator_token_;
-  hgcal::RecHitTools rhtools_;
   edm::ESGetToken<HGCalDDDConstants, IdealGeometryRecord> hdc_token_;
-  const HGCalDDDConstants* hgcons_;
-  std::unique_ptr<GeomDet> firstDisk_[2];
-  std::unique_ptr<GeomDet> interfaceDisk_[2];
-  edm::ESHandle<MagneticField> bfield_;
-  edm::ESHandle<Propagator> propagator_;
+  std::unique_ptr<DetectorTools> detectorTools_;
   bool saveLCs_;
   bool saveSuperclustering_;
   bool saveSuperclusteringDNNScore_;
-  bool saveSimTrackstersSC_;
-  bool saveSimTrackstersCP_;
   bool saveTICLCandidate_;
   bool saveSimTICLCandidate_;
   bool saveTracks_;
@@ -421,118 +621,9 @@ private:
   // Variables for branches
   unsigned int ev_event_;
   unsigned int nclusters_;
-  unsigned int stsSC_ntracksters_;
-  unsigned int stsCP_ntracksters_;
 
   std::vector<std::vector<unsigned int>> superclustering_linkedResultTracksters; // Map of indices from superclusteredTracksters collection back into ticlTrackstersCLUE3DEM collection
   //ticl::SuperclusteringDNNScore superclusteringDNNScore;
-
-  std::vector<float> stsSC_trackster_time;
-  std::vector<float> stsSC_trackster_timeBoundary;
-  std::vector<float> stsSC_trackster_timeError;
-  std::vector<float> stsSC_trackster_regressed_energy;
-  std::vector<float> stsSC_trackster_regressed_pt;
-  std::vector<float> stsSC_trackster_raw_energy;
-  std::vector<float> stsSC_trackster_raw_em_energy;
-  std::vector<float> stsSC_trackster_raw_pt;
-  std::vector<float> stsSC_trackster_raw_em_pt;
-  std::vector<float> stsSC_trackster_barycenter_x;
-  std::vector<float> stsSC_trackster_barycenter_y;
-  std::vector<float> stsSC_trackster_barycenter_z;
-  std::vector<float> stsSC_trackster_barycenter_eta;
-  std::vector<float> stsSC_trackster_barycenter_phi;
-  std::vector<float> stsSC_trackster_EV1;
-  std::vector<float> stsSC_trackster_EV2;
-  std::vector<float> stsSC_trackster_EV3;
-  std::vector<float> stsSC_trackster_eVector0_x;
-  std::vector<float> stsSC_trackster_eVector0_y;
-  std::vector<float> stsSC_trackster_eVector0_z;
-  std::vector<float> stsSC_trackster_sigmaPCA1;
-  std::vector<float> stsSC_trackster_sigmaPCA2;
-  std::vector<float> stsSC_trackster_sigmaPCA3;
-  std::vector<int> stsSC_pdgID;
-  std::vector<int> stsSC_trackIdx;
-  std::vector<float> stsSC_trackTime;
-  std::vector<float> stsSC_boundaryX;
-  std::vector<float> stsSC_boundaryY;
-  std::vector<float> stsSC_boundaryZ;
-  std::vector<float> stsSC_boundaryEta;
-  std::vector<float> stsSC_boundaryPhi;
-  std::vector<float> stsSC_boundaryPx;
-  std::vector<float> stsSC_boundaryPy;
-  std::vector<float> stsSC_boundaryPz;
-  std::vector<float> stsSC_track_boundaryX;
-  std::vector<float> stsSC_track_boundaryY;
-  std::vector<float> stsSC_track_boundaryZ;
-  std::vector<float> stsSC_track_boundaryEta;
-  std::vector<float> stsSC_track_boundaryPhi;
-  std::vector<float> stsSC_track_boundaryPx;
-  std::vector<float> stsSC_track_boundaryPy;
-  std::vector<float> stsSC_track_boundaryPz;
-  std::vector<std::vector<float>> stsSC_trackster_id_probabilities;
-  std::vector<std::vector<uint32_t>> stsSC_trackster_vertices_indexes;
-  std::vector<std::vector<float>> stsSC_trackster_vertices_x;
-  std::vector<std::vector<float>> stsSC_trackster_vertices_y;
-  std::vector<std::vector<float>> stsSC_trackster_vertices_z;
-  std::vector<std::vector<float>> stsSC_trackster_vertices_time;
-  std::vector<std::vector<float>> stsSC_trackster_vertices_timeErr;
-  std::vector<std::vector<float>> stsSC_trackster_vertices_energy;
-  std::vector<std::vector<float>> stsSC_trackster_vertices_correctedEnergy;
-  std::vector<std::vector<float>> stsSC_trackster_vertices_correctedEnergyUncertainty;
-  std::vector<std::vector<float>> stsSC_trackster_vertices_multiplicity;
-  std::vector<float> stsCP_trackster_time;
-  std::vector<float> stsCP_trackster_timeBoundary;
-  std::vector<float> stsCP_trackster_timeError;
-  std::vector<float> stsCP_trackster_regressed_energy;
-  std::vector<float> stsCP_trackster_regressed_pt;
-  std::vector<float> stsCP_trackster_raw_energy;
-  std::vector<float> stsCP_trackster_raw_em_energy;
-  std::vector<float> stsCP_trackster_raw_pt;
-  std::vector<float> stsCP_trackster_raw_em_pt;
-  std::vector<float> stsCP_trackster_barycenter_x;
-  std::vector<float> stsCP_trackster_barycenter_y;
-  std::vector<float> stsCP_trackster_barycenter_z;
-  std::vector<float> stsCP_trackster_barycenter_eta;
-  std::vector<float> stsCP_trackster_barycenter_phi;
-  std::vector<float> stsCP_trackster_EV1;
-  std::vector<float> stsCP_trackster_EV2;
-  std::vector<float> stsCP_trackster_EV3;
-  std::vector<float> stsCP_trackster_eVector0_x;
-  std::vector<float> stsCP_trackster_eVector0_y;
-  std::vector<float> stsCP_trackster_eVector0_z;
-  std::vector<float> stsCP_trackster_sigmaPCA1;
-  std::vector<float> stsCP_trackster_sigmaPCA2;
-  std::vector<float> stsCP_trackster_sigmaPCA3;
-  std::vector<int> stsCP_pdgID;
-  std::vector<int> stsCP_trackIdx;
-  std::vector<float> stsCP_trackTime;
-  std::vector<float> stsCP_boundaryX;
-  std::vector<float> stsCP_boundaryY;
-  std::vector<float> stsCP_boundaryZ;
-  std::vector<float> stsCP_boundaryEta;
-  std::vector<float> stsCP_boundaryPhi;
-  std::vector<float> stsCP_boundaryPx;
-  std::vector<float> stsCP_boundaryPy;
-  std::vector<float> stsCP_boundaryPz;
-  std::vector<float> stsCP_track_boundaryX;
-  std::vector<float> stsCP_track_boundaryY;
-  std::vector<float> stsCP_track_boundaryZ;
-  std::vector<float> stsCP_track_boundaryEta;
-  std::vector<float> stsCP_track_boundaryPhi;
-  std::vector<float> stsCP_track_boundaryPx;
-  std::vector<float> stsCP_track_boundaryPy;
-  std::vector<float> stsCP_track_boundaryPz;
-  std::vector<std::vector<float>> stsCP_trackster_id_probabilities;
-  std::vector<std::vector<uint32_t>> stsCP_trackster_vertices_indexes;
-  std::vector<std::vector<float>> stsCP_trackster_vertices_x;
-  std::vector<std::vector<float>> stsCP_trackster_vertices_y;
-  std::vector<std::vector<float>> stsCP_trackster_vertices_z;
-  std::vector<std::vector<float>> stsCP_trackster_vertices_time;
-  std::vector<std::vector<float>> stsCP_trackster_vertices_timeErr;
-  std::vector<std::vector<float>> stsCP_trackster_vertices_energy;
-  std::vector<std::vector<float>> stsCP_trackster_vertices_correctedEnergy;
-  std::vector<std::vector<float>> stsCP_trackster_vertices_correctedEnergyUncertainty;
-  std::vector<std::vector<float>> stsCP_trackster_vertices_multiplicity;
 
   std::vector<float> simTICLCandidate_raw_energy;
   std::vector<float> simTICLCandidate_regressed_energy;
@@ -604,8 +695,6 @@ private:
   TTree* cluster_tree_;
   TTree* candidate_tree_;
   TTree* superclustering_tree_;
-  TTree* simtrackstersSC_tree_;
-  TTree* simtrackstersCP_tree_;
   TTree* tracks_tree_;
   TTree* simTICLCandidate_tree;
 };
@@ -621,108 +710,6 @@ void TICLDumper::clearVariables() {
   //superclustering_superclusteredTracksters_dumper.clearVariables();
   superclustering_linkedResultTracksters.clear();
   // superclusteringDNNScore.clear();
-
-  stsSC_trackster_time.clear();
-  stsSC_trackster_timeBoundary.clear();
-  stsSC_trackster_timeError.clear();
-  stsSC_trackster_regressed_energy.clear();
-  stsSC_trackster_regressed_pt.clear();
-  stsSC_trackster_raw_energy.clear();
-  stsSC_trackster_raw_em_energy.clear();
-  stsSC_trackster_raw_pt.clear();
-  stsSC_trackster_raw_em_pt.clear();
-  stsSC_trackster_barycenter_x.clear();
-  stsSC_trackster_barycenter_y.clear();
-  stsSC_trackster_barycenter_z.clear();
-  stsSC_trackster_EV1.clear();
-  stsSC_trackster_EV2.clear();
-  stsSC_trackster_EV3.clear();
-  stsSC_trackster_eVector0_x.clear();
-  stsSC_trackster_eVector0_y.clear();
-  stsSC_trackster_eVector0_z.clear();
-  stsSC_trackster_sigmaPCA1.clear();
-  stsSC_trackster_sigmaPCA2.clear();
-  stsSC_trackster_sigmaPCA3.clear();
-  stsSC_trackster_barycenter_eta.clear();
-  stsSC_trackster_barycenter_phi.clear();
-  stsSC_pdgID.clear();
-  stsSC_trackIdx.clear();
-  stsSC_trackTime.clear();
-  stsSC_boundaryX.clear();
-  stsSC_boundaryY.clear();
-  stsSC_boundaryZ.clear();
-  stsSC_boundaryEta.clear();
-  stsSC_boundaryPhi.clear();
-  stsSC_boundaryPx.clear();
-  stsSC_boundaryPy.clear();
-  stsSC_boundaryPz.clear();
-  stsSC_track_boundaryX.clear();
-  stsSC_track_boundaryY.clear();
-  stsSC_track_boundaryZ.clear();
-  stsSC_track_boundaryEta.clear();
-  stsSC_track_boundaryPhi.clear();
-  stsSC_track_boundaryPx.clear();
-  stsSC_track_boundaryPy.clear();
-  stsSC_track_boundaryPz.clear();
-  stsSC_trackster_id_probabilities.clear();
-  stsSC_trackster_vertices_indexes.clear();
-  stsSC_trackster_vertices_x.clear();
-  stsSC_trackster_vertices_y.clear();
-  stsSC_trackster_vertices_z.clear();
-  stsSC_trackster_vertices_time.clear();
-  stsSC_trackster_vertices_timeErr.clear();
-  stsSC_trackster_vertices_energy.clear();
-  stsSC_trackster_vertices_correctedEnergy.clear();
-  stsSC_trackster_vertices_correctedEnergyUncertainty.clear();
-  stsSC_trackster_vertices_multiplicity.clear();
-
-  stsCP_trackster_time.clear();
-  stsCP_trackster_timeBoundary.clear();
-  stsCP_trackster_timeError.clear();
-  stsCP_trackster_regressed_energy.clear();
-  stsCP_trackster_regressed_pt.clear();
-  stsCP_trackster_raw_energy.clear();
-  stsCP_trackster_raw_em_energy.clear();
-  stsCP_trackster_raw_pt.clear();
-  stsCP_trackster_raw_em_pt.clear();
-  stsCP_trackster_barycenter_x.clear();
-  stsCP_trackster_barycenter_y.clear();
-  stsCP_trackster_barycenter_z.clear();
-  stsCP_trackster_sigmaPCA1.clear();
-  stsCP_trackster_sigmaPCA2.clear();
-  stsCP_trackster_sigmaPCA3.clear();
-  stsCP_trackster_barycenter_eta.clear();
-  stsCP_trackster_barycenter_phi.clear();
-  stsCP_pdgID.clear();
-  stsCP_trackIdx.clear();
-  stsCP_trackTime.clear();
-  stsCP_boundaryX.clear();
-  stsCP_boundaryY.clear();
-  stsCP_boundaryZ.clear();
-  stsCP_boundaryEta.clear();
-  stsCP_boundaryPhi.clear();
-  stsCP_boundaryPx.clear();
-  stsCP_boundaryPy.clear();
-  stsCP_boundaryPz.clear();
-  stsCP_track_boundaryX.clear();
-  stsCP_track_boundaryY.clear();
-  stsCP_track_boundaryZ.clear();
-  stsCP_track_boundaryEta.clear();
-  stsCP_track_boundaryPhi.clear();
-  stsCP_track_boundaryPx.clear();
-  stsCP_track_boundaryPy.clear();
-  stsCP_track_boundaryPz.clear();
-  stsCP_trackster_id_probabilities.clear();
-  stsCP_trackster_vertices_indexes.clear();
-  stsCP_trackster_vertices_x.clear();
-  stsCP_trackster_vertices_y.clear();
-  stsCP_trackster_vertices_z.clear();
-  stsCP_trackster_vertices_time.clear();
-  stsCP_trackster_vertices_timeErr.clear();
-  stsCP_trackster_vertices_energy.clear();
-  stsCP_trackster_vertices_correctedEnergy.clear();
-  stsCP_trackster_vertices_correctedEnergyUncertainty.clear();
-  stsCP_trackster_vertices_multiplicity.clear();
 
   simTICLCandidate_raw_energy.clear();
   simTICLCandidate_regressed_energy.clear();
@@ -820,11 +807,10 @@ TICLDumper::TICLDumper(const edm::ParameterSet& ps)
       caloGeometry_token_(esConsumes<CaloGeometry, CaloGeometryRecord, edm::Transition::BeginRun>()),
       simTracksters_SC_token_(
           consumes<std::vector<ticl::Trackster>>(ps.getParameter<edm::InputTag>("simtrackstersSC"))),
-      simTracksters_CP_token_(
-          consumes<std::vector<ticl::Trackster>>(ps.getParameter<edm::InputTag>("simtrackstersCP"))),
       simTICLCandidate_token_(
           consumes<std::vector<TICLCandidate>>(ps.getParameter<edm::InputTag>("simTICLCandidates"))),
       associations_parameterSets_(ps.getParameter<std::vector<edm::ParameterSet>>("associators")),
+      associations_dumperHelpers_(associations_parameterSets_.size()), // The DumperHelpers should not be moved after construction (needed by TTree branch pointers), so construct them all here
       simclusters_token_(consumes(ps.getParameter<edm::InputTag>("simclusters"))),
       caloparticles_token_(consumes(ps.getParameter<edm::InputTag>("caloparticles"))),
       geometry_token_(esConsumes<CaloGeometry, CaloGeometryRecord, edm::Transition::BeginRun>()),
@@ -836,8 +822,6 @@ TICLDumper::TICLDumper(const edm::ParameterSet& ps)
       saveLCs_(ps.getParameter<bool>("saveLCs")),
       saveSuperclustering_(ps.getParameter<bool>("saveSuperclustering")),
       //saveSuperclusteringDNNScore_(ps.getParameter<bool>("saveSuperclusteringDNNScore")),
-      saveSimTrackstersSC_(ps.getParameter<bool>("saveSimTrackstersSC")),
-      saveSimTrackstersCP_(ps.getParameter<bool>("saveSimTrackstersCP")),
       saveTICLCandidate_(ps.getParameter<bool>("saveSimTICLCandidate")),
       saveSimTICLCandidate_(ps.getParameter<bool>("saveSimTICLCandidate")),
       saveTracks_(ps.getParameter<bool>("saveTracks")) {
@@ -846,7 +830,8 @@ TICLDumper::TICLDumper(const edm::ParameterSet& ps)
       esConsumes<HGCalDDDConstants, IdealGeometryRecord, edm::Transition::BeginRun>(edm::ESInputTag("", detectorName_));
   
   for (edm::ParameterSet const& tracksterPset : tracksters_parameterSets_) {
-    tracksters_token_.push_back(consumes<std::vector<ticl::Trackster>>(tracksterPset.getParameter<edm::InputTag>("tracksterInputTag")));
+    tracksters_token_.push_back(consumes<std::vector<ticl::Trackster>>(tracksterPset.getParameter<edm::InputTag>("inputTag")));
+    tracksters_dumperHelpers_.emplace_back(TracksterDumperHelper::tracksterTypeFromString(tracksterPset.getParameter<std::string>("tracksterType")));
   }
 
   for (edm::ParameterSet const& associationPset : associations_parameterSets_) {
@@ -861,28 +846,22 @@ TICLDumper::TICLDumper(const edm::ParameterSet& ps)
 TICLDumper::~TICLDumper() { clearVariables(); };
 
 void TICLDumper::beginRun(edm::Run const&, edm::EventSetup const& es) {
-  const CaloGeometry& geom = es.getData(caloGeometry_token_);
-  rhtools_.setGeometry(geom);
-
-  edm::ESHandle<HGCalDDDConstants> hdc = es.getHandle(hdc_token_);
-  hgcons_ = hdc.product();
-  edm::ESHandle<MagneticField> bfield_ = es.getHandle(bfield_token_);
-  edm::ESHandle<Propagator> propagator = es.getHandle(propagator_token_);
-  initialize(hgcons_, rhtools_, bfield_, propagator);
+  detectorTools_ = std::make_unique<DetectorTools>(es.getData(hdc_token_), es.getData(caloGeometry_token_), es.getData(bfield_token_), es.getData(propagator_token_));
 }
 
 // Define tree and branches
 void TICLDumper::beginJob() {
-  edm::Service<TFileService> fs;
+  edm::Service<TFileService> fs;  
+
+  // Trackster trees
   for (unsigned int i = 0; i < tracksters_parameterSets_.size(); i++) {
     edm::ParameterSet const& tracksterPset = tracksters_parameterSets_[i];
-    tracksters_dumperHelpers_.emplace_back();
     TTree* tree = fs->make<TTree>(tracksterPset.getParameter<std::string>("treeName").c_str(), ("Tracksters : " + tracksterPset.getParameter<std::string>("treeName") + 
-       " (InputTag : " + tracksterPset.getParameter<edm::InputTag>("tracksterInputTag").encode() + ")").c_str());
+       " (InputTag : " + tracksterPset.getParameter<edm::InputTag>("inputTag").encode() + ")").c_str());
     tracksters_trees.push_back(tree);
     tracksters_dumperHelpers_[i].initTree(tree, &ev_event_);
   }
-  if (saveLCs_) {
+  if (saveLCs_) { 
     cluster_tree_ = fs->make<TTree>("clusters", "TICL tracksters");
     cluster_tree_->Branch("seedID", &cluster_seedID);
     cluster_tree_->Branch("energy", &cluster_energy);
@@ -924,131 +903,10 @@ void TICLDumper::beginJob() {
   //   superclustering_tree_->Branch("superclusteringDNNScore", &superclusteringDNNScore);
   // }
 
-  if (associations_dumperHelpers_.size()>0)
+  if (associations_parameterSets_.size()>0)
     associations_tree_ = fs->make<TTree>("associations", "Associations");
   for (unsigned int i = 0; i < associations_parameterSets_.size(); i++) {
-    associations_dumperHelpers_.emplace_back();
     associations_dumperHelpers_[i].initTree(associations_tree_, associations_parameterSets_[i].getParameter<std::string>("branchName"), associations_parameterSets_[i].getParameter<std::string>("suffix"));
-  }
-
-  if (saveSimTrackstersSC_) {
-    simtrackstersSC_tree_ = fs->make<TTree>("simtrackstersSC", "TICL simTracksters SC");
-    simtrackstersSC_tree_->Branch("event", &ev_event_);
-    simtrackstersSC_tree_->Branch("NTracksters", &stsSC_ntracksters_);
-    simtrackstersSC_tree_->Branch("time", &stsSC_trackster_time);
-    simtrackstersSC_tree_->Branch("timeBoundary", &stsSC_trackster_timeBoundary);
-    simtrackstersSC_tree_->Branch("timeError", &stsSC_trackster_timeError);
-    simtrackstersSC_tree_->Branch("regressed_energy", &stsSC_trackster_regressed_energy);
-    simtrackstersSC_tree_->Branch("regressed_pt", &stsSC_trackster_regressed_pt);
-    simtrackstersSC_tree_->Branch("raw_energy", &stsSC_trackster_raw_energy);
-    simtrackstersSC_tree_->Branch("raw_em_energy", &stsSC_trackster_raw_em_energy);
-    simtrackstersSC_tree_->Branch("raw_pt", &stsSC_trackster_raw_pt);
-    simtrackstersSC_tree_->Branch("raw_em_pt", &stsSC_trackster_raw_em_pt);
-    simtrackstersSC_tree_->Branch("barycenter_x", &stsSC_trackster_barycenter_x);
-    simtrackstersSC_tree_->Branch("barycenter_y", &stsSC_trackster_barycenter_y);
-    simtrackstersSC_tree_->Branch("barycenter_z", &stsSC_trackster_barycenter_z);
-    simtrackstersSC_tree_->Branch("barycenter_eta", &stsSC_trackster_barycenter_eta);
-    simtrackstersSC_tree_->Branch("barycenter_phi", &stsSC_trackster_barycenter_phi);
-    simtrackstersSC_tree_->Branch("EV1", &stsSC_trackster_EV1);
-    simtrackstersSC_tree_->Branch("EV2", &stsSC_trackster_EV2);
-    simtrackstersSC_tree_->Branch("EV3", &stsSC_trackster_EV3);
-    simtrackstersSC_tree_->Branch("eVector0_x", &stsSC_trackster_eVector0_x);
-    simtrackstersSC_tree_->Branch("eVector0_y", &stsSC_trackster_eVector0_y);
-    simtrackstersSC_tree_->Branch("eVector0_z", &stsSC_trackster_eVector0_z);
-    simtrackstersSC_tree_->Branch("sigmaPCA1", &stsSC_trackster_sigmaPCA1);
-    simtrackstersSC_tree_->Branch("sigmaPCA2", &stsSC_trackster_sigmaPCA2);
-    simtrackstersSC_tree_->Branch("sigmaPCA3", &stsSC_trackster_sigmaPCA3);
-    simtrackstersSC_tree_->Branch("pdgID", &stsSC_pdgID);
-    simtrackstersSC_tree_->Branch("trackIdx", &stsSC_trackIdx);
-    simtrackstersSC_tree_->Branch("trackTime", &stsSC_trackTime);
-    simtrackstersSC_tree_->Branch("boundaryX", &stsSC_boundaryX);
-    simtrackstersSC_tree_->Branch("boundaryY", &stsSC_boundaryY);
-    simtrackstersSC_tree_->Branch("boundaryZ", &stsSC_boundaryZ);
-    simtrackstersSC_tree_->Branch("boundaryEta", &stsSC_boundaryEta);
-    simtrackstersSC_tree_->Branch("boundaryPhi", &stsSC_boundaryPhi);
-    simtrackstersSC_tree_->Branch("boundaryPx", &stsSC_boundaryPx);
-    simtrackstersSC_tree_->Branch("boundaryPy", &stsSC_boundaryPy);
-    simtrackstersSC_tree_->Branch("boundaryPz", &stsSC_boundaryPz);
-    simtrackstersSC_tree_->Branch("track_boundaryX", &stsSC_track_boundaryX);
-    simtrackstersSC_tree_->Branch("track_boundaryY", &stsSC_track_boundaryY);
-    simtrackstersSC_tree_->Branch("track_boundaryZ", &stsSC_track_boundaryZ);
-    simtrackstersSC_tree_->Branch("track_boundaryEta", &stsSC_track_boundaryEta);
-    simtrackstersSC_tree_->Branch("track_boundaryPhi", &stsSC_track_boundaryPhi);
-    simtrackstersSC_tree_->Branch("track_boundaryPx", &stsSC_track_boundaryPx);
-    simtrackstersSC_tree_->Branch("track_boundaryPy", &stsSC_track_boundaryPy);
-    simtrackstersSC_tree_->Branch("track_boundaryPz", &stsSC_track_boundaryPz);
-    simtrackstersSC_tree_->Branch("id_probabilities", &stsSC_trackster_id_probabilities);
-    simtrackstersSC_tree_->Branch("vertices_indexes", &stsSC_trackster_vertices_indexes);
-    simtrackstersSC_tree_->Branch("vertices_x", &stsSC_trackster_vertices_x);
-    simtrackstersSC_tree_->Branch("vertices_y", &stsSC_trackster_vertices_y);
-    simtrackstersSC_tree_->Branch("vertices_z", &stsSC_trackster_vertices_z);
-    simtrackstersSC_tree_->Branch("vertices_time", &stsSC_trackster_vertices_time);
-    simtrackstersSC_tree_->Branch("vertices_timeErr", &stsSC_trackster_vertices_timeErr);
-    simtrackstersSC_tree_->Branch("vertices_energy", &stsSC_trackster_vertices_energy);
-    simtrackstersSC_tree_->Branch("vertices_correctedEnergy", &stsSC_trackster_vertices_correctedEnergy);
-    simtrackstersSC_tree_->Branch("vertices_correctedEnergyUncertainty",
-                                  &stsSC_trackster_vertices_correctedEnergyUncertainty);
-    simtrackstersSC_tree_->Branch("vertices_multiplicity", &stsSC_trackster_vertices_multiplicity);
-    simtrackstersSC_tree_->Branch("NsimTrackstersSC", &stsSC_ntracksters_); // same thing as NTracksters, not sure why it is duplicated
-  }
-  if (saveSimTrackstersCP_) {
-    simtrackstersCP_tree_ = fs->make<TTree>("simtrackstersCP", "TICL simTracksters CP");
-    simtrackstersCP_tree_->Branch("event", &ev_event_);
-    simtrackstersCP_tree_->Branch("NTracksters", &stsCP_ntracksters_);
-    simtrackstersCP_tree_->Branch("time", &stsCP_trackster_time);
-    simtrackstersCP_tree_->Branch("timeBoundary", &stsCP_trackster_timeBoundary);
-    simtrackstersCP_tree_->Branch("timeError", &stsCP_trackster_timeError);
-    simtrackstersCP_tree_->Branch("regressed_energy", &stsCP_trackster_regressed_energy);
-    simtrackstersCP_tree_->Branch("regressed_pt", &stsCP_trackster_regressed_pt);
-    simtrackstersCP_tree_->Branch("raw_energy", &stsCP_trackster_raw_energy);
-    simtrackstersCP_tree_->Branch("raw_em_energy", &stsCP_trackster_raw_em_energy);
-    simtrackstersCP_tree_->Branch("raw_pt", &stsCP_trackster_raw_pt);
-    simtrackstersCP_tree_->Branch("raw_em_pt", &stsCP_trackster_raw_em_pt);
-    simtrackstersCP_tree_->Branch("barycenter_x", &stsCP_trackster_barycenter_x);
-    simtrackstersCP_tree_->Branch("barycenter_y", &stsCP_trackster_barycenter_y);
-    simtrackstersCP_tree_->Branch("barycenter_z", &stsCP_trackster_barycenter_z);
-    simtrackstersCP_tree_->Branch("barycenter_eta", &stsCP_trackster_barycenter_eta);
-    simtrackstersCP_tree_->Branch("barycenter_phi", &stsCP_trackster_barycenter_phi);
-    simtrackstersCP_tree_->Branch("pdgID", &stsCP_pdgID);
-    simtrackstersCP_tree_->Branch("trackIdx", &stsCP_trackIdx);
-    simtrackstersCP_tree_->Branch("trackTime", &stsCP_trackTime);
-    simtrackstersCP_tree_->Branch("boundaryX", &stsCP_boundaryX);
-    simtrackstersCP_tree_->Branch("boundaryY", &stsCP_boundaryY);
-    simtrackstersCP_tree_->Branch("boundaryZ", &stsCP_boundaryZ);
-    simtrackstersCP_tree_->Branch("boundaryEta", &stsCP_boundaryEta);
-    simtrackstersCP_tree_->Branch("boundaryPhi", &stsCP_boundaryPhi);
-    simtrackstersCP_tree_->Branch("boundaryPx", &stsCP_boundaryPx);
-    simtrackstersCP_tree_->Branch("boundaryPy", &stsCP_boundaryPy);
-    simtrackstersCP_tree_->Branch("boundaryPz", &stsCP_boundaryPz);
-    simtrackstersCP_tree_->Branch("track_boundaryX", &stsCP_track_boundaryX);
-    simtrackstersCP_tree_->Branch("track_boundaryY", &stsCP_track_boundaryY);
-    simtrackstersCP_tree_->Branch("track_boundaryZ", &stsCP_track_boundaryZ);
-    simtrackstersCP_tree_->Branch("track_boundaryEta", &stsCP_track_boundaryEta);
-    simtrackstersCP_tree_->Branch("track_boundaryPhi", &stsCP_track_boundaryPhi);
-    simtrackstersCP_tree_->Branch("track_boundaryPx", &stsCP_track_boundaryPx);
-    simtrackstersCP_tree_->Branch("track_boundaryPy", &stsCP_track_boundaryPy);
-    simtrackstersCP_tree_->Branch("track_boundaryPz", &stsCP_track_boundaryPz);
-    simtrackstersCP_tree_->Branch("EV1", &stsCP_trackster_EV1);
-    simtrackstersCP_tree_->Branch("EV2", &stsCP_trackster_EV2);
-    simtrackstersCP_tree_->Branch("EV3", &stsCP_trackster_EV3);
-    simtrackstersCP_tree_->Branch("eVector0_x", &stsCP_trackster_eVector0_x);
-    simtrackstersCP_tree_->Branch("eVector0_y", &stsCP_trackster_eVector0_y);
-    simtrackstersCP_tree_->Branch("eVector0_z", &stsCP_trackster_eVector0_z);
-    simtrackstersCP_tree_->Branch("sigmaPCA1", &stsCP_trackster_sigmaPCA1);
-    simtrackstersCP_tree_->Branch("sigmaPCA2", &stsCP_trackster_sigmaPCA2);
-    simtrackstersCP_tree_->Branch("sigmaPCA3", &stsCP_trackster_sigmaPCA3);
-    simtrackstersCP_tree_->Branch("id_probabilities", &stsCP_trackster_id_probabilities);
-    simtrackstersCP_tree_->Branch("vertices_indexes", &stsCP_trackster_vertices_indexes);
-    simtrackstersCP_tree_->Branch("vertices_x", &stsCP_trackster_vertices_x);
-    simtrackstersCP_tree_->Branch("vertices_y", &stsCP_trackster_vertices_y);
-    simtrackstersCP_tree_->Branch("vertices_z", &stsCP_trackster_vertices_z);
-    simtrackstersCP_tree_->Branch("vertices_time", &stsCP_trackster_vertices_time);
-    simtrackstersCP_tree_->Branch("vertices_timeErr", &stsCP_trackster_vertices_timeErr);
-    simtrackstersCP_tree_->Branch("vertices_energy", &stsCP_trackster_vertices_energy);
-    simtrackstersCP_tree_->Branch("vertices_correctedEnergy", &stsCP_trackster_vertices_correctedEnergy);
-    simtrackstersCP_tree_->Branch("vertices_correctedEnergyUncertainty",
-                                  &stsCP_trackster_vertices_correctedEnergyUncertainty);
-    simtrackstersCP_tree_->Branch("vertices_multiplicity", &stsCP_trackster_vertices_multiplicity);
   }
 
   if (saveTracks_) {
@@ -1094,49 +952,10 @@ void TICLDumper::beginJob() {
   }
 }
 
-void TICLDumper::buildLayers() {
-  // build disks at HGCal front & EM-Had interface for track propagation
-
-  float zVal = hgcons_->waferZ(1, true);
-  std::pair<float, float> rMinMax = hgcons_->rangeR(zVal, true);
-
-  float zVal_interface = rhtools_.getPositionLayer(rhtools_.lastLayerEE()).z();
-  std::pair<float, float> rMinMax_interface = hgcons_->rangeR(zVal_interface, true);
-
-  for (int iSide = 0; iSide < 2; ++iSide) {
-    float zSide = (iSide == 0) ? (-1. * zVal) : zVal;
-    firstDisk_[iSide] =
-        std::make_unique<GeomDet>(Disk::build(Disk::PositionType(0, 0, zSide),
-                                              Disk::RotationType(),
-                                              SimpleDiskBounds(rMinMax.first, rMinMax.second, zSide - 0.5, zSide + 0.5))
-                                      .get());
-
-    zSide = (iSide == 0) ? (-1. * zVal_interface) : zVal_interface;
-    interfaceDisk_[iSide] = std::make_unique<GeomDet>(
-        Disk::build(Disk::PositionType(0, 0, zSide),
-                    Disk::RotationType(),
-                    SimpleDiskBounds(rMinMax_interface.first, rMinMax_interface.second, zSide - 0.5, zSide + 0.5))
-            .get());
-  }
-}
-
-void TICLDumper::initialize(const HGCalDDDConstants* hgcons,
-                            const hgcal::RecHitTools rhtools,
-                            const edm::ESHandle<MagneticField> bfieldH,
-                            const edm::ESHandle<Propagator> propH) {
-  hgcons_ = hgcons;
-  rhtools_ = rhtools;
-  buildLayers();
-
-  bfield_ = bfieldH;
-  propagator_ = propH;
-}
 
 void TICLDumper::analyze(const edm::Event& event, const edm::EventSetup& setup) {
   ev_event_ += 1;
   clearVariables();
-  auto bFieldProd = bfield_.product();
-  const Propagator& prop = (*propagator_);
 
   //get all the layer clusters
   edm::Handle<std::vector<reco::CaloCluster>> layer_clusters_h;
@@ -1195,16 +1014,6 @@ void TICLDumper::analyze(const edm::Event& event, const edm::EventSetup& setup) 
     superclusteringDNNScore = *superclustering_DNNScore_h; 
   */
 
-  // simTracksters from SC
-  edm::Handle<std::vector<ticl::Trackster>> simTrackstersSC_h;
-  event.getByToken(simTracksters_SC_token_, simTrackstersSC_h);
-  const auto& simTrackstersSC = *simTrackstersSC_h;
-
-  // simTracksters from CP
-  edm::Handle<std::vector<ticl::Trackster>> simTrackstersCP_h;
-  event.getByToken(simTracksters_CP_token_, simTrackstersCP_h);
-  const auto& simTrackstersCP = *simTrackstersCP_h;
-
   edm::Handle<std::vector<TICLCandidate>> simTICLCandidates_h;
   event.getByToken(simTICLCandidate_token_, simTICLCandidates_h);
   const auto& simTICLCandidates = *simTICLCandidates_h;
@@ -1213,7 +1022,7 @@ void TICLDumper::analyze(const edm::Event& event, const edm::EventSetup& setup) 
   event.getByToken(caloparticles_token_, caloparticles_h);
   const auto& caloparticles = *caloparticles_h;
 
-  const auto& simclusters = event.get(simclusters_token_);
+  auto simclusters_h = event.getHandle(simclusters_token_);
 
   nclusters_ = clusters.size();
 
@@ -1221,302 +1030,13 @@ void TICLDumper::analyze(const edm::Event& event, const edm::EventSetup& setup) 
   for (unsigned int i = 0; i < tracksters_dumperHelpers_.size(); i++) {
     edm::Handle<std::vector<ticl::Trackster>> tracksters_handle;
     std::vector<ticl::Trackster> const& tracksters = event.get<std::vector<ticl::Trackster>>(tracksters_token_[i]);
-    tracksters_dumperHelpers_[i].fillFromEvent(tracksters, clusters, layerClustersTimes);
+    tracksters_dumperHelpers_[i].fillFromEvent(tracksters, clusters, layerClustersTimes,
+     *detectorTools_, simclusters_h, caloparticles_h, tracks);
     tracksters_trees[i]->Fill();
-    tracksters_collection[i] = tracksters;
+    //tracksters_collection[i] = tracksters;
   }
 
-  stsSC_ntracksters_ = simTrackstersSC.size();
-  using CaloObjectVariant = std::variant<CaloParticle, SimCluster>;
-  for (auto trackster_iterator = simTrackstersSC.begin(); trackster_iterator != simTrackstersSC.end();
-       ++trackster_iterator) {
-    //per-trackster analysis
-    stsSC_trackster_time.push_back(trackster_iterator->time());
-    stsSC_trackster_timeBoundary.push_back(trackster_iterator->boundaryTime());
-    stsSC_trackster_timeError.push_back(trackster_iterator->timeError());
-    stsSC_trackster_regressed_energy.push_back(trackster_iterator->regressed_energy());
-    stsSC_trackster_raw_energy.push_back(trackster_iterator->raw_energy());
-    stsSC_trackster_raw_em_energy.push_back(trackster_iterator->raw_em_energy());
-    stsSC_trackster_raw_pt.push_back(trackster_iterator->raw_pt());
-    stsSC_trackster_raw_em_pt.push_back(trackster_iterator->raw_em_pt());
-    stsSC_trackster_barycenter_x.push_back(trackster_iterator->barycenter().x());
-    stsSC_trackster_barycenter_y.push_back(trackster_iterator->barycenter().y());
-    stsSC_trackster_barycenter_z.push_back(trackster_iterator->barycenter().z());
-    stsSC_trackster_barycenter_eta.push_back(trackster_iterator->barycenter().eta());
-    stsSC_trackster_barycenter_phi.push_back(trackster_iterator->barycenter().phi());
-    stsSC_trackster_EV1.push_back(trackster_iterator->eigenvalues()[0]);
-    stsSC_trackster_EV2.push_back(trackster_iterator->eigenvalues()[1]);
-    stsSC_trackster_EV3.push_back(trackster_iterator->eigenvalues()[2]);
-    stsSC_trackster_eVector0_x.push_back((trackster_iterator->eigenvectors()[0]).x());
-    stsSC_trackster_eVector0_y.push_back((trackster_iterator->eigenvectors()[0]).y());
-    stsSC_trackster_eVector0_z.push_back((trackster_iterator->eigenvectors()[0]).z());
-    stsSC_trackster_sigmaPCA1.push_back(trackster_iterator->sigmasPCA()[0]);
-    stsSC_trackster_sigmaPCA2.push_back(trackster_iterator->sigmasPCA()[1]);
-    stsSC_trackster_sigmaPCA3.push_back(trackster_iterator->sigmasPCA()[2]);
-    stsSC_pdgID.push_back(simclusters[trackster_iterator->seedIndex()].pdgId());
-
-    CaloObjectVariant caloObj;
-    if (trackster_iterator->seedID() == caloparticles_h.id()) {
-      caloObj = caloparticles[trackster_iterator->seedIndex()];
-    } else {
-      caloObj = simclusters[trackster_iterator->seedIndex()];
-    }
-
-    auto const& simTrack = std::visit([](auto&& obj) { return obj.g4Tracks()[0]; }, caloObj);
-    auto const& caloPt = std::visit([](auto&& obj) { return obj.pt(); }, caloObj);
-    stsSC_trackster_regressed_pt.push_back(caloPt);
-    if (simTrack.crossedBoundary()) {
-      stsSC_boundaryX.push_back(simTrack.getPositionAtBoundary().x());
-      stsSC_boundaryY.push_back(simTrack.getPositionAtBoundary().y());
-      stsSC_boundaryZ.push_back(simTrack.getPositionAtBoundary().z());
-      stsSC_boundaryEta.push_back(simTrack.getPositionAtBoundary().eta());
-      stsSC_boundaryPhi.push_back(simTrack.getPositionAtBoundary().phi());
-      stsSC_boundaryPx.push_back(simTrack.getMomentumAtBoundary().x());
-      stsSC_boundaryPy.push_back(simTrack.getMomentumAtBoundary().y());
-      stsSC_boundaryPz.push_back(simTrack.getMomentumAtBoundary().z());
-    } else {
-      stsSC_boundaryX.push_back(-999);
-      stsSC_boundaryY.push_back(-999);
-      stsSC_boundaryZ.push_back(-999);
-      stsSC_boundaryEta.push_back(-999);
-      stsSC_boundaryPhi.push_back(-999);
-      stsSC_boundaryPx.push_back(-999);
-      stsSC_boundaryPy.push_back(-999);
-      stsSC_boundaryPz.push_back(-999);
-    }
-    auto const trackIdx = trackster_iterator->trackIdx();
-    stsSC_trackIdx.push_back(trackIdx);
-    if (trackIdx != -1) {
-      const auto& track = tracks[trackIdx];
-
-      int iSide = int(track.eta() > 0);
-
-      const auto& fts = trajectoryStateTransform::outerFreeState((track), bFieldProd);
-      // to the HGCal front
-      const auto& tsos = prop.propagate(fts, firstDisk_[iSide]->surface());
-      if (tsos.isValid()) {
-        const auto& globalPos = tsos.globalPosition();
-        const auto& globalMom = tsos.globalMomentum();
-        stsSC_track_boundaryX.push_back(globalPos.x());
-        stsSC_track_boundaryY.push_back(globalPos.y());
-        stsSC_track_boundaryZ.push_back(globalPos.z());
-        stsSC_track_boundaryEta.push_back(globalPos.eta());
-        stsSC_track_boundaryPhi.push_back(globalPos.phi());
-        stsSC_track_boundaryPx.push_back(globalMom.x());
-        stsSC_track_boundaryPy.push_back(globalMom.y());
-        stsSC_track_boundaryPz.push_back(globalMom.z());
-        stsSC_trackTime.push_back(track.t0());
-      } else {
-        stsSC_track_boundaryX.push_back(-999);
-        stsSC_track_boundaryY.push_back(-999);
-        stsSC_track_boundaryZ.push_back(-999);
-        stsSC_track_boundaryEta.push_back(-999);
-        stsSC_track_boundaryPhi.push_back(-999);
-        stsSC_track_boundaryPx.push_back(-999);
-        stsSC_track_boundaryPy.push_back(-999);
-        stsSC_track_boundaryPz.push_back(-999);
-      }
-    } else {
-      stsSC_track_boundaryX.push_back(-999);
-      stsSC_track_boundaryY.push_back(-999);
-      stsSC_track_boundaryZ.push_back(-999);
-      stsSC_track_boundaryEta.push_back(-999);
-      stsSC_track_boundaryPhi.push_back(-999);
-      stsSC_track_boundaryPx.push_back(-999);
-      stsSC_track_boundaryPy.push_back(-999);
-      stsSC_track_boundaryPz.push_back(-999);
-    }
-
-    std::vector<float> id_probs;
-    for (size_t i = 0; i < 8; i++)
-      id_probs.push_back(trackster_iterator->id_probabilities(i));
-    stsSC_trackster_id_probabilities.push_back(id_probs);
-
-    // Clusters
-    std::vector<uint32_t> vertices_indexes;
-    std::vector<float> vertices_x;
-    std::vector<float> vertices_y;
-    std::vector<float> vertices_z;
-    std::vector<float> vertices_time;
-    std::vector<float> vertices_timeErr;
-    std::vector<float> vertices_energy;
-    std::vector<float> vertices_correctedEnergy;
-    std::vector<float> vertices_correctedEnergyUncertainty;
-    for (auto idx : trackster_iterator->vertices()) {
-      vertices_indexes.push_back(idx);
-      auto associated_cluster = (*layer_clusters_h)[idx];
-      vertices_x.push_back(associated_cluster.x());
-      vertices_y.push_back(associated_cluster.y());
-      vertices_z.push_back(associated_cluster.z());
-      vertices_energy.push_back(associated_cluster.energy());
-      vertices_correctedEnergy.push_back(associated_cluster.correctedEnergy());
-      vertices_correctedEnergyUncertainty.push_back(associated_cluster.correctedEnergyUncertainty());
-      vertices_time.push_back(layerClustersTimes.get(idx).first);
-      vertices_timeErr.push_back(layerClustersTimes.get(idx).second);
-    }
-    stsSC_trackster_vertices_indexes.push_back(vertices_indexes);
-    stsSC_trackster_vertices_x.push_back(vertices_x);
-    stsSC_trackster_vertices_y.push_back(vertices_y);
-    stsSC_trackster_vertices_z.push_back(vertices_z);
-    stsSC_trackster_vertices_time.push_back(vertices_time);
-    stsSC_trackster_vertices_timeErr.push_back(vertices_timeErr);
-    stsSC_trackster_vertices_energy.push_back(vertices_energy);
-    stsSC_trackster_vertices_correctedEnergy.push_back(vertices_correctedEnergy);
-    stsSC_trackster_vertices_correctedEnergyUncertainty.push_back(vertices_correctedEnergyUncertainty);
-
-    // Multiplicity
-    std::vector<float> vertices_multiplicity;
-    for (auto multiplicity : trackster_iterator->vertex_multiplicity()) {
-      vertices_multiplicity.push_back(multiplicity);
-    }
-    stsSC_trackster_vertices_multiplicity.push_back(vertices_multiplicity);
-  }
-
-  stsCP_ntracksters_ = simTrackstersCP.size();
-
-  for (auto trackster_iterator = simTrackstersCP.begin(); trackster_iterator != simTrackstersCP.end();
-       ++trackster_iterator) {
-    //per-trackster analysis
-    stsCP_trackster_time.push_back(trackster_iterator->time());
-    stsCP_trackster_timeBoundary.push_back(trackster_iterator->boundaryTime());
-    stsCP_trackster_timeError.push_back(trackster_iterator->timeError());
-    stsCP_trackster_regressed_energy.push_back(trackster_iterator->regressed_energy());
-    stsCP_trackster_raw_energy.push_back(trackster_iterator->raw_energy());
-    stsCP_trackster_raw_em_energy.push_back(trackster_iterator->raw_em_energy());
-    stsCP_trackster_raw_pt.push_back(trackster_iterator->raw_pt());
-    stsCP_trackster_raw_em_pt.push_back(trackster_iterator->raw_em_pt());
-    stsCP_trackster_barycenter_x.push_back(trackster_iterator->barycenter().x());
-    stsCP_trackster_barycenter_y.push_back(trackster_iterator->barycenter().y());
-    stsCP_trackster_barycenter_z.push_back(trackster_iterator->barycenter().z());
-    stsCP_trackster_barycenter_eta.push_back(trackster_iterator->barycenter().eta());
-    stsCP_trackster_barycenter_phi.push_back(trackster_iterator->barycenter().phi());
-    stsCP_trackster_EV1.push_back(trackster_iterator->eigenvalues()[0]);
-    stsCP_trackster_EV2.push_back(trackster_iterator->eigenvalues()[1]);
-    stsCP_trackster_EV3.push_back(trackster_iterator->eigenvalues()[2]);
-    stsCP_trackster_eVector0_x.push_back((trackster_iterator->eigenvectors()[0]).x());
-    stsCP_trackster_eVector0_y.push_back((trackster_iterator->eigenvectors()[0]).y());
-    stsCP_trackster_eVector0_z.push_back((trackster_iterator->eigenvectors()[0]).z());
-    stsCP_trackster_sigmaPCA1.push_back(trackster_iterator->sigmasPCA()[0]);
-    stsCP_trackster_sigmaPCA2.push_back(trackster_iterator->sigmasPCA()[1]);
-    stsCP_trackster_sigmaPCA3.push_back(trackster_iterator->sigmasPCA()[2]);
-    stsCP_pdgID.push_back(caloparticles[trackster_iterator->seedIndex()].pdgId());
-    CaloObjectVariant caloObj;
-    if (trackster_iterator->seedID() == caloparticles_h.id()) {
-      caloObj = caloparticles[trackster_iterator->seedIndex()];
-    } else {
-      caloObj = simclusters[trackster_iterator->seedIndex()];
-    }
-
-    auto const& simTrack = std::visit([](auto&& obj) { return obj.g4Tracks()[0]; }, caloObj);
-    auto const& caloPt = std::visit([](auto&& obj) { return obj.pt(); }, caloObj);
-    stsCP_trackster_regressed_pt.push_back(caloPt);
-
-    if (simTrack.crossedBoundary()) {
-      stsCP_boundaryX.push_back(simTrack.getPositionAtBoundary().x());
-      stsCP_boundaryY.push_back(simTrack.getPositionAtBoundary().y());
-      stsCP_boundaryZ.push_back(simTrack.getPositionAtBoundary().z());
-      stsCP_boundaryEta.push_back(simTrack.getPositionAtBoundary().eta());
-      stsCP_boundaryPhi.push_back(simTrack.getPositionAtBoundary().phi());
-      stsCP_boundaryPx.push_back(simTrack.getMomentumAtBoundary().x());
-      stsCP_boundaryPy.push_back(simTrack.getMomentumAtBoundary().y());
-      stsCP_boundaryPz.push_back(simTrack.getMomentumAtBoundary().z());
-    } else {
-      stsCP_boundaryX.push_back(-999);
-      stsCP_boundaryY.push_back(-999);
-      stsCP_boundaryZ.push_back(-999);
-      stsCP_boundaryEta.push_back(-999);
-      stsCP_boundaryPhi.push_back(-999);
-      stsCP_boundaryPx.push_back(-999);
-      stsCP_boundaryPy.push_back(-999);
-      stsCP_boundaryPz.push_back(-999);
-    }
-    auto const trackIdx = trackster_iterator->trackIdx();
-    stsCP_trackIdx.push_back(trackIdx);
-    if (trackIdx != -1) {
-      const auto& track = tracks[trackIdx];
-
-      int iSide = int(track.eta() > 0);
-
-      const auto& fts = trajectoryStateTransform::outerFreeState((track), bFieldProd);
-      // to the HGCal front
-      const auto& tsos = prop.propagate(fts, firstDisk_[iSide]->surface());
-      if (tsos.isValid()) {
-        const auto& globalPos = tsos.globalPosition();
-        const auto& globalMom = tsos.globalMomentum();
-        stsCP_track_boundaryX.push_back(globalPos.x());
-        stsCP_track_boundaryY.push_back(globalPos.y());
-        stsCP_track_boundaryZ.push_back(globalPos.z());
-        stsCP_track_boundaryEta.push_back(globalPos.eta());
-        stsCP_track_boundaryPhi.push_back(globalPos.phi());
-        stsCP_track_boundaryPx.push_back(globalMom.x());
-        stsCP_track_boundaryPy.push_back(globalMom.y());
-        stsCP_track_boundaryPz.push_back(globalMom.z());
-        stsCP_trackTime.push_back(track.t0());
-      } else {
-        stsCP_track_boundaryX.push_back(-999);
-        stsCP_track_boundaryY.push_back(-999);
-        stsCP_track_boundaryZ.push_back(-999);
-        stsCP_track_boundaryEta.push_back(-999);
-        stsCP_track_boundaryPhi.push_back(-999);
-        stsCP_track_boundaryPx.push_back(-999);
-        stsCP_track_boundaryPy.push_back(-999);
-        stsCP_track_boundaryPz.push_back(-999);
-      }
-    } else {
-      stsCP_track_boundaryX.push_back(-999);
-      stsCP_track_boundaryY.push_back(-999);
-      stsCP_track_boundaryZ.push_back(-999);
-      stsCP_track_boundaryEta.push_back(-999);
-      stsCP_track_boundaryPhi.push_back(-999);
-      stsCP_track_boundaryPx.push_back(-999);
-      stsCP_track_boundaryPy.push_back(-999);
-      stsCP_track_boundaryPz.push_back(-999);
-    }
-    std::vector<float> id_probs;
-    for (size_t i = 0; i < 8; i++)
-      id_probs.push_back(trackster_iterator->id_probabilities(i));
-    stsCP_trackster_id_probabilities.push_back(id_probs);
-
-    // Clusters
-    std::vector<uint32_t> vertices_indexes;
-    std::vector<float> vertices_x;
-    std::vector<float> vertices_y;
-    std::vector<float> vertices_z;
-    std::vector<float> vertices_time;
-    std::vector<float> vertices_timeErr;
-    std::vector<float> vertices_energy;
-    std::vector<float> vertices_correctedEnergy;
-    std::vector<float> vertices_correctedEnergyUncertainty;
-    for (auto idx : trackster_iterator->vertices()) {
-      vertices_indexes.push_back(idx);
-      auto associated_cluster = (*layer_clusters_h)[idx];
-      vertices_x.push_back(associated_cluster.x());
-      vertices_y.push_back(associated_cluster.y());
-      vertices_z.push_back(associated_cluster.z());
-      vertices_energy.push_back(associated_cluster.energy());
-      vertices_correctedEnergy.push_back(associated_cluster.correctedEnergy());
-      vertices_correctedEnergyUncertainty.push_back(associated_cluster.correctedEnergyUncertainty());
-      vertices_time.push_back(layerClustersTimes.get(idx).first);
-      vertices_timeErr.push_back(layerClustersTimes.get(idx).second);
-    }
-    stsCP_trackster_vertices_indexes.push_back(vertices_indexes);
-    stsCP_trackster_vertices_x.push_back(vertices_x);
-    stsCP_trackster_vertices_y.push_back(vertices_y);
-    stsCP_trackster_vertices_z.push_back(vertices_z);
-    stsCP_trackster_vertices_time.push_back(vertices_time);
-    stsCP_trackster_vertices_timeErr.push_back(vertices_timeErr);
-    stsCP_trackster_vertices_energy.push_back(vertices_energy);
-    stsCP_trackster_vertices_correctedEnergy.push_back(vertices_correctedEnergy);
-    stsCP_trackster_vertices_correctedEnergyUncertainty.push_back(vertices_correctedEnergyUncertainty);
-
-    // Multiplicity
-    std::vector<float> vertices_multiplicity;
-    for (auto multiplicity : trackster_iterator->vertex_multiplicity()) {
-      vertices_multiplicity.push_back(multiplicity);
-    }
-    stsCP_trackster_vertices_multiplicity.push_back(vertices_multiplicity);
-  }
-
+  const auto& simTrackstersSC_h = event.getHandle(simTracksters_SC_token_);
   simTICLCandidate_track_in_candidate.resize(simTICLCandidates.size(), -1);
   for (size_t i = 0; i < simTICLCandidates.size(); ++i) {
     auto const& cand = simTICLCandidates[i];
@@ -1540,9 +1060,9 @@ void TICLDumper::analyze(const edm::Event& event, const edm::EventSetup& setup) 
       int tk_idx = trackPtr.get() - (edm::Ptr<reco::Track>(tracks_h, 0)).get();
       simTICLCandidate_track_in_candidate[i] = tk_idx;
 
-      const auto& fts = trajectoryStateTransform::outerFreeState((track), bFieldProd);
+      const auto& fts = trajectoryStateTransform::outerFreeState((track), &detectorTools_->bfield);
       // to the HGCal front
-      const auto& tsos = prop.propagate(fts, firstDisk_[iSide]->surface());
+      const auto& tsos = detectorTools_->propagator.propagate(fts, detectorTools_->firstDisk_[iSide]->surface());
       if (tsos.isValid()) {
         const auto& globalPos = tsos.globalPosition();
         const auto& globalMom = tsos.globalMomentum();
@@ -1584,11 +1104,11 @@ void TICLDumper::analyze(const edm::Event& event, const edm::EventSetup& setup) 
     cluster_position_eta.push_back(cluster_iterator->eta());
     cluster_position_phi.push_back(cluster_iterator->phi());
     auto haf = cluster_iterator->hitsAndFractions();
-    auto layerId = rhtools_.getLayerWithOffset(haf[0].first);
+    auto layerId = detectorTools_->rhtools.getLayerWithOffset(haf[0].first);
     cluster_layer_id.push_back(layerId);
     uint32_t number_of_hits = cluster_iterator->hitsAndFractions().size();
     cluster_number_of_hits.push_back(number_of_hits);
-    cluster_type.push_back(rhtools_.getCellType(lc_seed));
+    cluster_type.push_back(detectorTools_->rhtools.getCellType(lc_seed));
     cluster_timeErr.push_back(layerClustersTimes.get(c_id).second);
     cluster_time.push_back(layerClustersTimes.get(c_id).first);
     c_id += 1;
@@ -1641,9 +1161,9 @@ void TICLDumper::analyze(const edm::Event& event, const edm::EventSetup& setup) 
     const auto& track = tracks[i];
     reco::TrackRef trackref = reco::TrackRef(tracks_h, i);
     int iSide = int(track.eta() > 0);
-    const auto& fts = trajectoryStateTransform::outerFreeState((track), bFieldProd);
+    const auto& fts = trajectoryStateTransform::outerFreeState((track), &detectorTools_->bfield);
     // to the HGCal front
-    const auto& tsos = prop.propagate(fts, firstDisk_[iSide]->surface());
+    const auto& tsos = detectorTools_->propagator.propagate(fts, detectorTools_->firstDisk_[iSide]->surface());
     if (tsos.isValid()) {
       const auto& globalPos = tsos.globalPosition();
       const auto& globalMom = tsos.globalMomentum();
@@ -1678,10 +1198,6 @@ void TICLDumper::analyze(const edm::Event& event, const edm::EventSetup& setup) 
     candidate_tree_->Fill();
   if (saveSuperclustering_ /*|| saveSuperclusteringDNNScore_ */)
     superclustering_tree_->Fill();
-  if (saveSimTrackstersSC_)
-    simtrackstersSC_tree_->Fill();
-  if (saveSimTrackstersCP_)
-    simtrackstersCP_tree_->Fill();
   if (saveTracks_)
     tracks_tree_->Fill();
   if (saveSimTICLCandidate_)
@@ -1695,7 +1211,10 @@ void TICLDumper::fillDescriptions(edm::ConfigurationDescriptions& descriptions) 
 
   edm::ParameterSetDescription tracksterDescValidator;
   tracksterDescValidator.add<std::string>("treeName")->setComment("Name of the output tree for the trackster collection");
-  tracksterDescValidator.add<edm::InputTag>("tracksterInputTag")->setComment("Input tag for the trackster collection to write");
+  tracksterDescValidator.add<edm::InputTag>("inputTag")->setComment("Input tag for the trackster collection to write");
+  tracksterDescValidator.ifValue(edm::ParameterDescription<std::string>("tracksterType", "Trackster", true, 
+      edm::Comment("Type of trackster. Trackster=regular trackster (from RECO). SimTracksterCP=Simtrackster from CaloParticle. SimTracksterSC=Simtrackster from SimCluster")), 
+    edm::allowedValues<std::string>("Trackster", "SimTracksterCP", "SimTracksterSC"));
   desc.addVPSet("tracksterCollections", tracksterDescValidator)->setComment("Trackster collections to dump");
 
   desc.add<edm::InputTag>("layerClusters", edm::InputTag("hgcalMergeLayerClusters"));
@@ -1711,8 +1230,8 @@ void TICLDumper::fillDescriptions(edm::ConfigurationDescriptions& descriptions) 
   desc.add<edm::InputTag>("tracksPosMtd", edm::InputTag("trackExtenderWithMTD:generalTrackmtdpos"));
   desc.add<edm::InputTag>("superclustering", edm::InputTag("ticlTracksterLinksSuperclustering"));
   //desc.add<edm::InputTag>("superclusteringDNNScore", edm::InputTag("ticlTrackstersSuperclustering", "superclusteringTracksterDNNScore"));
-  desc.add<edm::InputTag>("simtrackstersSC", edm::InputTag("ticlSimTracksters"));
-  desc.add<edm::InputTag>("simtrackstersCP", edm::InputTag("ticlSimTracksters", "fromCPs"));
+  
+  desc.add<edm::InputTag>("simtrackstersSC", edm::InputTag("ticlSimTracksters"))->setComment("SimTrackster from CaloParticle collection to use for simTICLcandidates");
   desc.add<edm::InputTag>("simTICLCandidates", edm::InputTag("ticlSimTracksters"));
 
   edm::ParameterSetDescription associatorDescValidator;
@@ -1729,8 +1248,6 @@ void TICLDumper::fillDescriptions(edm::ConfigurationDescriptions& descriptions) 
   desc.add<std::string>("propagator", "PropagatorWithMaterial");
 
   desc.add<bool>("saveLCs", true);
-  desc.add<bool>("saveSimTrackstersSC", true);
-  desc.add<bool>("saveSimTrackstersCP", true);
   desc.add<bool>("saveTICLCandidate", true);
   desc.add<bool>("saveSimTICLCandidate", true);
   desc.add<bool>("saveTracks", true);
