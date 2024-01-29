@@ -1020,7 +1020,7 @@ void TICLDumper::analyze(const edm::Event& event, const edm::EventSetup& setup) 
 
   edm::Handle<std::vector<CaloParticle>> caloparticles_h;
   event.getByToken(caloparticles_token_, caloparticles_h);
-  const auto& caloparticles = *caloparticles_h;
+  //const auto& caloparticles = *caloparticles_h;
 
   auto simclusters_h = event.getHandle(simclusters_token_);
 
