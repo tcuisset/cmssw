@@ -140,7 +140,7 @@ void SuperclusteringSampleDumper::analyze(const edm::Event& evt, const edm::Even
       // There is no need to run inference for tracksters very far apart
       if (std::abs(ts_seed.barycenter().Eta() - ts_cand.barycenter().Eta()) < deltaEtaWindow_
           && deltaPhi(ts_seed.barycenter().Phi(), ts_cand.barycenter().Phi()) < deltaPhiWindow_
-          &&  ts_cand.raw_energy() < candidateEnergyThreshold_) { 
+          &&  ts_cand.raw_energy() >= candidateEnergyThreshold_) { 
         // Add to output
         std::vector<float> features = dnnInput_->computeVector(ts_seed, ts_cand);
         assert(features.size() == features_.size());
