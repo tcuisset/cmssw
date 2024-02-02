@@ -22,7 +22,7 @@ namespace ticl {
   std::pair<float, float> computeLocalTracksterTime(const Trackster &trackster,
                                                     const std::vector<reco::CaloCluster> &layerClusters,
                                                     const edm::ValueMap<std::pair<float, float>> &layerClustersTime,
-                                                    const Eigen::Vector3d &barycenter,
+                                                    const Eigen::Vector3f &barycenter,
                                                     size_t N);
   std::pair<float, float> computeTracksterTime(const Trackster &trackster,
                                                const edm::ValueMap<std::pair<float, float>> &layerClustersTime,

@@ -31,11 +31,11 @@ void ticl::assignPCAtoTracksters(std::vector<Trackster> &tracksters,
 
     LogDebug("TrackstersPCA_Eigen")<<"start testing teackster with size:"<<trackster.vertices().size()<<std::endl;
 
-    Eigen::Vector3d point;
+    Eigen::Vector3f point;
     point << 0., 0., 0.;
-    Eigen::Vector3d barycenter;
+    Eigen::Vector3f barycenter;
     barycenter << 0., 0., 0.;
-    Eigen::Vector3d filtered_barycenter;
+    Eigen::Vector3f filtered_barycenter;
     filtered_barycenter << 0., 0., 0.;
 
     auto fillPoint = [&](const reco::CaloCluster &c, const float weight = 1.f) {
@@ -53,11 +53,11 @@ void ticl::assignPCAtoTracksters(std::vector<Trackster> &tracksters,
     size_t N = trackster.vertices().size();
     float weight = 1.f / N;
     float weights2_sum = 0.f;
-    Eigen::Vector3d sigmas;
+    Eigen::Vector3f sigmas;
     sigmas << 0., 0., 0.;
-    Eigen::Vector3d sigmasEigen;
+    Eigen::Vector3f sigmasEigen;
     sigmasEigen << 0., 0., 0.;
-    Eigen::Matrix3d covM = Eigen::Matrix3d::Zero();
+    Eigen::Matrix3f covM = Eigen::Matrix3f::Zero();
 
     std::vector<double> layerClusterEnergies;
 
@@ -161,9 +161,9 @@ void ticl::assignPCAtoTracksters(std::vector<Trackster> &tracksters,
     covM *= 1. / (1. - weights2_sum);
     
     // Perform the actual decomposition
-    Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d>::RealVectorType eigenvalues_fromEigen;
-    Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d>::EigenvectorsType eigenvectors_fromEigen;
-    Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> eigensolver(covM);
+    Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f>::RealVectorType eigenvalues_fromEigen;
+    Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f>::EigenvectorsType eigenvectors_fromEigen;
+    Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> eigensolver(covM);
     if (eigensolver.info() != Eigen::Success) {
       eigenvalues_fromEigen = eigenvalues_fromEigen.Zero();
       eigenvectors_fromEigen = eigenvectors_fromEigen.Zero();
@@ -176,7 +176,7 @@ void ticl::assignPCAtoTracksters(std::vector<Trackster> &tracksters,
     auto calc_spread = [&](size_t i) {
       fillPoint(layerClusters[trackster.vertices(i)]);
       sigmas += weight * (point - (clean ? filtered_barycenter : barycenter)).cwiseAbs2();
-      Eigen::Vector3d point_transformed = eigenvectors_fromEigen * (point - (clean ? filtered_barycenter : barycenter));
+      Eigen::Vector3f point_transformed = eigenvectors_fromEigen * (point - (clean ? filtered_barycenter : barycenter));
       if (energyWeight && trackster.raw_energy())
         weight = (layerClusters[trackster.vertices(i)].energy() / trackster.vertex_multiplicity(i)) / (clean ? filtered_energy : trackster.raw_energy());
       sigmasEigen += weight * (point_transformed.cwiseAbs2());
@@ -234,7 +234,7 @@ void ticl::assignPCAtoTracksters(std::vector<Trackster> &tracksters,
 std::pair<float, float> ticl::computeLocalTracksterTime(const Trackster &trackster,
                                                         const std::vector<reco::CaloCluster> &layerClusters,
                                                         const edm::ValueMap<std::pair<float, float>> &layerClustersTime,
-                                                        const Eigen::Vector3d &barycenter,
+                                                        const Eigen::Vector3f &barycenter,
                                                         size_t N) {
   float tracksterTime = 0.;
   float tracksterTimeErr = 0.;
