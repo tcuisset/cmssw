@@ -278,6 +278,8 @@ void TracksterLinkingbySuperClustering::linkTracksters(const Inputs& input, std:
   for (unsigned int ts_id = 0; ts_id < tracksterCount; ts_id++) {
     if (!tracksterMask[ts_id]) {
       outputSuperclusters.emplace_back(std::initializer_list<unsigned int>{ts_id});
+      resultTracksters.emplace_back(inputTracksters[ts_id]);
+      linkedTracksterIdToInputTracksterId.emplace_back(std::initializer_list<unsigned int>{ts_id});
     }
   }
 
