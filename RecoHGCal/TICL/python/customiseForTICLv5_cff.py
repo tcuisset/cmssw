@@ -11,6 +11,7 @@ from RecoHGCal.TICL.pfTICLProducer_cfi import pfTICLProducer as _pfTICLProducer
 from RecoHGCal.TICL.tracksterSelectionTf_cfi import *
 
 from RecoHGCal.TICL.tracksterLinksProducer_cfi import tracksterLinksProducer as _tracksterLinksProducer
+from RecoHGCal.TICL.ticlEGammaSuperClusterProducer_cfi import ticlEGammaSuperClusterProducer
 from RecoHGCal.TICL.ticlCandidateProducer_cfi import ticlCandidateProducer as _ticlCandidateProducer
 from RecoHGCal.Configuration.RecoHGCal_EventContent_cff import customiseForTICLv5EventContent
 from RecoHGCal.TICL.iterativeTICL_cff import ticlIterLabels, ticlIterLabelsMerge
@@ -106,6 +107,14 @@ def customiseForTICLv5(process, enableDumper = False):
                                      process.ticlCandidateTask)
     process.particleFlowClusterHGCal.initialClusteringStep.tracksterSrc = "ticlCandidate"
     process.globalrecoTask.remove(process.ticlTrackstersMerge)
+
+    # modifying superclustering
+    process.ticlEGammaSuperClusterProducer = ticlEGammaSuperClusterProducer
+    process.particleFlowSuperClusteringTask.replace(process.particleFlowSuperClusterHGCal, process.ticlEGammaSuperClusterProducer)
+    process.FEVTDEBUGHLToutput.outputCommands.extend(["keep *_ticlEGammaSuperClusterProducer_*_*"])
+    process.mergedSuperClustersHGC.src[1] = "ticlEGammaSuperClusterProducer" # original config : cms.EDProducer("SuperClusterMerger", src = cms.VInputTag("particleFlowSuperClusterECAL:particleFlowSuperClusterECALBarrel", "particleFlowSuperClusterHGCal"))
+    process.ecalDrivenElectronSeeds.endcapSuperClusters = cms.InputTag("ticlEGammaSuperClusterProducer")
+    process.photonCoreHGC.scIslandEndcapProducer = cms.InputTag("ticlEGammaSuperClusterProducer")
 
     process.tracksterSimTracksterAssociationLinking.label_tst = cms.InputTag("ticlCandidate")
     process.tracksterSimTracksterAssociationPR.label_tst = cms.InputTag("ticlCandidate")
