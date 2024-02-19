@@ -86,8 +86,10 @@ void EGammaSuperclusterProducer::produce(edm::Event& iEvent, const edm::EventSet
     //  continue; // Drop superclusters that are formed of one trackster only
 
     reco::CaloClusterPtrVector trackstersEMInSupercluster; 
+    double regressedEnergySum = 0.; // Sum of regressed_energy of all tracksters in supercluster
     for (unsigned int tsInSc_id : superclusterLink) {
       trackstersEMInSupercluster.push_back(reco::CaloClusterPtr(caloClustersEM_h, tsInSc_id));
+      regressedEnergySum += emTracksters[tsInSc_id].regressed_energy();
     }
     reco::SuperCluster& egammaSc = egammaSuperclusters->emplace_back(
       ticlSupercluster.raw_energy(),
@@ -98,8 +100,8 @@ void EGammaSuperclusterProducer::produce(edm::Event& iEvent, const edm::EventSet
       0.046, // phiwidth (TODO placheolder value for now)
       0.017 // etawidth (TODO placheolder value for now)
     );
-    egammaSc.setCorrectedEnergy(ticlSupercluster.raw_energy()); // TODO we use raw_energy for now,probably should run energy regression and use regressed_energy ?
-    egammaSc.setCorrectedEnergyUncertainty(0.01 * ticlSupercluster.raw_energy()); // TODO placeholder value
+    egammaSc.setCorrectedEnergy(regressedEnergySum); // TODO 
+    //egammaSc.setCorrectedEnergyUncertainty(0.01 * regressedEnergySum); // TODO placeholder value
 
   }
   
