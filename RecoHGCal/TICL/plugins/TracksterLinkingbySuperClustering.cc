@@ -276,7 +276,7 @@ void TracksterLinkingbySuperClustering::linkTracksters(const Inputs& input, std:
 
   // Adding one-trackster superclusters for all tracksters not in a supercluster already
   for (unsigned int ts_id = 0; ts_id < tracksterCount; ts_id++) {
-    if (!tracksterMask[ts_id]) {
+    if (!tracksterMask[ts_id] && inputTracksters[ts_id].raw_energy() >= candidateEnergyThreshold_) {
       outputSuperclusters.emplace_back(std::initializer_list<unsigned int>{ts_id});
       resultTracksters.emplace_back(inputTracksters[ts_id]);
       linkedTracksterIdToInputTracksterId.emplace_back(std::initializer_list<unsigned int>{ts_id});
