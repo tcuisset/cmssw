@@ -33,6 +33,9 @@
 #include "DataFormats/HGCalReco/interface/Common.h"
 #include "SimDataFormats/CaloAnalysis/interface/CaloParticle.h"
 #include "SimDataFormats/CaloAnalysis/interface/SimCluster.h"
+#include "DataFormats/EgammaReco/interface/SuperClusterFwd.h"
+#include "DataFormats/EgammaReco/interface/SuperCluster.h"
+
 
 #include "RecoLocalCalo/HGCalRecAlgos/interface/RecHitTools.h"
 #include "TrackingTools/TrajectoryState/interface/TrajectoryStateTransform.h"
@@ -583,6 +586,9 @@ private:
   const edm::EDGetTokenT<std::vector<ticl::Trackster>> superclustering_superclusteredTracksters_token;
   const edm::EDGetTokenT<std::vector<std::vector<unsigned int>>> superclustering_linkedResultTracksters_token;
   //const edm::EDGetTokenT<ticl::SuperclusteringDNNScore> superclustering_DNNScore_token_;
+  const edm::EDGetTokenT<reco::SuperClusterCollection> recoSuperClusters_token;
+  const edm::EDGetTokenT<reco::CaloClusterCollection> recoSuperClusters_caloClusters_token;
+  const edm::EDGetTokenT<std::vector<ticl::Trackster>> recoSuperClusters_sourceTracksters_token;
   edm::ESGetToken<CaloGeometry, CaloGeometryRecord> caloGeometry_token_;
   const edm::EDGetTokenT<std::vector<ticl::Trackster>> simTracksters_SC_token_; ///< needed for simticlcandidate
   const edm::EDGetTokenT<std::vector<TICLCandidate>> simTICLCandidate_token_;
@@ -609,6 +615,7 @@ private:
   bool saveLCs_;
   bool saveSuperclustering_;
   bool saveSuperclusteringDNNScore_;
+  bool saveRecoSuperclusters_;
   bool saveTICLCandidate_;
   bool saveSimTICLCandidate_;
   bool saveTracks_;
@@ -624,6 +631,17 @@ private:
 
   std::vector<std::vector<unsigned int>> superclustering_linkedResultTracksters; // Map of indices from superclusteredTracksters collection back into ticlTrackstersCLUE3DEM collection
   //ticl::SuperclusteringDNNScore superclusteringDNNScore;
+
+  std::vector<double> recoSuperCluster_rawEnergy; 
+  std::vector<double>  recoSuperCluster_energy;
+  std::vector<double>  recoSuperCluster_correctedEnergy;
+  std::vector<double>  recoSuperCluster_position_x;
+  std::vector<double>  recoSuperCluster_position_y;
+  std::vector<double>  recoSuperCluster_position_z;
+  std::vector<double>  recoSuperCluster_position_eta;
+  std::vector<double>  recoSuperCluster_position_phi;
+  std::vector<uint32_t> recoSuperCluster_seedTs; ///< Index to seed trackster (into the trackster collection used to make superclusters, given by config recoSuperClusters_sourceTracksterCollection)
+  std::vector<std::vector<uint32_t>> recoSuperCluster_constituentTs; ///< Indices to all tracksters inside the supercluster (same)
 
   std::vector<float> simTICLCandidate_raw_energy;
   std::vector<float> simTICLCandidate_regressed_energy;
@@ -710,6 +728,17 @@ void TICLDumper::clearVariables() {
   //superclustering_superclusteredTracksters_dumper.clearVariables();
   superclustering_linkedResultTracksters.clear();
   // superclusteringDNNScore.clear();
+
+  recoSuperCluster_rawEnergy.clear();
+  recoSuperCluster_energy.clear();
+  recoSuperCluster_correctedEnergy.clear();
+  recoSuperCluster_position_x.clear();
+  recoSuperCluster_position_y.clear();
+  recoSuperCluster_position_z.clear();
+  recoSuperCluster_position_eta.clear();
+  recoSuperCluster_position_phi.clear();
+  recoSuperCluster_seedTs.clear();
+  recoSuperCluster_constituentTs.clear();
 
   simTICLCandidate_raw_energy.clear();
   simTICLCandidate_regressed_energy.clear();
@@ -804,6 +833,12 @@ TICLDumper::TICLDumper(const edm::ParameterSet& ps)
           consumes<std::vector<std::vector<unsigned int>>>(ps.getParameter<edm::InputTag>("superclustering"))),
       //superclustering_DNNScore_token_(consumes<ticl::SuperclusteringDNNScore>(
       //    ps.getParameter<edm::InputTag>("superclusteringDNNScore"))),
+      recoSuperClusters_token(
+          consumes<reco::SuperClusterCollection>(ps.getParameter<edm::InputTag>("recoSuperClusters"))),
+      recoSuperClusters_caloClusters_token(
+          consumes<reco::CaloClusterCollection>(ps.getParameter<edm::InputTag>("recoSuperClusters"))),
+      recoSuperClusters_sourceTracksters_token(
+          consumes<std::vector<ticl::Trackster>>(ps.getParameter<edm::InputTag>("recoSuperClusters_sourceTracksterCollection"))),
       caloGeometry_token_(esConsumes<CaloGeometry, CaloGeometryRecord, edm::Transition::BeginRun>()),
       simTracksters_SC_token_(
           consumes<std::vector<ticl::Trackster>>(ps.getParameter<edm::InputTag>("simtrackstersSC"))),
@@ -822,6 +857,7 @@ TICLDumper::TICLDumper(const edm::ParameterSet& ps)
       saveLCs_(ps.getParameter<bool>("saveLCs")),
       saveSuperclustering_(ps.getParameter<bool>("saveSuperclustering")),
       //saveSuperclusteringDNNScore_(ps.getParameter<bool>("saveSuperclusteringDNNScore")),
+      saveRecoSuperclusters_(ps.getParameter<bool>("saveRecoSuperclusters")),
       saveTICLCandidate_(ps.getParameter<bool>("saveSimTICLCandidate")),
       saveSimTICLCandidate_(ps.getParameter<bool>("saveSimTICLCandidate")),
       saveTracks_(ps.getParameter<bool>("saveTracks")) {
@@ -893,15 +929,27 @@ void TICLDumper::beginJob() {
     candidate_tree_->Branch("track_in_candidate", &track_in_candidate);
     candidate_tree_->Branch("tracksters_in_candidate", &tracksters_in_candidate);
   }
-
-  if (saveSuperclustering_) {
+  if (saveSuperclustering_ || saveRecoSuperclusters_)
     superclustering_tree_ = fs->make<TTree>("superclustering", "Superclustering in HGCAL CE-E");
+  if (saveSuperclustering_) {
     //superclustering_superclusteredTracksters_dumper.initTree(superclustering_tree_, &ev_event_);
     superclustering_tree_->Branch("linkedResultTracksters", &superclustering_linkedResultTracksters);
   }
   // if (saveSuperclusteringDNNScore_) {
   //   superclustering_tree_->Branch("superclusteringDNNScore", &superclusteringDNNScore);
   // }
+  if (saveRecoSuperclusters_) {
+    superclustering_tree_->Branch("recoSuperCluster_rawEnergy", &recoSuperCluster_rawEnergy);
+    superclustering_tree_->Branch("recoSuperCluster_energy", &recoSuperCluster_energy);
+    superclustering_tree_->Branch("recoSuperCluster_correctedEnergy", &recoSuperCluster_correctedEnergy);
+    superclustering_tree_->Branch("recoSuperCluster_position_x", &recoSuperCluster_position_x);
+    superclustering_tree_->Branch("recoSuperCluster_position_y", &recoSuperCluster_position_y);
+    superclustering_tree_->Branch("recoSuperCluster_position_z", &recoSuperCluster_position_z);
+    superclustering_tree_->Branch("recoSuperCluster_position_eta", &recoSuperCluster_position_eta);
+    superclustering_tree_->Branch("recoSuperCluster_position_phi", &recoSuperCluster_position_phi);
+    superclustering_tree_->Branch("recoSuperCluster_seedTs", &recoSuperCluster_seedTs);
+    superclustering_tree_->Branch("recoSuperCluster_constituentTs", &recoSuperCluster_constituentTs);
+  }
 
   if (associations_parameterSets_.size()>0)
     associations_tree_ = fs->make<TTree>("associations", "Associations");
@@ -1013,6 +1061,46 @@ void TICLDumper::analyze(const edm::Event& event, const edm::EventSetup& setup) 
   if (superclustering_DNNScore_h.isValid())
     superclusteringDNNScore = *superclustering_DNNScore_h; 
   */
+
+  // recoSuperClusters
+  if (saveRecoSuperclusters_) {
+    reco::SuperClusterCollection const& recoSuperClusters = event.get(recoSuperClusters_token);
+    reco::CaloClusterCollection const& recoCaloClusters = event.get(recoSuperClusters_caloClusters_token);
+    std::vector<ticl::Trackster> const& recoSuperClusters_sourceTracksters = event.get(recoSuperClusters_sourceTracksters_token);
+
+    std::unordered_map<DetId, unsigned> hitToTracksterMap; // Map for fast lookup of hit to trackster index in recoSuperClusters_sourceTracksters
+
+    for (unsigned ts_id = 0; ts_id < recoSuperClusters_sourceTracksters.size(); ts_id++) {
+      for (unsigned int lc_index : recoSuperClusters_sourceTracksters[ts_id].vertices()) {
+        for (auto [detId, fraction] : clusters[lc_index].hitsAndFractions()) {
+          bool insertionSucceeded = hitToTracksterMap.emplace(detId, ts_id).second;
+          assert(insertionSucceeded && "TICLDumper found tracksters sharing rechits");
+        }
+      }
+    }
+
+    for (auto const& recoSc : recoSuperClusters) {
+      recoSuperCluster_rawEnergy.push_back(recoSc.rawEnergy());
+      recoSuperCluster_energy.push_back(recoSc.energy());
+      recoSuperCluster_correctedEnergy.push_back(recoSc.correctedEnergy());
+      recoSuperCluster_position_x.push_back(recoSc.position().x());
+      recoSuperCluster_position_y.push_back(recoSc.position().y());
+      recoSuperCluster_position_z.push_back(recoSc.position().z());
+      recoSuperCluster_position_eta.push_back(recoSc.position().eta());
+      recoSuperCluster_position_phi.push_back(recoSc.position().phi());
+
+      // Finding the trackster that was used to create the CaloCluster, using the DetId of a hit (we assume there is no sharing of rechits between tracksters)
+
+      // Seed trackster of the supercluster : Using the DetId of the seed rechit of the seed CaloCluster
+      recoSuperCluster_seedTs.push_back(hitToTracksterMap.at(recoSc.seed()->seed()));
+      recoSuperCluster_constituentTs.emplace_back();
+      for (edm::Ptr<reco::CaloCluster> const& caloClusterPtr : recoSc.clusters()) {
+        // Using the DetId of the seed rechit of the CaloCluster
+        recoSuperCluster_constituentTs.back().push_back(hitToTracksterMap.at(caloClusterPtr->seed()));
+      }
+    }
+  }
+  
 
   edm::Handle<std::vector<TICLCandidate>> simTICLCandidates_h;
   event.getByToken(simTICLCandidate_token_, simTICLCandidates_h);
@@ -1196,7 +1284,7 @@ void TICLDumper::analyze(const edm::Event& event, const edm::EventSetup& setup) 
     cluster_tree_->Fill();
   if (saveTICLCandidate_)
     candidate_tree_->Fill();
-  if (saveSuperclustering_ /*|| saveSuperclusteringDNNScore_ */)
+  if (saveSuperclustering_ || saveRecoSuperclusters_ /*|| saveSuperclusteringDNNScore_ */)
     superclustering_tree_->Fill();
   if (saveTracks_)
     tracks_tree_->Fill();
@@ -1230,7 +1318,9 @@ void TICLDumper::fillDescriptions(edm::ConfigurationDescriptions& descriptions) 
   desc.add<edm::InputTag>("tracksPosMtd", edm::InputTag("trackExtenderWithMTD:generalTrackmtdpos"));
   desc.add<edm::InputTag>("superclustering", edm::InputTag("ticlTracksterLinksSuperclustering"));
   //desc.add<edm::InputTag>("superclusteringDNNScore", edm::InputTag("ticlTrackstersSuperclustering", "superclusteringTracksterDNNScore"));
-  
+  desc.add<edm::InputTag>("recoSuperClusters", edm::InputTag("particleFlowSuperClusterHGCal"))->setComment("egamma supercluster collection (either from PFECALSuperClusterProducer for Mustache, or from TICL->Egamma converter in case of TICL DNN superclusters)");
+  desc.add<edm::InputTag>("recoSuperClusters_sourceTracksterCollection", edm::InputTag("ticlTrackstersMerge"))->setComment("Trackster collection used to produce the reco::SuperCluster, used to provide a mapping back to the tracksters used in superclusters");
+
   desc.add<edm::InputTag>("simtrackstersSC", edm::InputTag("ticlSimTracksters"))->setComment("SimTrackster from CaloParticle collection to use for simTICLcandidates");
   desc.add<edm::InputTag>("simTICLCandidates", edm::InputTag("ticlSimTracksters"));
 
@@ -1254,6 +1344,7 @@ void TICLDumper::fillDescriptions(edm::ConfigurationDescriptions& descriptions) 
   desc.add<bool>("saveSuperclustering", true);
   //desc.add<bool>("saveSuperclusteringDNNScore", false)
   //  ->setComment("Save the superclustering DNN score for all the evaluations made. Takes a large amount of disk space. Make sure the DNN score is also saved into the event as well (otherwise it won't dump anything)");
+  desc.add<bool>("saveRecoSuperclusters", true)->setComment("Save superclustering Egamma collections (as reco::SuperCluster)");
   descriptions.add("ticlDumper", desc);
 }
 
