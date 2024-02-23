@@ -276,7 +276,9 @@ void TracksterLinkingbySuperClustering::linkTracksters(const Inputs& input, std:
 
   // Adding one-trackster superclusters for all tracksters not in a supercluster already
   for (unsigned int ts_id = 0; ts_id < tracksterCount; ts_id++) {
-    if (!tracksterMask[ts_id] && inputTracksters[ts_id].raw_energy() >= candidateEnergyThreshold_) {
+    if (!tracksterMask[ts_id] // && inputTracksters[ts_id].raw_energy() >= candidateEnergyThreshold_
+          && inputTracksters[ts_id].raw_pt() >= seedPtThreshold_
+    ) {
       outputSuperclusters.emplace_back(std::initializer_list<unsigned int>{ts_id});
       resultTracksters.emplace_back(inputTracksters[ts_id]);
       linkedTracksterIdToInputTracksterId.emplace_back(std::initializer_list<unsigned int>{ts_id});
@@ -305,7 +307,7 @@ void TracksterLinkingbySuperClustering::fillPSetDescription(edm::ParameterSetDes
      ->setComment("Size of delta eta window to consider for superclustering. Seed-candidate pairs outside this window are not considered for DNN inference.");
   desc.add<double>("deltaPhiWindow", 0.5)
      ->setComment("Size of delta phi window to consider for superclustering. Seed-candidate pairs outside this window are not considered for DNN inference.");
-  desc.add<double>("seedPtThreshold", 1.)
+  desc.add<double>("seedPtThreshold", 5.)
      ->setComment("Minimum transverse momentum of trackster to be considered as seed of a supercluster");
   desc.add<double>("candidateEnergyThreshold", 2.) // set the same as Alessandro
      ->setComment("Minimum energy of trackster to be considered as candidate for superclustering");
