@@ -34,7 +34,8 @@ from RecoHGCal.TICL.CLUE3DHighStep_cff import ticlTrackstersCLUE3DHigh
 from RecoHGCal.TICL.TrkEMStep_cff import ticlTrackstersTrkEM, filteredLayerClustersHFNoseTrkEM
 
 
-def customiseForTICLv5(process, enableDumper = False, enableNewSuperclustering=True):
+def customiseForTICLv5(process, enableDumper = False, enableSuperclusteringDNN=True):
+    """ enableSuperclusteringDNN : if True, use the superlcustering DNN for electron seeds. If False, use Mustache (fed from CLUE3D EM tracksters) """
 
     process.HGCalUncalibRecHit.computeLocalTime = cms.bool(True)
     process.ticlSimTracksters.computeLocalTime = cms.bool(True)
@@ -111,11 +112,20 @@ def customiseForTICLv5(process, enableDumper = False, enableNewSuperclustering=T
     # modifying superclustering
     process.ticlEGammaSuperClusterProducer = ticlEGammaSuperClusterProducer
     process.FEVTDEBUGHLToutput.outputCommands.extend(["keep *_ticlEGammaSuperClusterProducer_*_*"])
-    if enableNewSuperclustering:
+    if enableSuperclusteringDNN:
         process.particleFlowSuperClusteringTask.replace(process.particleFlowSuperClusterHGCal, process.ticlEGammaSuperClusterProducer)
         process.mergedSuperClustersHGC.src[1] = "ticlEGammaSuperClusterProducer" # original config : cms.EDProducer("SuperClusterMerger", src = cms.VInputTag("particleFlowSuperClusterECAL:particleFlowSuperClusterECALBarrel", "particleFlowSuperClusterHGCal"))
         process.ecalDrivenElectronSeeds.endcapSuperClusters = cms.InputTag("ticlEGammaSuperClusterProducer")
         process.photonCoreHGC.scIslandEndcapProducer = cms.InputTag("ticlEGammaSuperClusterProducer")
+    else:
+        # make CLUE3D EM tracksters flow into Mustache (instead of ticlCandidate)
+
+        # particleFlowClusterHGCal is used for particleFlowSuperClusterHGCal as well as for hgcalHitCalibration (which we don't want to change)
+        # so duplicate particleFlowClusterHGCal to make it consume CLUE3D EM tracksters, keeping the old config in in parallel for hgcalHitCalibration
+        process.particleFlowClusterHGCalCLUE3DEM = process.particleFlowClusterHGCal.clone()
+        process.particleFlowClusterHGCalCLUE3DEM.initialClusteringStep.tracksterSrc = cms.InputTag("ticlTrackstersCLUE3DEM")
+        process.hgcalLocalRecoTask.add(process.particleFlowClusterHGCalCLUE3DEM)
+        process.particleFlowSuperClusterHGCal.PFClusters = cms.InputTag("particleFlowClusterHGCalCLUE3DEM")
 
     process.tracksterSimTracksterAssociationLinking.label_tst = cms.InputTag("ticlCandidate")
     process.tracksterSimTracksterAssociationPR.label_tst = cms.InputTag("ticlCandidate")
@@ -179,8 +189,8 @@ def customiseForTICLv5(process, enableDumper = False, enableNewSuperclustering=T
                     tracksterType=cms.string("SimTracksterCP")
                 ),
             ],
-            recoSuperClusters = cms.InputTag("ticlEGammaSuperClusterProducer" if enableNewSuperclustering else "particleFlowSuperClusterHGCal"),
-            recoSuperClusters_sourceTracksterCollection = cms.InputTag("ticlTrackstersCLUE3DEM" if enableNewSuperclustering else "ticlCandidate"),
+            recoSuperClusters = cms.InputTag("ticlEGammaSuperClusterProducer" if enableSuperclusteringDNN else "particleFlowSuperClusterHGCal"),
+            recoSuperClusters_sourceTracksterCollection = cms.InputTag("ticlTrackstersCLUE3DEM"),
             ticlcandidates = cms.InputTag("ticlCandidate"),
                 associators=[
                     cms.PSet(
