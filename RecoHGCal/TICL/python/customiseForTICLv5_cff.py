@@ -110,9 +110,9 @@ def customiseForTICLv5(process, enableDumper = False, enableSuperclusteringDNN=T
     process.globalrecoTask.remove(process.ticlTrackstersMerge)
 
     # modifying superclustering
-    process.ticlEGammaSuperClusterProducer = ticlEGammaSuperClusterProducer
-    process.FEVTDEBUGHLToutput.outputCommands.extend(["keep *_ticlEGammaSuperClusterProducer_*_*"])
     if enableSuperclusteringDNN:
+        process.ticlEGammaSuperClusterProducer = ticlEGammaSuperClusterProducer
+        process.FEVTDEBUGHLToutput.outputCommands.extend(["keep *_ticlEGammaSuperClusterProducer_*_*"])
         process.particleFlowSuperClusteringTask.replace(process.particleFlowSuperClusterHGCal, process.ticlEGammaSuperClusterProducer)
         process.mergedSuperClustersHGC.src[1] = "ticlEGammaSuperClusterProducer" # original config : cms.EDProducer("SuperClusterMerger", src = cms.VInputTag("particleFlowSuperClusterECAL:particleFlowSuperClusterECALBarrel", "particleFlowSuperClusterHGCal"))
         process.ecalDrivenElectronSeeds.endcapSuperClusters = cms.InputTag("ticlEGammaSuperClusterProducer")
@@ -189,7 +189,7 @@ def customiseForTICLv5(process, enableDumper = False, enableSuperclusteringDNN=T
                     tracksterType=cms.string("SimTracksterCP")
                 ),
             ],
-            recoSuperClusters = cms.InputTag("ticlEGammaSuperClusterProducer" if enableSuperclusteringDNN else "particleFlowSuperClusterHGCal"),
+            recoSuperClusters = cms.InputTag("ticlEGammaSuperClusterProducer" if enableSuperclusteringDNN else "particleFlowClusterHGCalCLUE3DEM"),
             recoSuperClusters_sourceTracksterCollection = cms.InputTag("ticlTrackstersCLUE3DEM"),
             ticlcandidates = cms.InputTag("ticlCandidate"),
                 associators=[
