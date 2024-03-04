@@ -337,7 +337,7 @@ private:
   std::vector<float> tracksters_merged_regressed_energy;
   std::vector<float> tracksters_merged_raw_energy;
   std::vector<float> tracksters_merged_raw_em_energy;
-  std::vector<std::array<float, 7>> tracksters_merged_raw_energy_perCellType;
+  std::vector<std::vector<float>> tracksters_merged_raw_energy_perCellType;
   std::vector<float> tracksters_merged_raw_pt;
   std::vector<float> tracksters_merged_raw_em_pt;
   std::vector<float> tracksters_merged_barycenter_x;
@@ -1837,7 +1837,7 @@ void TICLDumper::analyze(const edm::Event& event, const edm::EventSetup& setup) 
     std::vector<float> vertices_energy;
     std::vector<float> vertices_correctedEnergy;
     std::vector<float> vertices_correctedEnergyUncertainty;
-    std::array<float, 7> energyPerCellType{};
+    std::vector<float> energyPerCellType(7, 0.);
     for (auto idx : trackster_iterator->vertices()) {
       vertices_indexes.push_back(idx);
       auto associated_cluster = (*layer_clusters_h)[idx];
