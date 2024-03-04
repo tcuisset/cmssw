@@ -5,6 +5,7 @@ from ..sequences.HLTEndSequence_cfi import *
 from ..modules.hltPreDoublePFTauHPS_cfi import *
 from ..sequences.HLTDoLocalPixelSequence_cfi import *
 from ..sequences.HLTParticleFlowSequence_cfi import *
+from ..modules.hltL1DoubleNNTau52_cfi import hltL1DoubleNNTau52
 
 #HLTL2TauTagNNSequence = cms.Sequence(HLTDoLocalPixelSequence + fragment.HLTRecoPixelTracksSequence + fragment.HLTRecopixelvertexingSequence + fragment.HLTDoCaloSequence + cms.ignore(fragment.hltL1sDoubleTauBigOR) + cms.ignore(fragment.hltL1sSingleTau) + cms.ignore(fragment.hltL1sBigOrMuXXerIsoTauYYer) + cms.ignore(fragment.hltL1sMu22erIsoTau40er) + cms.ignore(fragment.hltL1sBigORDoubleTauJet) + cms.ignore(fragment.hltL1VBFDiJetIsoTau) + cms.ignore(fragment.hltL1sVeryBigORMu18erTauXXer2p1) + cms.ignore(fragment.hltL1sDoubleTauBigORWithLowMass) + fragment.hltL2TauTagNNProducer)
 
@@ -12,29 +13,9 @@ hltL2TauTagNNProducer = cms.EDProducer( "L2TauNNProducer",
     debugLevel = cms.int32( 0 ),
     L1Taus = cms.VPSet( 
       cms.PSet(  L1CollectionName = cms.string( "DoubleTau" ),
-        L1TauTrigger = cms.InputTag( "hltL1sDoubleTauBigOR" )
+        L1TauTrigger = cms.InputTag( "hltL1DoubleNNTau52" )
       ),
-      cms.PSet(  L1CollectionName = cms.string( "SingleTau" ),
-        L1TauTrigger = cms.InputTag( "hltL1sSingleTau" )
-      ),
-      cms.PSet(  L1CollectionName = cms.string( "MuXXTauYY" ),
-        L1TauTrigger = cms.InputTag( "hltL1sBigOrMuXXerIsoTauYYer" )
-      ),
-      cms.PSet(  L1CollectionName = cms.string( "Mu22Tau40" ),
-        L1TauTrigger = cms.InputTag( "hltL1sMu22erIsoTau40er" )
-      ),
-      cms.PSet(  L1CollectionName = cms.string( "DoubleTauJet" ),
-        L1TauTrigger = cms.InputTag( "hltL1sBigORDoubleTauJet" )
-      ),
-      cms.PSet(  L1CollectionName = cms.string( "VBFIsoTau" ),
-        L1TauTrigger = cms.InputTag( "hltL1VBFDiJetIsoTau" )
-      ),
-      cms.PSet(  L1CollectionName = cms.string( "Mu18TauXX" ),
-        L1TauTrigger = cms.InputTag( "hltL1sVeryBigORMu18erTauXXer2p1" )
-      ),
-      cms.PSet(  L1CollectionName = cms.string( "DoubleTauLowMass" ),
-        L1TauTrigger = cms.InputTag( "hltL1sDoubleTauBigORWithLowMass" )
-      )
+
     ),
     hbheInput = cms.InputTag( "hltHbhereco" ),
     hoInput = cms.InputTag( "hltHoreco" ),
@@ -65,6 +46,7 @@ hltL2DoubleTauTagNNFilter = cms.EDFilter( "L2TauTagFilter",
 HLT_DoublePNetTauh = cms.Path(
     HLTBeginSequence +
     hltPreDoublePFTauHPS + 
+    hltL1DoubleNNTau52 +
     HLTParticleFlowSequence +
     hltL2TauTagNNProducer + 
     hltL2DoubleTauTagNNFilter + 
