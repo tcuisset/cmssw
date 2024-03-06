@@ -165,6 +165,7 @@ private:
   std::vector<float> trackster_regressed_energy;
   std::vector<float> trackster_raw_energy;
   std::vector<float> trackster_raw_em_energy;
+  std::vector<std::vector<float>> tracksters_raw_energy_perCellType;
   std::vector<float> trackster_raw_pt;
   std::vector<float> trackster_raw_em_pt;
   std::vector<float> trackster_barycenter_x;
@@ -464,6 +465,7 @@ void TICLDumper::clearVariables() {
   trackster_regressed_energy.clear();
   trackster_raw_energy.clear();
   trackster_raw_em_energy.clear();
+  tracksters_raw_energy_perCellType.clear();
   trackster_raw_pt.clear();
   trackster_raw_em_pt.clear();
   trackster_barycenter_x.clear();
@@ -841,6 +843,7 @@ void TICLDumper::beginJob() {
     trackster_tree_->Branch("regressed_energy", &trackster_regressed_energy);
     trackster_tree_->Branch("raw_energy", &trackster_raw_energy);
     trackster_tree_->Branch("raw_em_energy", &trackster_raw_em_energy);
+    trackster_tree_->Branch("raw_energy_perCellType", &tracksters_raw_energy_perCellType);
     trackster_tree_->Branch("raw_pt", &trackster_raw_pt);
     trackster_tree_->Branch("raw_em_pt", &trackster_raw_em_pt);
     trackster_tree_->Branch("barycenter_x", &trackster_barycenter_x);
@@ -1367,6 +1370,7 @@ void TICLDumper::analyze(const edm::Event& event, const edm::EventSetup& setup) 
     std::vector<float> vertices_energy;
     std::vector<float> vertices_correctedEnergy;
     std::vector<float> vertices_correctedEnergyUncertainty;
+    std::vector<float> energyPerCellType(7, 0.); // 7 length for the 7 cell types
     for (auto idx : trackster_iterator->vertices()) {
       vertices_indexes.push_back(idx);
       auto associated_cluster = (*layer_clusters_h)[idx];
@@ -1378,7 +1382,10 @@ void TICLDumper::analyze(const edm::Event& event, const edm::EventSetup& setup) 
       vertices_correctedEnergyUncertainty.push_back(associated_cluster.correctedEnergyUncertainty());
       vertices_time.push_back(layerClustersTimes.get(idx).first);
       vertices_timeErr.push_back(layerClustersTimes.get(idx).second);
+      
+      energyPerCellType.at(rhtools_.getCellType(associated_cluster.seed())) += associated_cluster.energy();
     }
+    tracksters_raw_energy_perCellType.push_back(energyPerCellType);
     trackster_vertices_indexes.push_back(vertices_indexes);
     trackster_vertices_x.push_back(vertices_x);
     trackster_vertices_y.push_back(vertices_y);
