@@ -189,7 +189,7 @@ def customiseForTICLv5(process, enableDumper = False, enableSuperclusteringDNN=T
                     tracksterType=cms.string("SimTracksterCP")
                 ),
             ],
-            recoSuperClusters = cms.InputTag("ticlEGammaSuperClusterProducer" if enableSuperclusteringDNN else "particleFlowClusterHGCalCLUE3DEM"),
+            recoSuperClusters = cms.InputTag("ticlEGammaSuperClusterProducer" if enableSuperclusteringDNN else "particleFlowSuperClusterHGCal"),
             recoSuperClusters_sourceTracksterCollection = cms.InputTag("ticlTrackstersCLUE3DEM"),
             ticlcandidates = cms.InputTag("ticlCandidate"),
                 associators=[
