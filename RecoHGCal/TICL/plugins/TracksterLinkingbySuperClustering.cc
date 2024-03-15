@@ -225,16 +225,16 @@ void TracksterLinkingbySuperClustering::linkTracksters(const Inputs& input, std:
         // No supercluster exists yet for the seed. Create one.
         outputSuperclusters.emplace_back();
         outputSuperclusters.back().push_back(bestSeedForCurrentCandidate_idx);
-        resultTracksters.emplace_back(inputTracksters[trackstersIndicesPt[bestSeedForCurrentCandidate_idx]]);
-        linkedTracksterIdToInputTracksterId.emplace_back(std::initializer_list<unsigned int>{trackstersIndicesPt[bestSeedForCurrentCandidate_idx]});
+        resultTracksters.emplace_back(inputTracksters[bestSeedForCurrentCandidate_idx]);
+        linkedTracksterIdToInputTracksterId.emplace_back(std::initializer_list<unsigned int>{bestSeedForCurrentCandidate_idx});
         seed_supercluster_it = outputSuperclusters.end()-1;
         tracksterMask[bestSeedForCurrentCandidate_idx] = true; // mask the seed as well (needed to find tracksters not in any supercluster)
       }
       // Index of the supercluster into resultTracksters, outputSuperclusters and linkedTracksterIdToInputTracksterId collections (the indices are the same)
       unsigned int indexIntoOutputTracksters = seed_supercluster_it - outputSuperclusters.begin();
       seed_supercluster_it->push_back(ts_cand_idx);
-      resultTracksters[indexIntoOutputTracksters].mergeTracksters({inputTracksters[trackstersIndicesPt[ts_cand_idx]]});
-      linkedTracksterIdToInputTracksterId[indexIntoOutputTracksters].push_back(trackstersIndicesPt[ts_cand_idx]);
+      resultTracksters[indexIntoOutputTracksters].mergeTracksters({inputTracksters[ts_cand_idx]});
+      linkedTracksterIdToInputTracksterId[indexIntoOutputTracksters].push_back(ts_cand_idx);
       
       assert(outputSuperclusters.size() == resultTracksters.size() && outputSuperclusters.size() == linkedTracksterIdToInputTracksterId.size());
       assert(seed_supercluster_it->size() == linkedTracksterIdToInputTracksterId[indexIntoOutputTracksters].size());
@@ -282,7 +282,7 @@ void TracksterLinkingbySuperClustering::linkTracksters(const Inputs& input, std:
       outputSuperclusters.emplace_back(std::initializer_list<unsigned int>{ts_id});
       resultTracksters.emplace_back(inputTracksters[ts_id]);
       linkedTracksterIdToInputTracksterId.emplace_back(std::initializer_list<unsigned int>{ts_id});
-    }
+    } 
   }
 
   #ifdef EDM_ML_DEBUG
