@@ -307,7 +307,7 @@ void TracksterLinkingbySuperClustering::fillPSetDescription(edm::ParameterSetDes
      ->setComment("Size of delta eta window to consider for superclustering. Seed-candidate pairs outside this window are not considered for DNN inference.");
   desc.add<double>("deltaPhiWindow", 0.5)
      ->setComment("Size of delta phi window to consider for superclustering. Seed-candidate pairs outside this window are not considered for DNN inference.");
-  desc.add<double>("seedPtThreshold", 5.)
+  desc.add<double>("seedPtThreshold", 4.)
      ->setComment("Minimum transverse momentum of trackster to be considered as seed of a supercluster");
   desc.add<double>("candidateEnergyThreshold", 2.) // set the same as Alessandro
      ->setComment("Minimum energy of trackster to be considered as candidate for superclustering");
