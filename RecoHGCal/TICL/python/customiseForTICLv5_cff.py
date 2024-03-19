@@ -114,7 +114,9 @@ def customiseForTICLv5(process, enableDumper = False, enableSuperclusteringDNN=T
         process.ticlEGammaSuperClusterProducer = ticlEGammaSuperClusterProducer
         process.FEVTDEBUGHLToutput.outputCommands.extend(["keep *_ticlEGammaSuperClusterProducer_*_*"])
         process.particleFlowSuperClusteringTask.replace(process.particleFlowSuperClusterHGCal, process.ticlEGammaSuperClusterProducer)
-        process.mergedSuperClustersHGC.src[1] = "ticlEGammaSuperClusterProducer" # original config : cms.EDProducer("SuperClusterMerger", src = cms.VInputTag("particleFlowSuperClusterECAL:particleFlowSuperClusterECALBarrel", "particleFlowSuperClusterHGCal"))
+        try:
+            process.mergedSuperClustersHGC.src[1] = "ticlEGammaSuperClusterProducer" # original config : cms.EDProducer("SuperClusterMerger", src = cms.VInputTag("particleFlowSuperClusterECAL:particleFlowSuperClusterECALBarrel", "particleFlowSuperClusterHGCal"))
+        except AttributeError: pass # in case we run without DQM
         process.ecalDrivenElectronSeeds.endcapSuperClusters = cms.InputTag("ticlEGammaSuperClusterProducer")
         process.photonCoreHGC.scIslandEndcapProducer = cms.InputTag("ticlEGammaSuperClusterProducer")
     else:
