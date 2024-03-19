@@ -43,6 +43,7 @@ public:
 private:
   void beginJob() override;
   void analyze(const edm::Event&, const edm::EventSetup&) override;
+  bool checkExplainedVarianceRatioCut(ticl::Trackster const& ts) const;
 
   const edm::EDGetTokenT<std::vector<Trackster>> tracksters_clue3d_token_;
   const edm::EDGetTokenT<hgcal::RecoToSimCollectionSimTracksters> tsRecoToSimCP_token_;
@@ -51,6 +52,9 @@ private:
   float deltaPhiWindow_;
   float seedPtThreshold_;
   float candidateEnergyThreshold_;
+  float explVarRatioCut_energyBoundary_; // Boundary energy between low and high energy explVarRatio cut threshold
+  float explVarRatioMinimum_lowEnergy_;  // Cut on explained variance ratio of tracksters to be considered as candidate, for trackster raw_energy < explVarRatioCut_energyBoundary
+  float explVarRatioMinimum_highEnergy_; // Cut on explained variance ratio of tracksters to be considered as candidate, for trackster raw_energy > explVarRatioCut_energyBoundary
 
   TTree* output_tree_;
   unsigned int eventNb_;
@@ -58,8 +62,14 @@ private:
   std::vector<std::vector<float>> features_; // Outer index : feature number (split into branches), inner index : inference pair index
   std::vector<unsigned int> seedTracksterIdx_; // ID of seed trackster used for inference pair
   std::vector<unsigned int> candidateTracksterIdx_; // ID of candidate trackster used for inference pair
+
   std::vector<float> seedTracksterBestAssociationScore_; // Best association score of seed trackster (seedTracksterIdx) with CaloParticle
-  std::vector<float> candidateTracksterAssociationScoreWithSeed_; // Association score of candidate trackster with the CaloParticle used for seedTracksterBestAssociationScore
+  std::vector<long> seedTracksterBestAssociation_simTsIdx_; // Index of SimTrackster that has the best association score to the seedTrackster
+
+  std::vector<float> candidateTracksterBestAssociationScore_; // Best association score of candidate trackster (seedTracksterIdx) with CaloParticle
+  std::vector<long> candidateTracksterBestAssociation_simTsIdx_; // Index of SimTrackster that has the best association score to the candidate
+
+  std::vector<float> candidateTracksterAssociationWithSeed_score_; // Association score of candidate trackster with the CaloParticle of seedTracksterBestAssociation_simTsIdx_
 };
 
 SuperclusteringSampleDumper::SuperclusteringSampleDumper(const edm::ParameterSet& ps)
@@ -70,6 +80,9 @@ SuperclusteringSampleDumper::SuperclusteringSampleDumper(const edm::ParameterSet
       deltaPhiWindow_(ps.getParameter<double>("deltaPhiWindow")),
       seedPtThreshold_(ps.getParameter<double>("seedPtThreshold")),
       candidateEnergyThreshold_(ps.getParameter<double>("candidateEnergyThreshold")),
+      explVarRatioCut_energyBoundary_(ps.getParameter<double>("candidateEnergyThreshold")),
+      explVarRatioMinimum_lowEnergy_(ps.getParameter<double>("explVarRatioMinimum_lowEnergy")),
+      explVarRatioMinimum_highEnergy_(ps.getParameter<double>("explVarRatioMinimum_highEnergy")),
       eventNb_(0),
       dnnInput_(makeDNNInputFromString(ps.getParameter<std::string>("dnnVersion"))),
       features_(dnnInput_->featureCount()) {
@@ -83,12 +96,30 @@ void SuperclusteringSampleDumper::beginJob() {
   output_tree_->Branch("seedTracksterIdx", &seedTracksterIdx_);
   output_tree_->Branch("candidateTracksterIdx", &candidateTracksterIdx_);
   output_tree_->Branch("seedTracksterBestAssociationScore", &seedTracksterBestAssociationScore_);
-  output_tree_->Branch("candidateTracksterAssociationScoreWithSeed", &candidateTracksterAssociationScoreWithSeed_);
+  output_tree_->Branch("seedTracksterBestAssociation_simTsIdx", &seedTracksterBestAssociation_simTsIdx_);
+  output_tree_->Branch("candidateTracksterBestAssociationScore", &candidateTracksterBestAssociationScore_);
+  output_tree_->Branch("candidateTracksterBestAssociation_simTsIdx", &candidateTracksterBestAssociation_simTsIdx_);
+  output_tree_->Branch("candidateTracksterAssociationWithSeed_score", &candidateTracksterAssociationWithSeed_score_);
   std::vector<std::string> featureNames = dnnInput_->featureNames();
   assert(featureNames.size() == dnnInput_->featureCount());
   for (unsigned int i = 0; i < dnnInput_->featureCount(); i++) {
     output_tree_->Branch(("feature_" + featureNames[i]).c_str(), &features_[i]);
   }
+}
+
+bool SuperclusteringSampleDumper::checkExplainedVarianceRatioCut(ticl::Trackster const& ts) const {
+  /* Cut on explained variance ratio. The DNN was trained by Alessandro Tarabini using this cut on the explained variance ratio.
+    Therefore we reproduce it here. It is expected that this cut will be removed when the network for EM/hadronic differentiation is in place
+    (would need retraining of the superclustering DNN) */
+    float explVar_denominator = std::accumulate(std::begin(ts.eigenvalues()), std::end(ts.eigenvalues()), 0.f, std::plus<float>());
+    if (explVar_denominator != 0.) {
+      float explVarRatio = ts.eigenvalues()[0] / explVar_denominator;
+      if (ts.raw_energy() > explVarRatioCut_energyBoundary_)
+        return explVarRatio <= explVarRatioMinimum_highEnergy_;
+      else
+        return explVarRatio <= explVarRatioMinimum_lowEnergy_;
+    } else
+      return false;
 }
 
 
@@ -119,13 +150,16 @@ void SuperclusteringSampleDumper::analyze(const edm::Event& evt, const edm::Even
     if (ts_seed.raw_pt() < seedPtThreshold_)
         break; // All further seeds will have lower pT than threshold (due to pT sorting)
 
-    // Find best associated CaloParticle
+    if (!checkExplainedVarianceRatioCut(ts_seed))
+      continue;
+        
+    // Find best associated CaloParticle to the seed
     auto seed_assocs = assoc_CP_recoToSim->find({inputTracksters, ts_seed_idx_input});
     if (seed_assocs == assoc_CP_recoToSim->end())
       continue; // No CaloParticle associations for the current trackster (should not happen in theory)
     
     // Best score is smallest score
-    hgcal::RecoToSimCollectionSimTracksters::data_type const& assocWithBestScore = *std::min_element(seed_assocs->val.begin(), seed_assocs->val.end(), 
+    hgcal::RecoToSimCollectionSimTracksters::data_type const& seed_assocWithBestScore = *std::min_element(seed_assocs->val.begin(), seed_assocs->val.end(), 
       [](hgcal::RecoToSimCollectionSimTracksters::data_type const& assoc_1, hgcal::RecoToSimCollectionSimTracksters::data_type const& assoc_2) {
         // assoc_* is of type : std::pair<edmRefIntoSimTracksterCollection, std::pair<sharedEnergy, associationScore>>
         return assoc_1.second.second < assoc_2.second.second; 
@@ -138,37 +172,58 @@ void SuperclusteringSampleDumper::analyze(const edm::Event& evt, const edm::Even
       Trackster const& ts_cand = (*inputTracksters)[trackstersIndicesPt[ts_cand_idx]];
       // Check that the two tracksters are geometrically compatible for superclustering (using deltaEta, deltaPhi window)
       // There is no need to run inference for tracksters very far apart
-      if (std::abs(ts_seed.barycenter().Eta() - ts_cand.barycenter().Eta()) < deltaEtaWindow_
+      if (!(std::abs(ts_seed.barycenter().Eta() - ts_cand.barycenter().Eta()) < deltaEtaWindow_
           && deltaPhi(ts_seed.barycenter().Phi(), ts_cand.barycenter().Phi()) < deltaPhiWindow_
-          &&  ts_cand.raw_energy() >= candidateEnergyThreshold_) { 
-        // Add to output
-        std::vector<float> features = dnnInput_->computeVector(ts_seed, ts_cand);
-        assert(features.size() == features_.size());
-        for (unsigned int feature_idx = 0; feature_idx < features_.size(); feature_idx++) {
-          features_[feature_idx].push_back(features[feature_idx]);
-        }
-        seedTracksterIdx_.push_back(trackstersIndicesPt[ts_seed_idx]);
-        candidateTracksterIdx_.push_back(trackstersIndicesPt[ts_cand_idx]);
+          &&  ts_cand.raw_energy() >= candidateEnergyThreshold_
+          && checkExplainedVarianceRatioCut(ts_cand)))
+        continue;
 
-        // Compute the association score of the candidate trackster with the CaloParticle that has the best association with the seed trackster
-        float cand_assocToSeedCP_score = 1.; // default value : 1 is the worst score (0 is best)
-        // First find associated CaloParticles with candidate
-        auto cand_assocCP = assoc_CP_recoToSim->find(edm::Ref<ticl::TracksterCollection>(inputTracksters, trackstersIndicesPt[ts_cand_idx]));
-        
-        if (cand_assocCP != assoc_CP_recoToSim->end()) {
-          // find the association with 
-          auto cand_assocWithSeedCP = std::find_if(cand_assocCP->val.begin(), cand_assocCP->val.end(), 
-            [&assocWithBestScore](hgcal::RecoToSimCollectionSimTracksters::data_type const& assoc) {
-              // assoc is of type : std::pair<edmRefIntoSimTracksterCollection, std::pair<sharedEnergy, associationScore>>
-              return assoc.first == assocWithBestScore.first; 
-            });
-          if (cand_assocWithSeedCP != cand_assocCP->val.end()) {
-            cand_assocToSeedCP_score = cand_assocWithSeedCP->second.second;
-          }
-        }
-        seedTracksterBestAssociationScore_.push_back(assocWithBestScore.second.second);
-        candidateTracksterAssociationScoreWithSeed_.push_back(cand_assocToSeedCP_score);
+      // Add to output
+      std::vector<float> features = dnnInput_->computeVector(ts_seed, ts_cand);
+      assert(features.size() == features_.size());
+      for (unsigned int feature_idx = 0; feature_idx < features_.size(); feature_idx++) {
+        features_[feature_idx].push_back(features[feature_idx]);
       }
+      seedTracksterIdx_.push_back(trackstersIndicesPt[ts_seed_idx]);
+      candidateTracksterIdx_.push_back(trackstersIndicesPt[ts_cand_idx]);
+
+      // Compute the association score of the candidate trackster with the CaloParticle that has the best association with the seed trackster
+      float candidateTracksterBestAssociationScore = 1.;
+      long candidateTracksterBestAssociation_simTsIdx = -1;
+      float candidateTracksterAssociationWithSeed_score = 1.; // default value : 1 is the worst score (0 is best)
+
+      // First find associated CaloParticles with candidate
+      auto cand_assocCP = assoc_CP_recoToSim->find(edm::Ref<ticl::TracksterCollection>(inputTracksters, trackstersIndicesPt[ts_cand_idx]));
+      
+      if (cand_assocCP != assoc_CP_recoToSim->end()) {
+        // find the association with best score
+        hgcal::RecoToSimCollectionSimTracksters::data_type const& cand_assocWithBestScore = *std::min_element(cand_assocCP->val.begin(), cand_assocCP->val.end(), 
+          [](hgcal::RecoToSimCollectionSimTracksters::data_type const& assoc_1, hgcal::RecoToSimCollectionSimTracksters::data_type const& assoc_2) {
+            // assoc_* is of type : std::pair<edmRefIntoSimTracksterCollection, std::pair<sharedEnergy, associationScore>>
+            return assoc_1.second.second < assoc_2.second.second; 
+        });
+        candidateTracksterBestAssociationScore = cand_assocWithBestScore.second.second;
+        candidateTracksterBestAssociation_simTsIdx = cand_assocWithBestScore.first.key();
+
+        // find the association score with the same CaloParticle as the seed
+        auto cand_assocWithSeedCP = std::find_if(cand_assocCP->val.begin(), cand_assocCP->val.end(), 
+          [&seed_assocWithBestScore](hgcal::RecoToSimCollectionSimTracksters::data_type const& assoc) {
+            // assoc is of type : std::pair<edmRefIntoSimTracksterCollection, std::pair<sharedEnergy, associationScore>>
+            return assoc.first == seed_assocWithBestScore.first; 
+          });
+        if (cand_assocWithSeedCP != cand_assocCP->val.end()) {
+          candidateTracksterAssociationWithSeed_score = cand_assocWithSeedCP->second.second;
+        }
+      }
+
+
+      seedTracksterBestAssociationScore_.push_back(seed_assocWithBestScore.second.second);
+      seedTracksterBestAssociation_simTsIdx_.push_back(seed_assocWithBestScore.first.key());
+
+      candidateTracksterBestAssociationScore_.push_back(candidateTracksterBestAssociationScore);
+      candidateTracksterBestAssociation_simTsIdx_.push_back(candidateTracksterBestAssociation_simTsIdx);
+
+      candidateTracksterAssociationWithSeed_score_.push_back(candidateTracksterAssociationWithSeed_score);
     }
   }
 
@@ -178,7 +233,10 @@ void SuperclusteringSampleDumper::analyze(const edm::Event& evt, const edm::Even
   seedTracksterIdx_.clear();
   candidateTracksterIdx_.clear();
   seedTracksterBestAssociationScore_.clear();
-  candidateTracksterAssociationScoreWithSeed_.clear();
+  seedTracksterBestAssociation_simTsIdx_.clear();
+  candidateTracksterBestAssociationScore_.clear();
+  candidateTracksterBestAssociation_simTsIdx_.clear();
+  candidateTracksterAssociationWithSeed_score_.clear();
 }
 
 
@@ -186,21 +244,28 @@ void SuperclusteringSampleDumper::analyze(const edm::Event& evt, const edm::Even
 void SuperclusteringSampleDumper::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
   edm::ParameterSetDescription desc;
   desc.add<edm::InputTag>("tracksters", edm::InputTag("ticlTrackstersCLUE3DEM"))
-    ->setComment("Input trackster collection. Should be CLUE3D tracksters.");
+    ->setComment("Input trackster collection, same as what is used for superclustering inference.");
   desc.add<edm::InputTag>("recoToSimAssociatorCP",
                           edm::InputTag("tracksterSimTracksterAssociationLinkingbyCLUE3DEM", "recoToSim"));
   //desc.add<edm::InputTag>("simToRecoAssociatorCP",
   //                        edm::InputTag("tracksterSimTracksterAssociationLinkingbyCLUE3D", "simToReco"));
   desc.add<std::string>("dnnVersion", "alessandro-v2")
     ->setComment("DNN version tag. Can be alessandro-v1 or alessandro-v2");
-  desc.add<double>("deltaEtaWindow", 0.1)
+  // Cuts are intentionally looser than those used for inference in TracksterLinkingBySuperClustering.cpp
+  desc.add<double>("deltaEtaWindow", 0.2)
      ->setComment("Size of delta eta window to consider for superclustering. Seed-candidate pairs outside this window are not considered for DNN inference.");
-  desc.add<double>("deltaPhiWindow", 0.5)
+  desc.add<double>("deltaPhiWindow", 0.7)
      ->setComment("Size of delta phi window to consider for superclustering. Seed-candidate pairs outside this window are not considered for DNN inference.");
-  desc.add<double>("seedPtThreshold", 1.)
+  desc.add<double>("seedPtThreshold", 3.)
      ->setComment("Minimum transverse momentum of trackster to be considered as seed of a supercluster");
-  desc.add<double>("candidateEnergyThreshold", 2.)
+  desc.add<double>("candidateEnergyThreshold", 1.5)
      ->setComment("Minimum energy of trackster to be considered as candidate for superclustering");
+  desc.add<double>("explVarRatioCut_energyBoundary", 50.)
+     ->setComment("Boundary energy between low and high energy explVarRatio cut threshold");
+  desc.add<double>("explVarRatioMinimum_lowEnergy", 0.85)
+     ->setComment("Cut on explained variance ratio of tracksters to be considered as candidate, for trackster raw_energy < explVarRatioCut_energyBoundary");
+  desc.add<double>("explVarRatioMinimum_highEnergy", 0.9)
+     ->setComment("Cut on explained variance ratio of tracksters to be considered as candidate, for trackster raw_energy > explVarRatioCut_energyBoundary");
   descriptions.add("superclusteringSampleDumper", desc);
 }
 
