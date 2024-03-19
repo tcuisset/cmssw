@@ -115,16 +115,15 @@ bool SuperclusteringSampleDumper::checkExplainedVarianceRatioCut(ticl::Trackster
     if (explVar_denominator != 0.) {
       float explVarRatio = ts.eigenvalues()[0] / explVar_denominator;
       if (ts.raw_energy() > explVarRatioCut_energyBoundary_)
-        return explVarRatio <= explVarRatioMinimum_highEnergy_;
+        return explVarRatio >= explVarRatioMinimum_highEnergy_;
       else
-        return explVarRatio <= explVarRatioMinimum_lowEnergy_;
+        return explVarRatio >= explVarRatioMinimum_lowEnergy_;
     } else
       return false;
 }
 
 
 void SuperclusteringSampleDumper::analyze(const edm::Event& evt, const edm::EventSetup& iSetup) {
-  eventNb_++;
   edm::Handle<std::vector<Trackster>> inputTracksters;
   evt.getByToken(tracksters_clue3d_token_, inputTracksters);
 
@@ -228,6 +227,7 @@ void SuperclusteringSampleDumper::analyze(const edm::Event& evt, const edm::Even
   }
 
   output_tree_->Fill();
+  eventNb_++;
   for (auto& feats : features_)
     feats.clear();
   seedTracksterIdx_.clear();

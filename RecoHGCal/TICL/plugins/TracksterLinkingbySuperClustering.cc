@@ -67,9 +67,9 @@ bool TracksterLinkingbySuperClustering::checkExplainedVarianceRatioCut(ticl::Tra
     if (explVar_denominator != 0.) {
       float explVarRatio = ts.eigenvalues()[0] / explVar_denominator;
       if (ts.raw_energy() > explVarRatioCut_energyBoundary_)
-        return explVarRatio <= explVarRatioMinimum_highEnergy_;
+        return explVarRatio >= explVarRatioMinimum_highEnergy_;
       else
-        return explVarRatio <= explVarRatioMinimum_lowEnergy_;
+        return explVarRatio >= explVarRatioMinimum_lowEnergy_;
     } else
       return false;
 }
