@@ -45,7 +45,10 @@ TracksterLinkingbySuperClustering::TracksterLinkingbySuperClustering(const edm::
       deltaEtaWindow_(ps.getParameter<double>("deltaEtaWindow")),
       deltaPhiWindow_(ps.getParameter<double>("deltaPhiWindow")),
       seedPtThreshold_(ps.getParameter<double>("seedPtThreshold")),
-      candidateEnergyThreshold_(ps.getParameter<double>("candidateEnergyThreshold"))
+      candidateEnergyThreshold_(ps.getParameter<double>("candidateEnergyThreshold")),
+      explVarRatioCut_energyBoundary_(ps.getParameter<double>("candidateEnergyThreshold")),
+      explVarRatioMinimum_lowEnergy_(ps.getParameter<double>("explVarRatioMinimum_lowEnergy")),
+      explVarRatioMinimum_highEnergy_(ps.getParameter<double>("explVarRatioMinimum_highEnergy"))
 {
   assert(onnxRuntime_ && "TracksterLinkingbySuperClustering : ONNXRuntime was not provided, the model should have been set in onnxModelPath in the plugin config");
 } 
@@ -54,6 +57,21 @@ void TracksterLinkingbySuperClustering::initialize(const HGCalDDDConstants *hgco
                                              const hgcal::RecHitTools rhtools,
                                              const edm::ESHandle<MagneticField> bfieldH,
                                              const edm::ESHandle<Propagator> propH) {
+}
+
+bool TracksterLinkingbySuperClustering::checkExplainedVarianceRatioCut(ticl::Trackster const& ts) const {
+  /* Cut on explained variance ratio. The DNN was trained by Alessandro Tarabini using this cut on the explained variance ratio.
+    Therefore we reproduce it here. It is expected that this cut will be removed when the network for EM/hadronic differentiation is in place
+    (would need retraining of the superclustering DNN) */
+    float explVar_denominator = std::accumulate(std::begin(ts.eigenvalues()), std::end(ts.eigenvalues()), 0.f, std::plus<float>());
+    if (explVar_denominator != 0.) {
+      float explVarRatio = ts.eigenvalues()[0] / explVar_denominator;
+      if (ts.raw_energy() > explVarRatioCut_energyBoundary_)
+        return explVarRatio <= explVarRatioMinimum_highEnergy_;
+      else
+        return explVarRatio <= explVarRatioMinimum_lowEnergy_;
+    } else
+      return false;
 }
 
 /**
@@ -104,18 +122,7 @@ void TracksterLinkingbySuperClustering::linkTracksters(const Inputs& input, std:
     Trackster const& ts_cand = inputTracksters[trackstersIndicesPt[ts_cand_idx]];
 
     // Cut on candidate trackster energy, to match what was used for training by Alessandro
-    if (ts_cand.raw_energy() < candidateEnergyThreshold_)
-      continue;
-    
-    /* Cut on explained variance ratio. The DNN was trained by Alessandro Tarabini using this cut on the explained variance ratio.
-    Therefore we reproduce it here. It is expected that this cut will be removed when the network for EM/hadronic differentiation is in place
-    (would need retraining of the superclustering DNN) */
-    float explVar_denominator = std::accumulate(std::begin(ts_cand.eigenvalues()), std::end(ts_cand.eigenvalues()), 0.f, std::plus<float>());
-    if (explVar_denominator != 0.) {
-      float explVarRatio = ts_cand.eigenvalues()[0] / explVar_denominator;
-      if ((ts_cand.raw_energy() > 50 && explVarRatio <= 0.95) || (ts_cand.raw_energy() <= 50 && explVarRatio <= 0.92))
-        continue;
-    } else
+    if (ts_cand.raw_energy() < candidateEnergyThreshold_ || !checkExplainedVarianceRatioCut(ts_cand))
       continue;
 
     auto& tracksterTiles = tracksterTilesBothEndcaps[ts_cand.barycenter().eta()>0];
@@ -137,6 +144,9 @@ void TracksterLinkingbySuperClustering::linkTracksters(const Inputs& input, std:
 
           if (ts_seed.raw_pt() < seedPtThreshold_)
             break; // All further seeds will have lower pT than threshold (due to pT sorting)
+          
+          if (!checkExplainedVarianceRatioCut(ts_seed))
+            continue;
 
           // Check that the two tracksters are geometrically compatible for superclustering
           if (std::abs(ts_seed.barycenter().Eta() - ts_cand.barycenter().Eta()) < deltaEtaWindow_
@@ -311,4 +321,10 @@ void TracksterLinkingbySuperClustering::fillPSetDescription(edm::ParameterSetDes
      ->setComment("Minimum transverse momentum of trackster to be considered as seed of a supercluster");
   desc.add<double>("candidateEnergyThreshold", 2.) // set the same as Alessandro
      ->setComment("Minimum energy of trackster to be considered as candidate for superclustering");
+  desc.add<double>("explVarRatioCut_energyBoundary", 50.)
+     ->setComment("Boundary energy between low and high energy explVarRatio cut threshold");
+  desc.add<double>("explVarRatioMinimum_lowEnergy", 0.92)
+     ->setComment("Cut on explained variance ratio of tracksters to be considered as candidate, for trackster raw_energy < explVarRatioCut_energyBoundary");
+  desc.add<double>("explVarRatioMinimum_highEnergy", 0.95)
+     ->setComment("Cut on explained variance ratio of tracksters to be considered as candidate, for trackster raw_energy > explVarRatioCut_energyBoundary");
 }

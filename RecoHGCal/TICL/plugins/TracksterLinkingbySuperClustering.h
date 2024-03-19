@@ -24,6 +24,8 @@ namespace ticl {
                     const edm::ESHandle<Propagator> propH) override;
     
   private:
+    bool checkExplainedVarianceRatioCut(ticl::Trackster const& ts) const;
+
     const std::string dnnVersion_;  // Version identifier of the DNN (to choose which inputs to use)
     double
         nnWorkingPoint_;  // Working point for neural network (above this score, consider the trackster candidate for superclustering)
@@ -31,6 +33,9 @@ namespace ticl {
     float deltaPhiWindow_;            // Delta phi window
     float seedPtThreshold_;           // Min pT for a trackster to be considered as supercluster seed
     float candidateEnergyThreshold_;  // Min energy for a trackster to be superclustered as candidate
+    float explVarRatioCut_energyBoundary_; // Boundary energy between low and high energy explVarRatio cut threshold
+    float explVarRatioMinimum_lowEnergy_;  // Cut on explained variance ratio of tracksters to be considered as candidate, for trackster raw_energy < explVarRatioCut_energyBoundary
+    float explVarRatioMinimum_highEnergy_; // Cut on explained variance ratio of tracksters to be considered as candidate, for trackster raw_energy > explVarRatioCut_energyBoundary
   };
 
 }  // namespace ticl
