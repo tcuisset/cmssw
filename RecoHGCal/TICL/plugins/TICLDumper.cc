@@ -22,6 +22,7 @@
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
 #include "FWCore/ServiceRegistry/interface/Service.h"
 
+#include "DataFormats/Provenance/interface/EventID.h"
 #include "DataFormats/CaloRecHit/interface/CaloCluster.h"
 #include "DataFormats/HGCalReco/interface/Trackster.h"
 #include "DataFormats/HGCalReco/interface/TICLCandidate.h"
@@ -122,10 +123,10 @@ public:
     : tracksterType_(tracksterType) {}
   
   /**
-   * To be called once after tree creation. ev_event_ should be a pointer to the event counter. *Do not copy/move or resize vector holding object after calling this function*
+   * To be called once after tree creation. eventId_ should be a pointer to the event counter. *Do not copy/move or resize vector holding object after calling this function*
   */
-  void initTree(TTree* trackster_tree_, unsigned int* ev_event_) {
-    trackster_tree_->Branch("event", ev_event_);
+  void initTree(TTree* trackster_tree_, edm::EventID* eventId_) {
+    trackster_tree_->Branch("event", eventId_);
     trackster_tree_->Branch("NTracksters", &nTracksters);
     trackster_tree_->Branch("NClusters", &nClusters);
     trackster_tree_->Branch("time", &trackster_time);
@@ -626,7 +627,7 @@ private:
   void clearVariables();
 
   // Variables for branches
-  unsigned int ev_event_;
+  edm::EventID eventId_;
   unsigned int nclusters_;
 
   std::vector<std::vector<unsigned int>> superclustering_linkedResultTracksters; // Map of indices from superclusteredTracksters collection back into ticlTrackstersCLUE3DEM collection
@@ -895,10 +896,11 @@ void TICLDumper::beginJob() {
     TTree* tree = fs->make<TTree>(tracksterPset.getParameter<std::string>("treeName").c_str(), ("Tracksters : " + tracksterPset.getParameter<std::string>("treeName") + 
        " (InputTag : " + tracksterPset.getParameter<edm::InputTag>("inputTag").encode() + ")").c_str());
     tracksters_trees.push_back(tree);
-    tracksters_dumperHelpers_[i].initTree(tree, &ev_event_);
+    tracksters_dumperHelpers_[i].initTree(tree, &eventId_);
   }
   if (saveLCs_) { 
     cluster_tree_ = fs->make<TTree>("clusters", "TICL tracksters");
+    cluster_tree_->Branch("event", &eventId_);
     cluster_tree_->Branch("seedID", &cluster_seedID);
     cluster_tree_->Branch("energy", &cluster_energy);
     cluster_tree_->Branch("correctedEnergy", &cluster_correctedEnergy);
@@ -916,6 +918,7 @@ void TICLDumper::beginJob() {
   }
   if (saveTICLCandidate_) {
     candidate_tree_ = fs->make<TTree>("candidates", "TICL candidates");
+    candidate_tree_->Branch("event", &eventId_);
     candidate_tree_->Branch("NCandidates", &nCandidates);
     candidate_tree_->Branch("candidate_charge", &candidate_charge);
     candidate_tree_->Branch("candidate_pdgId", &candidate_pdgId);
@@ -929,10 +932,12 @@ void TICLDumper::beginJob() {
     candidate_tree_->Branch("track_in_candidate", &track_in_candidate);
     candidate_tree_->Branch("tracksters_in_candidate", &tracksters_in_candidate);
   }
-  if (saveSuperclustering_ || saveRecoSuperclusters_)
+  if (saveSuperclustering_ || saveRecoSuperclusters_) {
     superclustering_tree_ = fs->make<TTree>("superclustering", "Superclustering in HGCAL CE-E");
+    superclustering_tree_->Branch("event", &eventId_);
+  }
   if (saveSuperclustering_) {
-    //superclustering_superclusteredTracksters_dumper.initTree(superclustering_tree_, &ev_event_);
+    //superclustering_superclusteredTracksters_dumper.initTree(superclustering_tree_, &eventId_);
     superclustering_tree_->Branch("linkedResultTracksters", &superclustering_linkedResultTracksters);
   }
   // if (saveSuperclusteringDNNScore_) {
@@ -951,15 +956,17 @@ void TICLDumper::beginJob() {
     superclustering_tree_->Branch("recoSuperCluster_constituentTs", &recoSuperCluster_constituentTs);
   }
 
-  if (associations_parameterSets_.size()>0)
+  if (associations_parameterSets_.size()>0) {
     associations_tree_ = fs->make<TTree>("associations", "Associations");
+    associations_tree_->Branch("event", &eventId_);
+  }
   for (unsigned int i = 0; i < associations_parameterSets_.size(); i++) {
     associations_dumperHelpers_[i].initTree(associations_tree_, associations_parameterSets_[i].getParameter<std::string>("branchName"), associations_parameterSets_[i].getParameter<std::string>("suffix"));
   }
 
   if (saveTracks_) {
     tracks_tree_ = fs->make<TTree>("tracks", "Tracks");
-    tracks_tree_->Branch("event", &ev_event_);
+    tracks_tree_->Branch("event", &eventId_);
     tracks_tree_->Branch("track_id", &track_id);
     tracks_tree_->Branch("track_hgcal_x", &track_hgcal_x);
     tracks_tree_->Branch("track_hgcal_y", &track_hgcal_y);
@@ -983,6 +990,7 @@ void TICLDumper::beginJob() {
 
   if (saveSimTICLCandidate_) {
     simTICLCandidate_tree = fs->make<TTree>("simTICLCandidate", "Sim TICL Candidate");
+    simTICLCandidate_tree->Branch("event", &eventId_);
     simTICLCandidate_tree->Branch("simTICLCandidate_raw_energy", &simTICLCandidate_raw_energy);
     simTICLCandidate_tree->Branch("simTICLCandidate_regressed_energy", &simTICLCandidate_regressed_energy);
     simTICLCandidate_tree->Branch("simTICLCandidate_simTracksterCPIndex", &simTICLCandidate_simTracksterCPIndex);
@@ -1002,7 +1010,7 @@ void TICLDumper::beginJob() {
 
 
 void TICLDumper::analyze(const edm::Event& event, const edm::EventSetup& setup) {
-  ev_event_ += 1;
+  eventId_ = event.id();
   clearVariables();
 
   //get all the layer clusters
