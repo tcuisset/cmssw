@@ -57,7 +57,7 @@ private:
   float explVarRatioMinimum_highEnergy_; // Cut on explained variance ratio of tracksters to be considered as candidate, for trackster raw_energy > explVarRatioCut_energyBoundary
 
   TTree* output_tree_;
-  unsigned int eventNb_;
+  edm::EventID eventId_;
   std::unique_ptr<AbstractDNNInput> dnnInput_;
   std::vector<std::vector<float>> features_; // Outer index : feature number (split into branches), inner index : inference pair index
   std::vector<unsigned int> seedTracksterIdx_; // ID of seed trackster used for inference pair
@@ -65,6 +65,7 @@ private:
 
   std::vector<float> seedTracksterBestAssociationScore_; // Best association score of seed trackster (seedTracksterIdx) with CaloParticle
   std::vector<long> seedTracksterBestAssociation_simTsIdx_; // Index of SimTrackster that has the best association score to the seedTrackster
+  std::vector<float> seedTracksterBestAssociation_caloParticleEnergy_; // Energy of best associated CaloParticle to seed
 
   std::vector<float> candidateTracksterBestAssociationScore_; // Best association score of candidate trackster (seedTracksterIdx) with CaloParticle
   std::vector<long> candidateTracksterBestAssociation_simTsIdx_; // Index of SimTrackster that has the best association score to the candidate
@@ -83,7 +84,7 @@ SuperclusteringSampleDumper::SuperclusteringSampleDumper(const edm::ParameterSet
       explVarRatioCut_energyBoundary_(ps.getParameter<double>("candidateEnergyThreshold")),
       explVarRatioMinimum_lowEnergy_(ps.getParameter<double>("explVarRatioMinimum_lowEnergy")),
       explVarRatioMinimum_highEnergy_(ps.getParameter<double>("explVarRatioMinimum_highEnergy")),
-      eventNb_(0),
+      eventId_(),
       dnnInput_(makeDNNInputFromString(ps.getParameter<std::string>("dnnVersion"))),
       features_(dnnInput_->featureCount()) {
   usesResource("TFileService");
@@ -92,11 +93,12 @@ SuperclusteringSampleDumper::SuperclusteringSampleDumper(const edm::ParameterSet
 void SuperclusteringSampleDumper::beginJob() {
   edm::Service<TFileService> fs;
   output_tree_ = fs->make<TTree>("superclusteringTraining", "Superclustering training samples");
-  output_tree_->Branch("Event", &eventNb_);
+  output_tree_->Branch("Event", &eventId_);
   output_tree_->Branch("seedTracksterIdx", &seedTracksterIdx_);
   output_tree_->Branch("candidateTracksterIdx", &candidateTracksterIdx_);
   output_tree_->Branch("seedTracksterBestAssociationScore", &seedTracksterBestAssociationScore_);
   output_tree_->Branch("seedTracksterBestAssociation_simTsIdx", &seedTracksterBestAssociation_simTsIdx_);
+  output_tree_->Branch("seedTracksterBestAssociation_caloParticleEnergy", &seedTracksterBestAssociation_caloParticleEnergy_);
   output_tree_->Branch("candidateTracksterBestAssociationScore", &candidateTracksterBestAssociationScore_);
   output_tree_->Branch("candidateTracksterBestAssociation_simTsIdx", &candidateTracksterBestAssociation_simTsIdx_);
   output_tree_->Branch("candidateTracksterAssociationWithSeed_score", &candidateTracksterAssociationWithSeed_score_);
@@ -124,6 +126,8 @@ bool SuperclusteringSampleDumper::checkExplainedVarianceRatioCut(ticl::Trackster
 
 
 void SuperclusteringSampleDumper::analyze(const edm::Event& evt, const edm::EventSetup& iSetup) {
+  eventId_ = evt.id();
+
   edm::Handle<std::vector<Trackster>> inputTracksters;
   evt.getByToken(tracksters_clue3d_token_, inputTracksters);
 
@@ -218,6 +222,7 @@ void SuperclusteringSampleDumper::analyze(const edm::Event& evt, const edm::Even
 
       seedTracksterBestAssociationScore_.push_back(seed_assocWithBestScore.second.second);
       seedTracksterBestAssociation_simTsIdx_.push_back(seed_assocWithBestScore.first.key());
+      seedTracksterBestAssociation_caloParticleEnergy_.push_back(seed_assocWithBestScore.first->regressed_energy());
 
       candidateTracksterBestAssociationScore_.push_back(candidateTracksterBestAssociationScore);
       candidateTracksterBestAssociation_simTsIdx_.push_back(candidateTracksterBestAssociation_simTsIdx);
@@ -227,13 +232,13 @@ void SuperclusteringSampleDumper::analyze(const edm::Event& evt, const edm::Even
   }
 
   output_tree_->Fill();
-  eventNb_++;
   for (auto& feats : features_)
     feats.clear();
   seedTracksterIdx_.clear();
   candidateTracksterIdx_.clear();
   seedTracksterBestAssociationScore_.clear();
   seedTracksterBestAssociation_simTsIdx_.clear();
+  seedTracksterBestAssociation_caloParticleEnergy_.clear();
   candidateTracksterBestAssociationScore_.clear();
   candidateTracksterBestAssociation_simTsIdx_.clear();
   candidateTracksterAssociationWithSeed_score_.clear();
