@@ -43,7 +43,7 @@ namespace ticl {
     result.resize(rhtools.lastLayer() + 1);
     
     for (unsigned i = 0; i < N; ++i) {
-      auto thisLC = layerClusters[ts.vertices(i)];
+      const auto& thisLC = layerClusters[ts.vertices(i)];
       auto layer = getLayerFromLC(thisLC, rhtools);
       result[layer].push_back(i);
     }

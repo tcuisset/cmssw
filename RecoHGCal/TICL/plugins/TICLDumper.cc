@@ -374,7 +374,7 @@ public:
       std::vector<float> vertices_correctedEnergyUncertainty;
       for (auto idx : trackster_iterator->vertices()) {
         vertices_indexes.push_back(idx);
-        auto associated_cluster = clusters[idx];
+        const auto& const& associated_cluster = clusters[idx];
         vertices_x.push_back(associated_cluster.x());
         vertices_y.push_back(associated_cluster.y());
         vertices_z.push_back(associated_cluster.z());
@@ -488,8 +488,8 @@ public:
   }
 
   void fillFromEvent(edm::Handle<std::vector<ticl::Trackster>> tracksters_handle, edm::Handle<std::vector<ticl::Trackster>> simTracksters_h, hgcal::RecoToSimCollectionSimTracksters const& tsRecoSimSCMap, hgcal::SimToRecoCollectionSimTracksters const& tsSimToRecoSCMap) {
-    auto const& tracksters = *tracksters_handle;
-    auto simTracksters = *simTracksters_h;
+    auto const& tracksters = *tracksters_handlconst e;
+ &   auto const& simTracksters = *simTracksters_h;
 
     // Reco -> Sim
     recoToSim.resize(tracksters.size());
@@ -953,10 +953,7 @@ void TICLDumper::beginJob() {
     superclustering_tree_->Branch("recoSuperCluster_position_eta", &recoSuperCluster_position_eta);
     superclustering_tree_->Branch("recoSuperCluster_position_phi", &recoSuperCluster_position_phi);
     superclustering_tree_->Branch("recoSuperCluster_seedTs", &recoSuperCluster_seedTs);
-    superclustering_tree_->Branch("recoSuperCluster_constituentTs", &recoSuperCluster_constituentTs);
-  }
-
-  if (associations_parameterSets_.size()>0) {
+    superclustering_tree_->Branch("recoSuperCluster_constituentTs", &recoSuperCluster_constituentTs!associations_parameterSets_.empty()rSets_.empty()) {
     associations_tree_ = fs->make<TTree>("associations", "Associations");
     associations_tree_->Branch("event", &eventId_);
   }
@@ -1246,9 +1243,7 @@ void TICLDumper::analyze(const edm::Event& event, const edm::EventSetup& setup) 
   // trackster to simTrackster associations
   for (unsigned int i = 0; i < associations_dumperHelpers_.size(); i++) {
     associations_dumperHelpers_[i].fillFromEvent(event.getHandle(associations_tracksterCollection_[i]), event.getHandle(associations_simTracksterCollection_[i]), 
-      event.get(associations_recoToSim_token_[i]), event.get(associations_simToReco_token_[i]));
-  }
-  if (associations_dumperHelpers_.size() > 0)
+      event.get(associations_recoToSim_token_[i]), event.get(associations_simToReco_token_[i]!associations_dumperHelpers_.empty()rs_.size() > 0)
     associations_tree_->Fill();
 
 

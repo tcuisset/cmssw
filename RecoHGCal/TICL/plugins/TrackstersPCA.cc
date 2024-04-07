@@ -107,7 +107,7 @@ void ticl::assignPCAtoTracksters(std::vector<Trackster> &tracksters,
           auto filtered_vert = vertices_in_layer[maxEid_inLayer];
           filtered_idx.push_back(filtered_vert);
           
-          const auto maxE_LC = layerClusters[trackster.vertices(filtered_vert)];
+          const auto& maxE_LC = layerClusters[trackster.vertices(filtered_vert)];
           fillPoint(maxE_LC, maxE_LC.energy() * (1.f / trackster.vertex_multiplicity(filtered_vert)));
           for (size_t j = 0; j < 3; ++j)
             filtered_barycenter[j] += point[j];

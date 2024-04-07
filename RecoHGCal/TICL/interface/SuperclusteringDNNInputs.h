@@ -42,9 +42,9 @@ namespace ticl {
   */
   class DNNInputAlessandroV1 : public AbstractDNNInput {
   public:
-    /* virtual */ unsigned int featureCount() const { return 9; }
+    unsigned int featureCount() const override { return 9; }
 
-    std::vector<float> computeVector(ticl::Trackster const& ts_base, ticl::Trackster const& ts_toCluster);
+    std::vector<float> computeVector(ticl::Trackster const& ts_base, ticl::Trackster const& ts_toCluster) override;
 
     std::vector<std::string> featureNames() const override {
       return {"DeltaEtaBaryc", "DeltaPhiBaryc", "multi_en", "multi_eta", "multi_pt", "seedEta", "seedPhi", "seedEn", "seedPt"};
@@ -57,9 +57,9 @@ namespace ticl {
   */
   class DNNInputAlessandroV2 : public AbstractDNNInput {
   public:
-    /* virtual */ unsigned int featureCount() const { return 17; }
+    unsigned int featureCount() const override { return 17; }
 
-    std::vector<float> computeVector(ticl::Trackster const& ts_base, ticl::Trackster const& ts_toCluster);
+    std::vector<float> computeVector(ticl::Trackster const& ts_base, ticl::Trackster const& ts_toCluster) override;
 
     std::vector<std::string> featureNames() const override {
       return {"DeltaEtaBaryc", "DeltaPhiBaryc", "multi_en", "multi_eta", "multi_pt", "seedEta", "seedPhi", "seedEn", "seedPt", "theta", "theta_xz_seedFrame", "theta_yz_seedFrame", "theta_xy_cmsFrame", "theta_yz_cmsFrame", "theta_xz_cmsFrame", "explVar", "explVarRatio"};
