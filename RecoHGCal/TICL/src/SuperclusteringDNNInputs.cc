@@ -1,15 +1,8 @@
-/** Poruce inputs for the superclustering DNN */
-// Author: Theo Cuisset - theo.cuisset@polytechnique.edu
-// Date: 11/2023
+#include "RecoHGCal/TICL/interface/SuperclusteringDNNInputs.h"
 
-#ifndef __RecoHGCal_TICL_SuperclusteringDNNInputs_H__
-#define __RecoHGCal_TICL_SuperclusteringDNNInputs_H__
-
-#include <array>
 #include <algorithm>
-#include <memory>
-#include <string>
 #include <numeric>
+#include <cmath>
 
 #include <Math/Vector2D.h>
 #include <Math/Vector3D.h>
@@ -19,43 +12,12 @@
 #include "FWCore/MessageLogger/interface/MessageLogger.h"
 #include "DataFormats/HGCalReco/interface/Trackster.h"
 
+using namespace ticl;
 
-// Abstract base class for DNN input preparation.
-class AbstractDNNInput {
-public:
-  virtual ~AbstractDNNInput() = default;
-
-  virtual unsigned int featureCount() const {
-    return featureNames().size();
-  };
-
-  /** Get name of features. Used for SuperclusteringSampleDumper branch names (inference does not use the names, only the indices) 
-   * The default implementation is meant to be overriden by inheriting classes
-  */
-  virtual std::vector<std::string> featureNames() const { 
-    std::vector<std::string> defaultNames;
-    defaultNames.reserve(featureCount());
-    for (unsigned int i = 1; i <= featureCount(); i++) {
-        defaultNames.push_back(std::string("nb_") + std::to_string(i));
-    }
-    return defaultNames;
-  }
-
-  /** Compute feature for seed and candidate pair */
-  virtual std::vector<float> computeVector(ticl::Trackster const& ts_base, ticl::Trackster const& ts_toCluster) = 0;
-};
-
-/* First version of DNN by Alessandro Tarabini. Meant as a DNN equivalent of Moustache algorithm (superclustering algo in ECAL)
-Uses features : ['DeltaEta', 'DeltaPhi', 'multi_en', 'multi_eta', 'multi_pt', 'seedEta','seedPhi','seedEn', 'seedPt']
-*/
-class DNNInputAlessandroV1 : public AbstractDNNInput {
-public:
-  /* virtual */ unsigned int featureCount() const { return 9; }
-
-  std::vector<float> computeVector(ticl::Trackster const& ts_base, ticl::Trackster const& ts_toCluster) {
+std::vector<float> DNNInputAlessandroV1::computeVector(ticl::Trackster const& ts_base, ticl::Trackster const& ts_toCluster) {
     /*  We use the barycenter for most of the variables below as that is what seems to have been used by Alessandro Tarabini, 
-      but using PCA might be better. 
-     (It would need retraining of the DNN)
+        but using PCA might be better. 
+        (It would need retraining of the DNN)
     */
     return {{
         std::abs(ts_toCluster.barycenter().Eta()) - std::abs(ts_base.barycenter().Eta()), //DeltaEtaBaryc
@@ -68,12 +30,7 @@ public:
         ts_base.raw_energy(), //seedEn
         (ts_base.raw_energy() * std::sin(ts_toCluster.barycenter().Theta())), //seedPt
     }};
-  }
-
-  std::vector<std::string> featureNames() const override {
-    return {"DeltaEtaBaryc", "DeltaPhiBaryc", "multi_en", "multi_eta", "multi_pt", "seedEta", "seedPhi", "seedEn", "seedPt"};
-  }
-};
+}
 
 
 // Helper functions for angles. Adapted from ROOT (3D vectors -> 2D vectors)
@@ -99,14 +56,8 @@ inline float Angle2D( const  Vector1 & v1, const Vector2 & v2) {
   return static_cast<float>(std::acos( CosTheta2D(v1, v2) ));
 }
 
-/* Second version of DNN by Alessandro Tarabini. 
-Uses features : ['DeltaEta', 'DeltaPhi', 'multi_en', 'multi_eta', 'multi_pt', 'seedEta','seedPhi','seedEn', 'seedPt', 'theta', 'theta_xz_seedFrame', 'theta_yz_seedFrame', 'theta_xy_cmsFrame', 'theta_yz_cmsFrame', 'theta_xz_cmsFrame', 'explVar', 'explVarRatio']
-*/
-class DNNInputAlessandroV2 : public AbstractDNNInput {
-public:
-  /* virtual */ unsigned int featureCount() const { return 17; }
 
-  std::vector<float> computeVector(ticl::Trackster const& ts_base, ticl::Trackster const& ts_toCluster) {
+std::vector<float> DNNInputAlessandroV2::computeVector(ticl::Trackster const& ts_base, ticl::Trackster const& ts_toCluster) {
     using ROOT::Math::VectorUtil::Angle;
     using ROOT::Math::XYZVectorF;
     using ROOT::Math::XYVectorF;
@@ -117,7 +68,7 @@ public:
         xs, 
         xs.Cross(pca_seed_cmsFrame).Unit(),
         pca_seed_cmsFrame);
-      
+        
     XYZVectorF pca_cand_seedFrame = rot(pca_cand_cmsFrame); // seed coordinates
 
     float explVar_denominator = std::accumulate(std::begin(ts_toCluster.eigenvalues()), std::end(ts_toCluster.eigenvalues()), 0.f, std::plus<float>());
@@ -125,8 +76,8 @@ public:
     if (explVar_denominator != 0.) {
         explVarRatio = ts_toCluster.eigenvalues()[0] / explVar_denominator; // explVarRatio
     } else {
-      // TODO Study what would be best in this case (or if it could ever happen)
-      edm::LogWarning("HGCalTICLSuperclustering") << "Sum of eigenvalues was zero for trackster. Could not compute explained variance ratio.";
+        // TODO Study what would be best in this case (or if it could ever happen)
+        edm::LogWarning("HGCalTICLSuperclustering") << "Sum of eigenvalues was zero for trackster. Could not compute explained variance ratio.";
     }
 
     return {{
@@ -148,14 +99,13 @@ public:
         ts_toCluster.eigenvalues()[0], // explVar
         explVarRatio // explVarRatio
     }};
-  }
-
-  std::vector<std::string> featureNames() const override {
-    return {"DeltaEtaBaryc", "DeltaPhiBaryc", "multi_en", "multi_eta", "multi_pt", "seedEta", "seedPhi", "seedEn", "seedPt", "theta", "theta_xz_seedFrame", "theta_yz_seedFrame", "theta_xy_cmsFrame", "theta_yz_cmsFrame", "theta_xz_cmsFrame", "explVar", "explVarRatio"};
-  }
-};
+}
 
 
-std::unique_ptr<AbstractDNNInput> makeDNNInputFromString(std::string dnnVersion); // defined in TracksterLinkingBySuperclustering.cc
-
-#endif
+std::unique_ptr<AbstractDNNInput> ticl::makeDNNInputFromString(std::string dnnVersion) {
+  if (dnnVersion == "alessandro-v1")
+    return std::make_unique<DNNInputAlessandroV1>();
+  else if (dnnVersion == "alessandro-v2")
+    return std::make_unique<DNNInputAlessandroV2>();
+  assert(false);
+}

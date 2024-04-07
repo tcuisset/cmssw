@@ -22,21 +22,15 @@ Date : 11/2023
 
 #include <string>
 #include <memory>
+#include <algorithm>
 
 #include "DataFormats/HGCalReco/interface/TICLLayerTile.h"
+#include "DataFormats/HGCalReco/interface/Trackster.h"
 #include "RecoHGCal/TICL/plugins/TracksterLinkingbySuperClustering.h"
-#include "RecoHGCal/TICL/interface/TracksterLinkingAlgoBase.h"
-#include "RecoHGCal/TICL/plugins/SuperclusteringDNNInputs.h"
+#include "RecoHGCal/TICL/interface/SuperclusteringDNNInputs.h"
 
 using namespace ticl;
 
-std::unique_ptr<AbstractDNNInput> makeDNNInputFromString(std::string dnnVersion) {
-  if (dnnVersion == "alessandro-v1")
-    return std::make_unique<DNNInputAlessandroV1>();
-  else if (dnnVersion == "alessandro-v2")
-    return std::make_unique<DNNInputAlessandroV2>();
-  assert(false);
-}
 
 TracksterLinkingbySuperClustering::TracksterLinkingbySuperClustering(const edm::ParameterSet& ps, edm::ConsumesCollector iC, cms::Ort::ONNXRuntime const* onnxRuntime)
       : TracksterLinkingAlgoBase(ps, iC, onnxRuntime),

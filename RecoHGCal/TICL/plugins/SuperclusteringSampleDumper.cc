@@ -27,7 +27,8 @@
 #include "SimDataFormats/CaloAnalysis/interface/CaloParticle.h"
 #include "SimDataFormats/Associations/interface/TracksterToSimTracksterAssociator.h"
 
-#include "RecoHGCal/TICL/plugins/SuperclusteringDNNInputs.h"
+#include "RecoHGCal/TICL/plugins/TracksterLinkingbySuperClustering.h"
+#include "RecoHGCal/TICL/interface/SuperclusteringDNNInputs.h"
 
 
 using namespace ticl;

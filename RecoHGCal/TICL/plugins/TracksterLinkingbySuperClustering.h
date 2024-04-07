@@ -13,10 +13,16 @@ Date : 11/2023
 #ifndef RecoHGCal_TICL_TracksterLinkingSuperClustering_H
 #define RecoHGCal_TICL_TracksterLinkingSuperClustering_H
 
+#include <vector>
+
 #include "RecoHGCal/TICL/interface/TracksterLinkingAlgoBase.h"
 #include "PhysicsTools/ONNXRuntime/interface/ONNXRuntime.h"
 
+#include "FWCore/MessageLogger/interface/MessageLogger.h"
+
+
 namespace ticl {
+  class Trackster;
 
   class TracksterLinkingbySuperClustering : public TracksterLinkingAlgoBase {
   public:
