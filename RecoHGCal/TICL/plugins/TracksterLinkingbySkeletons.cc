@@ -12,7 +12,9 @@
 
 using namespace ticl;
 
-TracksterLinkingbySkeletons::TracksterLinkingbySkeletons(const edm::ParameterSet &conf, edm::ConsumesCollector iC, cms::Ort::ONNXRuntime const* onnxRuntime)
+TracksterLinkingbySkeletons::TracksterLinkingbySkeletons(const edm::ParameterSet &conf,
+                                                         edm::ConsumesCollector iC,
+                                                         cms::Ort::ONNXRuntime const *onnxRuntime)
     : TracksterLinkingAlgoBase(conf, iC),
       timing_quality_threshold_(conf.getParameter<double>("track_time_quality_threshold")),
       del_(conf.getParameter<double>("wind")),

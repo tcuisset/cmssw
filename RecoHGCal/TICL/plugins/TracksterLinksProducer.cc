@@ -126,7 +126,7 @@ TracksterLinksProducer::TracksterLinksProducer(const edm::ParameterSet &ps, cons
 }
 
 std::unique_ptr<ONNXRuntime> TracksterLinksProducer::initializeGlobalCache(const edm::ParameterSet &iConfig) {
-  auto const& pluginPset = iConfig.getParameter<edm::ParameterSet>("linkingPSet");
+  auto const &pluginPset = iConfig.getParameter<edm::ParameterSet>("linkingPSet");
   if (pluginPset.exists("onnxModelPath"))
     return std::make_unique<ONNXRuntime>(pluginPset.getParameter<edm::FileInPath>("onnxModelPath").fullPath());
   else

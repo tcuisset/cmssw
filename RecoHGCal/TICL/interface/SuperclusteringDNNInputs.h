@@ -17,18 +17,16 @@ namespace ticl {
   public:
     virtual ~AbstractDNNInput() = default;
 
-    virtual unsigned int featureCount() const {
-      return featureNames().size();
-    };
+    virtual unsigned int featureCount() const { return featureNames().size(); };
 
     /** Get name of features. Used for SuperclusteringSampleDumper branch names (inference does not use the names, only the indices) 
      * The default implementation is meant to be overriden by inheriting classes
     */
-    virtual std::vector<std::string> featureNames() const { 
+    virtual std::vector<std::string> featureNames() const {
       std::vector<std::string> defaultNames;
       defaultNames.reserve(featureCount());
       for (unsigned int i = 1; i <= featureCount(); i++) {
-          defaultNames.push_back(std::string("nb_") + std::to_string(i));
+        defaultNames.push_back(std::string("nb_") + std::to_string(i));
       }
       return defaultNames;
     }
@@ -47,10 +45,17 @@ namespace ticl {
     std::vector<float> computeVector(ticl::Trackster const& ts_base, ticl::Trackster const& ts_toCluster) override;
 
     std::vector<std::string> featureNames() const override {
-      return {"DeltaEtaBaryc", "DeltaPhiBaryc", "multi_en", "multi_eta", "multi_pt", "seedEta", "seedPhi", "seedEn", "seedPt"};
+      return {"DeltaEtaBaryc",
+              "DeltaPhiBaryc",
+              "multi_en",
+              "multi_eta",
+              "multi_pt",
+              "seedEta",
+              "seedPhi",
+              "seedEn",
+              "seedPt"};
     }
   };
-
 
   /* Second version of DNN by Alessandro Tarabini. 
   Uses features : ['DeltaEta', 'DeltaPhi', 'multi_en', 'multi_eta', 'multi_pt', 'seedEta','seedPhi','seedEn', 'seedPt', 'theta', 'theta_xz_seedFrame', 'theta_yz_seedFrame', 'theta_xy_cmsFrame', 'theta_yz_cmsFrame', 'theta_xz_cmsFrame', 'explVar', 'explVarRatio']
@@ -62,16 +67,27 @@ namespace ticl {
     std::vector<float> computeVector(ticl::Trackster const& ts_base, ticl::Trackster const& ts_toCluster) override;
 
     std::vector<std::string> featureNames() const override {
-      return {"DeltaEtaBaryc", "DeltaPhiBaryc", "multi_en", "multi_eta", "multi_pt", "seedEta", "seedPhi", "seedEn", "seedPt", "theta", "theta_xz_seedFrame", "theta_yz_seedFrame", "theta_xy_cmsFrame", "theta_yz_cmsFrame", "theta_xz_cmsFrame", "explVar", "explVarRatio"};
+      return {"DeltaEtaBaryc",
+              "DeltaPhiBaryc",
+              "multi_en",
+              "multi_eta",
+              "multi_pt",
+              "seedEta",
+              "seedPhi",
+              "seedEn",
+              "seedPt",
+              "theta",
+              "theta_xz_seedFrame",
+              "theta_yz_seedFrame",
+              "theta_xy_cmsFrame",
+              "theta_yz_cmsFrame",
+              "theta_xz_cmsFrame",
+              "explVar",
+              "explVarRatio"};
     }
   };
 
-
   std::unique_ptr<AbstractDNNInput> makeDNNInputFromString(std::string dnnVersion);
-}
-
-
-
-
+}  // namespace ticl
 
 #endif
