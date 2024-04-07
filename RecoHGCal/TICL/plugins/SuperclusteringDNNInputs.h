@@ -1,3 +1,4 @@
+/** Poruce inputs for the superclustering DNN */
 // Author: Theo Cuisset - theo.cuisset@polytechnique.edu
 // Date: 11/2023
 
@@ -8,6 +9,7 @@
 #include <algorithm>
 #include <memory>
 #include <string>
+#include <numeric>
 
 #include <Math/Vector2D.h>
 #include <Math/Vector3D.h>
@@ -15,7 +17,6 @@
 #include <Math/VectorUtil.h>
 
 #include "FWCore/MessageLogger/interface/MessageLogger.h"
-#include "PhysicsTools/TensorFlow/interface/TensorFlow.h"
 #include "DataFormats/HGCalReco/interface/Trackster.h"
 
 
@@ -23,8 +24,14 @@
 class AbstractDNNInput {
 public:
   virtual ~AbstractDNNInput() = default;
-  virtual unsigned int featureCount() const = 0;
-  // Default implementation of featureNames. Override for custom names
+
+  virtual unsigned int featureCount() const {
+    return featureNames().size();
+  };
+
+  /** Get name of features. Used for SuperclusteringSampleDumper branch names (inference does not use the names, only the indices) 
+   * The default implementation is meant to be overriden by inheriting classes
+  */
   virtual std::vector<std::string> featureNames() const { 
     std::vector<std::string> defaultNames;
     defaultNames.reserve(featureCount());
@@ -33,48 +40,19 @@ public:
     }
     return defaultNames;
   }
-/* Fill features in input tensor from pair of seed and candidate tracksters.
-  inputTensor is a 2D tensor. This function should fill inputTensor(batchIndex, 0...featureCount) with features 
-  */
-  virtual void fillTensor(tensorflow::Tensor& inputTensor, int batchIndex, ticl::Trackster const& ts_base, ticl::Trackster const& ts_toCluster) = 0;
+
+  /** Compute feature for seed and candidate pair */
   virtual std::vector<float> computeVector(ticl::Trackster const& ts_base, ticl::Trackster const& ts_toCluster) = 0;
 };
-
-
-// Helper class to create fillTensor function for different feature lengths
-template<typename Concrete, unsigned int Nfeatures>
-class DNNInputHelper : public AbstractDNNInput {
-    virtual unsigned int featureCount() const { return Nfeatures; }
-
-    virtual void fillTensor(tensorflow::Tensor& inputTensor, int batchIndex, ticl::Trackster const& ts_base, ticl::Trackster const& ts_toCluster) override {
-        assert(inputTensor.dims() == 2 && inputTensor.dim_size(1) == Nfeatures);
-        assert(batchIndex < inputTensor.dim_size(0));
-        auto eigenTensor = inputTensor.tensor<float, 2>();
-        auto features = static_cast<Concrete*>(this)->computeFeatures(ts_base, ts_toCluster);
-        for (unsigned int i = 0; i < features.size(); i++) {
-            eigenTensor(batchIndex, i) = features[i];
-        }
-    }
-    virtual std::vector<float> computeVector(ticl::Trackster const& ts_base, ticl::Trackster const& ts_toCluster) override {
-        auto features = static_cast<Concrete*>(this)->computeFeatures(ts_base, ts_toCluster);
-        return std::vector<float>(features.begin(), features.end());
-    }
-};
-
-
-
-/*
-DNN by Alessandro Tarabini comes in 2 versions with the following observables : 
- 'v1_dEtadPhi': ['DeltaEta', 'DeltaPhi', 'multi_en', 'multi_eta', 'multi_pt', 'seedEta','seedPhi','seedEn', 'seedPt'],
-  'v2_dEtadPhi': ['DeltaEta', 'DeltaPhi', 'multi_en', 'multi_eta', 'multi_pt', 'seedEta','seedPhi','seedEn', 'seedPt', 'theta', 'theta_xz_seedFrame', 'theta_yz_seedFrame', 'theta_xy_cmsFrame', 'theta_yz_cmsFrame', 'theta_xz_cmsFrame', 'explVar', 'explVarRatio'],
-*/
 
 /* First version of DNN by Alessandro Tarabini. Meant as a DNN equivalent of Moustache algorithm (superclustering algo in ECAL)
 Uses features : ['DeltaEta', 'DeltaPhi', 'multi_en', 'multi_eta', 'multi_pt', 'seedEta','seedPhi','seedEn', 'seedPt']
 */
-class DNNInputAlessandroV1 : public DNNInputHelper<DNNInputAlessandroV1, 9> {
+class DNNInputAlessandroV1 : public AbstractDNNInput {
 public:
-  std::array<float, 9> computeFeatures(ticl::Trackster const& ts_base, ticl::Trackster const& ts_toCluster) {
+  /* virtual */ unsigned int featureCount() const { return 9; }
+
+  std::vector<float> computeVector(ticl::Trackster const& ts_base, ticl::Trackster const& ts_toCluster) {
     /*  We use the barycenter for most of the variables below as that is what seems to have been used by Alessandro Tarabini, 
       but using PCA might be better. 
      (It would need retraining of the DNN)
@@ -124,9 +102,11 @@ inline float Angle2D( const  Vector1 & v1, const Vector2 & v2) {
 /* Second version of DNN by Alessandro Tarabini. 
 Uses features : ['DeltaEta', 'DeltaPhi', 'multi_en', 'multi_eta', 'multi_pt', 'seedEta','seedPhi','seedEn', 'seedPt', 'theta', 'theta_xz_seedFrame', 'theta_yz_seedFrame', 'theta_xy_cmsFrame', 'theta_yz_cmsFrame', 'theta_xz_cmsFrame', 'explVar', 'explVarRatio']
 */
-class DNNInputAlessandroV2 : public DNNInputHelper<DNNInputAlessandroV2, 17> {
+class DNNInputAlessandroV2 : public AbstractDNNInput {
 public:
-  std::array<float, 17> computeFeatures(ticl::Trackster const& ts_base, ticl::Trackster const& ts_toCluster) {
+  /* virtual */ unsigned int featureCount() const { return 17; }
+
+  std::vector<float> computeVector(ticl::Trackster const& ts_base, ticl::Trackster const& ts_toCluster) {
     using ROOT::Math::VectorUtil::Angle;
     using ROOT::Math::XYZVectorF;
     using ROOT::Math::XYVectorF;
@@ -146,7 +126,7 @@ public:
         explVarRatio = ts_toCluster.eigenvalues()[0] / explVar_denominator; // explVarRatio
     } else {
       // TODO Study what would be best in this case (or if it could ever happen)
-      LogDebug("HGCalTICLSuperclustering") << "Sum of eigenvalues was zero for trackster. Could not compute explained variance ratio.";
+      edm::LogWarning("HGCalTICLSuperclustering") << "Sum of eigenvalues was zero for trackster. Could not compute explained variance ratio.";
     }
 
     return {{
@@ -176,6 +156,6 @@ public:
 };
 
 
-std::unique_ptr<AbstractDNNInput> makeDNNInputFromString(std::string dnnVersion); // defined in SuperclusteringProducer.cc
+std::unique_ptr<AbstractDNNInput> makeDNNInputFromString(std::string dnnVersion); // defined in TracksterLinkingBySuperclustering.cc
 
 #endif
