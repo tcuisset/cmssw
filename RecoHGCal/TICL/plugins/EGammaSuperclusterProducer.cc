@@ -54,7 +54,7 @@ void EGammaSuperclusterProducer::produce(edm::Event& iEvent, const edm::EventSet
   auto egammaSuperclusters = std::make_unique<reco::SuperClusterCollection>();
   auto caloClustersEM = std::make_unique<reco::CaloClusterCollection>();
 
-  // Fill CaloCluster collection (1-1 mapping to TICL EM tracksters)
+  // Fill reco::CaloCluster collection (1-1 mapping to TICL EM tracksters)
   for (ticl::Trackster const& emTrackster : emTracksters) {
     std::vector<std::pair<DetId, float>> hitsAndFractions;
     int iLC = 0;
@@ -78,13 +78,16 @@ void EGammaSuperclusterProducer::produce(edm::Event& iEvent, const edm::EventSet
 
   edm::OrphanHandle<reco::CaloClusterCollection> caloClustersEM_h = iEvent.put(std::move(caloClustersEM));
 
+  // Fill reco::SuperCluster collection
   assert(ticlSuperclusters.size() == ticlSuperclusterLinks.size());
   for (std::size_t sc_i = 0; sc_i < ticlSuperclusters.size(); sc_i++) {
     ticl::Trackster const& ticlSupercluster = ticlSuperclusters[sc_i];
     std::vector<unsigned int> const& superclusterLink = ticlSuperclusterLinks[sc_i];
 
     reco::CaloClusterPtrVector trackstersEMInSupercluster;
-    double regressedEnergySum = 0.;  // Sum of regressed_energy of all tracksters in supercluster
+    /* TODO : for now, set as SuperCluster regressed energy the sum of regressed energies of CLUE3D EM tracksters 
+    A regression will most likely be included here */
+    double regressedEnergySum = 0.; 
     for (unsigned int tsInSc_id : superclusterLink) {
       trackstersEMInSupercluster.push_back(reco::CaloClusterPtr(caloClustersEM_h, tsInSc_id));
       regressedEnergySum += emTracksters[tsInSc_id].regressed_energy();
@@ -96,11 +99,11 @@ void EGammaSuperclusterProducer::produce(edm::Event& iEvent, const edm::EventSet
                              superclusterLink[0]),  // seed (first trackster in superclusterLink is the seed)
         trackstersEMInSupercluster,                 // clusters
         0.,                                         // Epreshower
-        0.046,                                      // phiwidth (TODO placheolder value for now)
-        0.017                                       // etawidth (TODO placheolder value for now)
+        0.046,                                      // phiwidth (TODO placeholder value for now)
+        0.017                                       // etawidth (TODO placeholder value for now)
     );
-    egammaSc.setCorrectedEnergy(regressedEnergySum);  // TODO
-    //egammaSc.setCorrectedEnergyUncertainty(0.01 * regressedEnergySum); // TODO placeholder value
+    egammaSc.setCorrectedEnergy(regressedEnergySum);
+    // correctedEnergyUncertainty is left at its default value for now
   }
 
   iEvent.put(std::move(egammaSuperclusters));
