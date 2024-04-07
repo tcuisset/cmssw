@@ -1,5 +1,3 @@
-// Author : Theo Cuisset - theo.cuisset@polytechnique.edu
-// Date : 11/2023
 /*
 TICL plugin for electron superclustering in HGCAL using a DNN. 
 DNN designed by Alessandro Tarabini.
@@ -17,6 +15,9 @@ Algorithm description :
    If the score is also above a working point, then we add the candidate to the supercluster of the seed, and mask the candidate so it cannot be considered as a seed further
 
 The loop is first on candidate, then on seeds as it is more efficient for step 4 to find the best seed for each candidate.
+
+Author : Theo Cuisset - theo.cuisset@polytechnique.edu
+Date : 11/2023
 */
 
 #include <string>
@@ -290,7 +291,7 @@ void TracksterLinkingbySuperClustering::linkTracksters(const Inputs& input, std:
     LogDebug("HGCalTICLSuperclustering") << "Created supercluster of size " << sc.size() << " holding tracksters (first one is seed) " << s.str();
   }
   #endif
-}
+} 
 
 void TracksterLinkingbySuperClustering::fillPSetDescription(edm::ParameterSetDescription &desc) {
   TracksterLinkingAlgoBase::fillPSetDescription(desc); // adds algo_verbosity
@@ -305,7 +306,7 @@ void TracksterLinkingbySuperClustering::fillPSetDescription(edm::ParameterSetDes
   desc.add<double>("deltaPhiWindow", 0.5)
      ->setComment("Size of delta phi window to consider for superclustering. Seed-candidate pairs outside this window are not considered for DNN inference.");
   desc.add<double>("seedPtThreshold", 4.)
-     ->setComment("Minimum transverse momentum of trackster to be considered as seed of a supercluster");
+     ->setComment("Minimum transverse energy of trackster to be considered as seed of a supercluster");
   desc.add<double>("candidateEnergyThreshold", 2.)
      ->setComment("Minimum energy of trackster to be considered as candidate for superclustering");
   desc.add<double>("explVarRatioCut_energyBoundary", 50.)
