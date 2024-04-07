@@ -87,7 +87,7 @@ void EGammaSuperclusterProducer::produce(edm::Event& iEvent, const edm::EventSet
     reco::CaloClusterPtrVector trackstersEMInSupercluster;
     /* TODO : for now, set as SuperCluster regressed energy the sum of regressed energies of CLUE3D EM tracksters 
     A regression will most likely be included here */
-    double regressedEnergySum = 0.; 
+    double regressedEnergySum = 0.;
     for (unsigned int tsInSc_id : superclusterLink) {
       trackstersEMInSupercluster.push_back(reco::CaloClusterPtr(caloClustersEM_h, tsInSc_id));
       regressedEnergySum += emTracksters[tsInSc_id].regressed_energy();

@@ -12,10 +12,10 @@ namespace ticl {
 
   class TracksterLinkingPassthrough : public TracksterLinkingAlgoBase {
   public:
-    TracksterLinkingPassthrough(const edm::ParameterSet& conf, edm::ConsumesCollector iC, cms::Ort::ONNXRuntime const* onnxRuntime = nullptr)
-        : TracksterLinkingAlgoBase(conf, iC, onnxRuntime) {
-    
-    }
+    TracksterLinkingPassthrough(const edm::ParameterSet& conf,
+                                edm::ConsumesCollector iC,
+                                cms::Ort::ONNXRuntime const* onnxRuntime = nullptr)
+        : TracksterLinkingAlgoBase(conf, iC, onnxRuntime) {}
 
     ~TracksterLinkingPassthrough() override {}
 
