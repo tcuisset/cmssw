@@ -2,7 +2,7 @@
 // Date : 11/2023
 /*
 TICL plugin for electron superclustering in HGCAL using a DNN. 
-DNN designed and trained by Alessandro Tarabini.
+DNN designed by Alessandro Tarabini.
 
 Inputs are CLUE3D EM tracksters. Outputs are superclusters (as vectors of IDs of trackster)
 "Seed trackster" : seed of supercluster, always highest pT trackster of supercluster, normally should be an electron
@@ -17,7 +17,6 @@ Algorithm description :
    If the score is also above a working point, then we add the candidate to the supercluster of the seed, and mask the candidate so it cannot be considered as a seed further
 
 The loop is first on candidate, then on seeds as it is more efficient for step 4 to find the best seed for each candidate.
-If macro SUPERCLUSTERING_DNN_SAVESCORE is set, will also produce DNN score in the event (as ticl::SuperclusteringDNNScore)
 */
 
 #include <string>
@@ -59,10 +58,12 @@ void TracksterLinkingbySuperClustering::initialize(const HGCalDDDConstants *hgco
                                              const edm::ESHandle<Propagator> propH) {
 }
 
+/** 
+ * Check if trackster passes cut on explained variance ratio. The DNN is trained only on pairs where both seed and candidate pass this cut
+ * Explained variance ratio is (largest PCA eigenvalue) / (sum of PCA eigenvalues)
+*/
 bool TracksterLinkingbySuperClustering::checkExplainedVarianceRatioCut(ticl::Trackster const& ts) const {
-  /* Cut on explained variance ratio. The DNN was trained by Alessandro Tarabini using this cut on the explained variance ratio.
-    Therefore we reproduce it here. It is expected that this cut will be removed when the network for EM/hadronic differentiation is in place
-    (would need retraining of the superclustering DNN) */
+
     float explVar_denominator = std::accumulate(std::begin(ts.eigenvalues()), std::end(ts.eigenvalues()), 0.f, std::plus<float>());
     if (explVar_denominator != 0.) {
       float explVarRatio = ts.eigenvalues()[0] / explVar_denominator;
@@ -75,23 +76,26 @@ bool TracksterLinkingbySuperClustering::checkExplainedVarianceRatioCut(ticl::Tra
 }
 
 /**
- * resultTracksters : should be all EM tracksters (including those not in Superclusters)
- * outputSuperclusters : indices into resultsTracksters. Should include ts not in SC as one-element vectors
- * linkedTracksterIdToInputTracksterId : map indices from output to input
+ * resultTracksters : superclusters as tracksters (ie merging of tracksters that have been superclustered together)
+ * outputSuperclusters : same as linkedTracksterIdToInputTracksterId. Probably should use only one of the two.
+ * linkedTracksterIdToInputTracksterId : maps indices from resultTracksters back into input tracksters.
+ *    resultTracksters[i] has seed input.tracksters[linkedTracksterIdToInputTracksterId[i][0]], linked with tracksters input.tracksters[linkedTracksterIdToInputTracksterId[i][1..N]]
 */
 void TracksterLinkingbySuperClustering::linkTracksters(const Inputs& input, std::vector<Trackster>& resultTracksters,
                     std::vector<std::vector<unsigned int>>& outputSuperclusters,
                     std::vector<std::vector<unsigned int>>& linkedTracksterIdToInputTracksterId) {
   // For now we use all input tracksters for superclustering. At some point there might be a filter here for EM tracksters (electromagnetic identification with DNN ?)
-  //resultTracksters = std::vector<Trackster>(input.tracksters.begin(), input.tracksters.end());
   auto const& inputTracksters = input.tracksters;
   const unsigned int tracksterCount = inputTracksters.size();
 
   std::unique_ptr<AbstractDNNInput> nnInput = makeDNNInputFromString(dnnVersion_);
 
-  //Sorting tracksters by decreasing order of pT (out-of-place sort). 
-  std::vector<unsigned int> trackstersIndicesPt(inputTracksters.size()); // Vector of indices into inputTracksters, to be sorted
-  std::iota(trackstersIndicesPt.begin(), trackstersIndicesPt.end(), 0); // Fill trackstersIndicesPt with 0...tracksterCount-1
+  /* Sorting tracksters by decreasing order of pT (out-of-place sort). 
+  inputTracksters[trackstersIndicesPt[0]], ..., inputTracksters[trackstersIndicesPt[N]] makes a list of tracksters sorted by decreasing pT
+  Indices into this pT sorted collection will have the suffix _pt. Thus inputTracksters[index] and inputTracksters[trackstersIndicesPt[index_pt]] are correct
+  */
+  std::vector<unsigned int> trackstersIndicesPt(inputTracksters.size());
+  std::iota(trackstersIndicesPt.begin(), trackstersIndicesPt.end(), 0);
   std::stable_sort(trackstersIndicesPt.begin(), trackstersIndicesPt.end(), [&inputTracksters](unsigned int i1, unsigned int i2) {
     return inputTracksters[i1].raw_pt() > inputTracksters[i2].raw_pt();
   });
@@ -110,37 +114,35 @@ void TracksterLinkingbySuperClustering::linkTracksters(const Inputs& input, std:
   std::vector<std::vector<std::pair<unsigned int, unsigned int>>> tracksterIndicesUsedInDNN; 
 
   // Use TracksterTiles to speed up search of tracksters in eta-phi window. One per endcap
-  std::array<TICLLayerTile, 2> tracksterTilesBothEndcaps; // one per endcap
-  for (unsigned int i = 0; i < trackstersIndicesPt.size(); ++i)
+  std::array<TICLLayerTile, 2> tracksterTilesBothEndcaps_pt; // one per endcap
+  for (unsigned int i_pt = 0; i_pt < trackstersIndicesPt.size(); ++i_pt)
   {
-    Trackster const& ts = inputTracksters[trackstersIndicesPt[i]];
-    tracksterTilesBothEndcaps[ts.barycenter().eta() > 0.].fill(ts.barycenter().eta(), ts.barycenter().phi(), i);
+    Trackster const& ts = inputTracksters[trackstersIndicesPt[i_pt]];
+    tracksterTilesBothEndcaps_pt[ts.barycenter().eta() > 0.].fill(ts.barycenter().eta(), ts.barycenter().phi(), i_pt);
   }
 
   // First loop on candidate tracksters (start at 1 since the highest pt trackster can only be a seed, not a candidate)
-  for (unsigned int ts_cand_idx = 1; ts_cand_idx < tracksterCount; ts_cand_idx++) {
-    Trackster const& ts_cand = inputTracksters[trackstersIndicesPt[ts_cand_idx]];
+  for (unsigned int ts_cand_idx_pt = 1; ts_cand_idx_pt < tracksterCount; ts_cand_idx_pt++) {
+    Trackster const& ts_cand = inputTracksters[trackstersIndicesPt[ts_cand_idx_pt]];
 
-    // Cut on candidate trackster energy, to match what was used for training by Alessandro
     if (ts_cand.raw_energy() < candidateEnergyThreshold_ || !checkExplainedVarianceRatioCut(ts_cand))
       continue;
 
-    auto& tracksterTiles = tracksterTilesBothEndcaps[ts_cand.barycenter().eta()>0];
+    auto& tracksterTiles = tracksterTilesBothEndcaps_pt[ts_cand.barycenter().eta()>0];
     std::array<int, 4> search_box = tracksterTiles.searchBoxEtaPhi(
       ts_cand.barycenter().Eta() - deltaEtaWindow_,
       ts_cand.barycenter().Eta() + deltaEtaWindow_,
       ts_cand.barycenter().Phi() - deltaPhiWindow_,
       ts_cand.barycenter().Phi() + deltaPhiWindow_
     );
-    // Second loop on superclustering seed tracksters
-    // Use the search box for performance
+    // Look for seed trackster
     for (int eta_i = search_box[0]; eta_i <= search_box[1]; ++eta_i) {
       for (int phi_i = search_box[2]; phi_i <= search_box[3]; ++phi_i) {
-        for (unsigned int ts_seed_idx : tracksterTiles[tracksterTiles.globalBin(eta_i, (phi_i % TileConstants::nPhiBins))]) {
-          if (ts_seed_idx >= ts_cand_idx)
-            continue; // Look only at seed tracksters with higher pT than the candidate (so all pairs are only looked at once)
+        for (unsigned int ts_seed_idx_pt : tracksterTiles[tracksterTiles.globalBin(eta_i, (phi_i % TileConstants::nPhiBins))]) {
+          if (ts_seed_idx_pt >= ts_cand_idx_pt)
+            continue; // Look only at seed tracksters with higher pT than the candidate
           
-          Trackster const& ts_seed = inputTracksters[trackstersIndicesPt[ts_seed_idx]];
+          Trackster const& ts_seed = inputTracksters[trackstersIndicesPt[ts_seed_idx_pt]];
 
           if (ts_seed.raw_pt() < seedPtThreshold_)
             break; // All further seeds will have lower pT than threshold (due to pT sorting)
@@ -155,10 +157,13 @@ void TracksterLinkingbySuperClustering::linkTracksters(const Inputs& input, std:
               // Create new minibatch
               assert(candidateIndexInCurrentBatch == miniBatchSize);
 
-              //Estimate how many seed-candidate pairs are remaining and don't allocate a full batch in this case. Use worst-case scenario of all pairs passing geometrical window
-              // Also assume ts_seed_idx=0 (worst case) 
-              // TODO we could probably use std::vector::reserve with a basic estimate for less memory usage on last batch
-              inputTensorBatches.emplace_back(std::min(miniBatchSize, (tracksterCount*(tracksterCount-1) - ts_cand_idx*(ts_cand_idx-1))/2) * nnInput->featureCount());
+              /* Estimate how many seed-candidate pairs are remaining and don't allocate a full batch in this case. Use worst-case scenario of all pairs passing geometrical window
+              Also assume ts_seed_idx_pt=0 (worst case) 
+              TODO In case memory usage is a problem, std::vector::reserve could be used with a more optimistic estimate
+              The last tensor of inputTensorBatches will be larger than necessary. The end of it will be uninitialized, then passed to the DNN.
+              We do not look at the output of the DNN on this section, so it will have no consequences.
+              */
+              inputTensorBatches.emplace_back(std::min(miniBatchSize, (tracksterCount*(tracksterCount-1) - ts_cand_idx_pt*(ts_cand_idx_pt-1))/2) * nnInput->featureCount());
 
               candidateIndexInCurrentBatch = 0;
               tracksterIndicesUsedInDNN.emplace_back();
@@ -170,16 +175,12 @@ void TracksterLinkingbySuperClustering::linkTracksters(const Inputs& input, std:
             // Copy the features into the batch (TODO : could probably avoid the copy and fill straight in the batch vector)
             std::copy(features.begin(), features.end(), inputTensorBatches.back().begin() + candidateIndexInCurrentBatch*nnInput->featureCount());
             candidateIndexInCurrentBatch++;
-            tracksterIndicesUsedInDNN.back().emplace_back(trackstersIndicesPt[ts_seed_idx], trackstersIndicesPt[ts_cand_idx]);
+            tracksterIndicesUsedInDNN.back().emplace_back(trackstersIndicesPt[ts_seed_idx_pt], trackstersIndicesPt[ts_cand_idx_pt]);
           }
         }
       }
     }
   }
-
-  /* The last tensor of inputTensorBatches will be larger than necessary. The end of it will be uninitialized, then passed to the DNN
-  We do not look at the output of the DNN on this so it should not matter.
-  TODO consider slicing the last batch to avoid unneeded inference */
 
   if (inputTensorBatches.empty()) {
     LogDebug("HGCalTICLSuperclustering") << "No superclustering candidate pairs passed preselection before DNN. There are " << tracksterCount << " tracksters in this event.";
@@ -199,7 +200,7 @@ void TracksterLinkingbySuperClustering::linkTracksters(const Inputs& input, std:
   std::vector<std::vector<float>> batchOutputs; // Outer index : minibatch, inner index : inference index in minibatch, value : DNN score
   for (std::vector<float>& singleBatch : inputTensorBatches) {
     // ONNXRuntime takes std::vector<std::vector<float>>& as input (non-const reference) so we have to make a new vector
-    std::vector<std::vector<float>> inputs_for_onnx{{std::move(singleBatch)}}; // Don't use singleBatch after this as it is in moved-from state
+    std::vector<std::vector<float>> inputs_for_onnx{{std::move(singleBatch)}};
     std::vector<float> outputs = onnxRuntime_->run({"input"}, inputs_for_onnx, {}, {}, inputs_for_onnx[0].size()/nnInput->featureCount())[0];
     batchOutputs.push_back(std::move(outputs));
   }
@@ -208,9 +209,8 @@ void TracksterLinkingbySuperClustering::linkTracksters(const Inputs& input, std:
   auto outputTracksterDNNScore = std::make_unique<SuperclusteringDNNScore>();
 #endif
 
-  /* Build mask of tracksters already superclustered as candidates, as well as seeds (only needed to add tracksters not in a supercluster to the output).
-  Uses global trackster ids
-  */
+  /* Build mask of tracksters already superclustered as candidates (to avoid using a trackster superclustered as candidate as a seed in further iterations).
+  Also mask seeds (only needed to add tracksters not in a supercluster to the output). */
   std::vector<bool> tracksterMask(tracksterCount, false);
   
   /* Index of the seed trackster of the previous iteration 
@@ -222,8 +222,7 @@ void TracksterLinkingbySuperClustering::linkTracksters(const Inputs& input, std:
   // Lambda to be called when there is a transition from one candidate to the next (as well as after the last iteration)
   // Does the actual supercluster creation
   auto onCandidateTransition = [&](unsigned ts_cand_idx) {
-    if (bestSeedForCurrentCandidate_idx < std::numeric_limits<unsigned int>::max()) {
-      // At least one seed can be superclustered with the candidate
+    if (bestSeedForCurrentCandidate_idx < std::numeric_limits<unsigned int>::max()) { // At least one seed can be superclustered with the candidate
       tracksterMask[ts_cand_idx] = true; // Mask the candidate so it is not considered as seed in later iterations
 
       // Look for a supercluster of the seed
@@ -231,10 +230,8 @@ void TracksterLinkingbySuperClustering::linkTracksters(const Inputs& input, std:
         return sc[0] == bestSeedForCurrentCandidate_idx;
       });
 
-      if (seed_supercluster_it == outputSuperclusters.end()) {
-        // No supercluster exists yet for the seed. Create one.
-        outputSuperclusters.emplace_back();
-        outputSuperclusters.back().push_back(bestSeedForCurrentCandidate_idx);
+      if (seed_supercluster_it == outputSuperclusters.end()) { // No supercluster exists yet for the seed. Create one.
+        outputSuperclusters.emplace_back(std::initializer_list<unsigned int>{bestSeedForCurrentCandidate_idx});
         resultTracksters.emplace_back(inputTracksters[bestSeedForCurrentCandidate_idx]);
         linkedTracksterIdToInputTracksterId.emplace_back(std::initializer_list<unsigned int>{bestSeedForCurrentCandidate_idx});
         seed_supercluster_it = outputSuperclusters.end()-1;
@@ -284,11 +281,9 @@ void TracksterLinkingbySuperClustering::linkTracksters(const Inputs& input, std:
   }
   onCandidateTransition(previousCandTrackster_idx);
 
-  // Adding one-trackster superclusters for all tracksters not in a supercluster already
+  // Adding one-trackster superclusters for all tracksters not in a supercluster already that pass the seed threshold
   for (unsigned int ts_id = 0; ts_id < tracksterCount; ts_id++) {
-    if (!tracksterMask[ts_id] // && inputTracksters[ts_id].raw_energy() >= candidateEnergyThreshold_
-          && inputTracksters[ts_id].raw_pt() >= seedPtThreshold_
-    ) {
+    if (!tracksterMask[ts_id] && inputTracksters[ts_id].raw_pt() >= seedPtThreshold_) {
       outputSuperclusters.emplace_back(std::initializer_list<unsigned int>{ts_id});
       resultTracksters.emplace_back(inputTracksters[ts_id]);
       linkedTracksterIdToInputTracksterId.emplace_back(std::initializer_list<unsigned int>{ts_id});
@@ -319,7 +314,7 @@ void TracksterLinkingbySuperClustering::fillPSetDescription(edm::ParameterSetDes
      ->setComment("Size of delta phi window to consider for superclustering. Seed-candidate pairs outside this window are not considered for DNN inference.");
   desc.add<double>("seedPtThreshold", 4.)
      ->setComment("Minimum transverse momentum of trackster to be considered as seed of a supercluster");
-  desc.add<double>("candidateEnergyThreshold", 2.) // set the same as Alessandro
+  desc.add<double>("candidateEnergyThreshold", 2.)
      ->setComment("Minimum energy of trackster to be considered as candidate for superclustering");
   desc.add<double>("explVarRatioCut_energyBoundary", 50.)
      ->setComment("Boundary energy between low and high energy explVarRatio cut threshold");

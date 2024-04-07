@@ -1,3 +1,14 @@
+// Author : Theo Cuisset - theo.cuisset@polytechnique.edu
+// Date : 11/2023
+/*
+TICL plugin for electron superclustering in HGCAL using a DNN. 
+DNN designed and trained by Alessandro Tarabini.
+
+Inputs are CLUE3D EM tracksters. Outputs are superclusters (as vectors of IDs of trackster)
+"Seed trackster" : seed of supercluster, always highest pT trackster of supercluster, normally should be an electron
+"Candidate trackster" : trackster that is considered for superclustering with a seed
+*/
+
 #ifndef RecoHGCal_TICL_TracksterLinkingSuperClustering_H
 #define RecoHGCal_TICL_TracksterLinkingSuperClustering_H
 
