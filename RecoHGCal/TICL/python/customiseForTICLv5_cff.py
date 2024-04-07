@@ -126,6 +126,7 @@ def customiseForTICLv5(process, enableDumper = False, enableSuperclusteringDNN=T
         # so duplicate particleFlowClusterHGCal to make it consume CLUE3D EM tracksters, keeping the old config in in parallel for hgcalHitCalibration
         process.particleFlowClusterHGCalCLUE3DEM = process.particleFlowClusterHGCal.clone()
         process.particleFlowClusterHGCalCLUE3DEM.initialClusteringStep.tracksterSrc = cms.InputTag("ticlTrackstersCLUE3DEM")
+        process.particleFlowClusterHGCalCLUE3DEM.filterByTracksterPID = cms.bool(False)
         process.hgcalLocalRecoTask.add(process.particleFlowClusterHGCalCLUE3DEM)
         process.particleFlowSuperClusterHGCal.PFClusters = cms.InputTag("particleFlowClusterHGCalCLUE3DEM")
 
