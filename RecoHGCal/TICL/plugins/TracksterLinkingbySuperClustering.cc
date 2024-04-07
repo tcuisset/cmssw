@@ -205,10 +205,6 @@ void TracksterLinkingbySuperClustering::linkTracksters(const Inputs& input, std:
     batchOutputs.push_back(std::move(outputs));
   }
 
-#ifdef SUPERCLUSTERING_DNN_SAVESCORE
-  auto outputTracksterDNNScore = std::make_unique<SuperclusteringDNNScore>();
-#endif
-
   /* Build mask of tracksters already superclustered as candidates (to avoid using a trackster superclustered as candidate as a seed in further iterations).
   Also mask seeds (only needed to add tracksters not in a supercluster to the output). */
   std::vector<bool> tracksterMask(tracksterCount, false);
@@ -266,10 +262,6 @@ void TracksterLinkingbySuperClustering::linkTracksters(const Inputs& input, std:
         // There is a transition from one seed to the next (don't make a transition for the first iteration)
         onCandidateTransition(previousCandTrackster_idx);
       }
-      #ifdef SUPERCLUSTERING_DNN_SAVESCORE
-      // Map the DNN score from float in [0, 1] to unsigned short
-      outputTracksterDNNScore->emplace_back(ts_seed_idx, ts_cand_idx, static_cast<ticl::SuperclusteringDNNScoreValuePacked>(currentDnnScore*std::numeric_limits<SuperclusteringDNNScoreValuePacked>::max()));
-      #endif
 
       if (currentDnnScore > bestSeedForCurrentCandidate_dnnScore && !tracksterMask[ts_seed_idx]) {
         // Check that the DNN suggests superclustering, that this seed-candidate assoc is better than previous ones, and that the seed is not already in a supercluster as candidate
