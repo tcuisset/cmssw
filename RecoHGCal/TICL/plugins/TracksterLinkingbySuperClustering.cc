@@ -36,6 +36,7 @@ TracksterLinkingbySuperClustering::TracksterLinkingbySuperClustering(const edm::
                                                                      cms::Ort::ONNXRuntime const* onnxRuntime)
     : TracksterLinkingAlgoBase(ps, iC, onnxRuntime),
       dnnVersion_(ps.getParameter<std::string>("dnnVersion")),
+      inferenceBatchSize_(ps.getParameter<unsigned int>("inferenceBatchSize")),
       nnWorkingPoint_(ps.getParameter<double>("nnWorkingPoint")),
       deltaEtaWindow_(ps.getParameter<double>("deltaEtaWindow")),
       deltaPhiWindow_(ps.getParameter<double>("deltaPhiWindow")),
@@ -101,9 +102,9 @@ void TracksterLinkingbySuperClustering::linkTracksters(
 
   /* Evaluate in minibatches since running with trackster count = 3000 leads to a short-lived ~15GB memory allocation
   Also we do not know in advance how many superclustering candidate pairs there are going to be
-  So we pick (arbitrarily) a batch size of 10^5. It needs to be rounded to featureCount
+  The batch size needs to be rounded to featureCount
   */
-  const unsigned int miniBatchSize = static_cast<unsigned int>(1e5) / nnInput->featureCount() * nnInput->featureCount();
+  const unsigned int miniBatchSize = static_cast<unsigned int>(inferenceBatchSize_) / nnInput->featureCount() * nnInput->featureCount();
 
   std::vector<std::vector<float>>
       inputTensorBatches;  // DNN input features tensors, in minibatches. Outer array : minibatches, inner array : 2D (flattened) array of features (indexed by batchIndex, featureId)
@@ -318,6 +319,10 @@ void TracksterLinkingbySuperClustering::fillPSetDescription(edm::ParameterSetDes
       ->setComment("Path to DNN (as ONNX model)");
   desc.add<std::string>("dnnVersion", "alessandro-v2")
       ->setComment("DNN version tag. Can be alessandro-v1 or alessandro-v2");
+  desc.add<unsigned int>("inferenceBatchSize", 1e5)
+      ->setComment(
+          "Size of inference batches fed to DNN. Increasing it should produce faster inference but higher memory usage. "
+          "Has no physics impact.");
   desc.add<double>("nnWorkingPoint", 0.51)
       ->setComment("Working point of DNN (in [0, 1]). DNN score above WP will attempt to supercluster.");
   desc.add<double>("deltaEtaWindow", 0.1)

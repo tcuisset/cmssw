@@ -43,7 +43,8 @@ namespace ticl {
   private:
     bool checkExplainedVarianceRatioCut(ticl::Trackster const& ts) const;
 
-    const std::string dnnVersion_;  // Version identifier of the DNN (to choose which inputs to use)
+    const std::string dnnVersion_;    // Version identifier of the DNN (to choose which inputs to use)
+    unsigned int inferenceBatchSize_; // Size of inference batches fed to DNN
     double
         nnWorkingPoint_;  // Working point for neural network (above this score, consider the trackster candidate for superclustering)
     float deltaEtaWindow_;                  // Delta eta window to consider trackster seed-candidate pairs for inference
