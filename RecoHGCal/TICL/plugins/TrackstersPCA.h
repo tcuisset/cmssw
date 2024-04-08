@@ -6,8 +6,6 @@
 #include <vector>
 #include "RecoLocalCalo/HGCalRecAlgos/interface/RecHitTools.h"
 
-typedef math::XYZVector Vector;
-
 namespace ticl {
   void assignPCAtoTracksters(std::vector<Trackster> &,
                              const std::vector<reco::CaloCluster> &,

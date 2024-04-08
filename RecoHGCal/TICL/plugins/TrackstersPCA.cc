@@ -54,7 +54,7 @@ void ticl::assignPCAtoTracksters(std::vector<Trackster> &tracksters,
     sigmasEigen << 0., 0., 0.;
     Eigen::Matrix3f covM = Eigen::Matrix3f::Zero();
 
-    std::vector<double> layerClusterEnergies;
+    std::vector<float> layerClusterEnergies;
 
     for (size_t i = 0; i < N; ++i) {
       auto fraction = 1.f / trackster.vertex_multiplicity(i);
@@ -78,7 +78,7 @@ void ticl::assignPCAtoTracksters(std::vector<Trackster> &tracksters,
     LogDebug("TrackstersPCA_Eigen") << "cleaning is  :" << clean << std::endl;
 
     std::vector<unsigned> filtered_idx;
-    double filtered_energy = 0;
+    float filtered_energy = 0;
     if (clean) {
       // Filter layerclusters for the cleaned PCA
       auto maxE_vertex = std::distance(layerClusterEnergies.begin(),
@@ -92,7 +92,7 @@ void ticl::assignPCAtoTracksters(std::vector<Trackster> &tracksters,
         if (vertices_in_layer.empty())
           continue;
 
-        std::vector<double> energies_in_layer;
+        std::vector<float> energies_in_layer;
         for (auto vrt : vertices_in_layer)
           energies_in_layer.push_back(layerClusters[trackster.vertices(vrt)].energy());
 
