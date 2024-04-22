@@ -1,6 +1,8 @@
 
 import FWCore.ParameterSet.Config as cms
 
+from Configuration.ProcessModifiers.ticl_v5_cff import ticl_v5
+
 mergedSuperClusters = cms.EDProducer("SuperClusterMerger",
   src = cms.VInputTag( 
 #    cms.InputTag("correctedHybridSuperClusters"),
@@ -9,6 +11,10 @@ mergedSuperClusters = cms.EDProducer("SuperClusterMerger",
      cms.InputTag("particleFlowSuperClusterECAL","particleFlowSuperClusterECALEndcapWithPreshower")
   )
 )
+ticl_v5.toModify(mergedSuperClusters, src=cms.VInputTag(
+     cms.InputTag("particleFlowSuperClusterECAL","particleFlowSuperClusterECALBarrel"),
+     cms.InputTag("ticlEGammaSuperClusterProducer")
+  ))
 
 from DQMOffline.EGamma.electronGeneralAnalyzer_cfi import *
 dqmElectronGeneralAnalysis.OutputFolderName = cms.string("Egamma/Electrons/Ele1_General") ;

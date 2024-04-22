@@ -16,6 +16,9 @@ from RecoHGCal.TICL.trackstersMergeProducer_cfi import trackstersMergeProducer a
 from RecoHGCal.TICL.tracksterSelectionTf_cfi import *
 
 from RecoHGCal.TICL.tracksterLinksProducer_cfi import tracksterLinksProducer as _tracksterLinksProducer
+from RecoHGCal.TICL.superclustering_cff import ticlTracksterLinksSuperclustering
+from RecoHGCal.TICL.ticlEGammaSuperClusterProducer_cfi import ticlEGammaSuperClusterProducer
+from RecoEcal.EgammaClusterProducers.particleFlowSuperClusteringSequence_cff import particleFlowSuperClusterHGCal
 from RecoHGCal.TICL.ticlCandidateProducer_cfi import ticlCandidateProducer as _ticlCandidateProducer
 
 from RecoHGCal.TICL.mtdSoAProducer_cfi import mtdSoAProducer as _mtdSoAProducer
@@ -59,7 +62,10 @@ ticlIterLabels = ["CLUE3DHigh"]
 '''
 
 ticlTracksterMergeTask = cms.Task(ticlTrackstersMerge)
-ticlTracksterLinksTask = cms.Task(ticlTracksterLinks)
+ticlTracksterLinksTask = cms.Task(ticlTracksterLinks) 
+ticl_v5.toModify(ticlTracksterLinksTask, func=lambda x : x.add(ticlTracksterLinksSuperclustering))
+ticl_v5.toModify(ticlTracksterLinksTask, func=lambda x : x.add(ticlEGammaSuperClusterProducer))
+ticl_v5.toReplaceWith(particleFlowSuperClusterHGCal, ticlEGammaSuperClusterProducer) # Replacing PFECALSuperClusterProducer by the TICL equivalent
 
 mergeTICLTask = cms.Task(ticlLayerTileTask
     ,ticlIterationsTask

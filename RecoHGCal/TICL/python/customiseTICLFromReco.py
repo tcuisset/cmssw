@@ -2,7 +2,7 @@
 from RecoHGCal.TICL.iterativeTICL_cff import *
 from RecoLocalCalo.HGCalRecProducers.hgcalLayerClusters_cff import hgcalLayerClustersEE, hgcalLayerClustersHSi, hgcalLayerClustersHSci
 from RecoLocalCalo.HGCalRecProducers.hgcalMergeLayerClusters_cfi import hgcalMergeLayerClusters
-from RecoHGCal.TICL.ticlDumper_cfi import ticlDumper
+from RecoHGCal.TICL.ticlDumper_cff import ticlDumper
 # Validation
 from Validation.HGCalValidation.HGCalValidator_cfi import *
 from RecoLocalCalo.HGCalRecProducers.hgcalRecHitMapProducer_cfi import hgcalRecHitMapProducer

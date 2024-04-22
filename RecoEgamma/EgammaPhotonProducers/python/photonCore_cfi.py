@@ -23,6 +23,11 @@ photonCoreHGC = photonCore.clone(
     pixelSeedProducer = 'electronMergedSeeds',
     endcapOnly = True,
 )
+from Configuration.ProcessModifiers.ticl_v5_cff import ticl_v5
+ticl_v5.toModify(
+    photonCoreHGC,
+    scIslandEndcapProducer = cms.InputTag("ticlEGammaSuperClusterProducer")
+)
 
 islandPhotonCore = photonCore.clone(
     scHybridBarrelProducer = "correctedIslandBarrelSuperClusters",

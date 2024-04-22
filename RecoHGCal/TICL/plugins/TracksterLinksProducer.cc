@@ -14,6 +14,8 @@
 #include "FWCore/ParameterSet/interface/ParameterSetDescription.h"
 #include "FWCore/Framework/interface/ConsumesCollector.h"
 
+#include "PhysicsTools/ONNXRuntime/interface/ONNXRuntime.h"
+
 #include "DataFormats/Common/interface/OrphanHandle.h"
 
 #include "DataFormats/CaloRecHit/interface/CaloCluster.h"
@@ -40,10 +42,11 @@
 #include "TrackstersPCA.h"
 
 using namespace ticl;
+using cms::Ort::ONNXRuntime;
 
-class TracksterLinksProducer : public edm::stream::EDProducer<> {
+class TracksterLinksProducer : public edm::stream::EDProducer<edm::GlobalCache<ONNXRuntime>> {
 public:
-  explicit TracksterLinksProducer(const edm::ParameterSet &ps);
+  explicit TracksterLinksProducer(const edm::ParameterSet &ps, const ONNXRuntime *);
   ~TracksterLinksProducer() override{};
   void produce(edm::Event &, const edm::EventSetup &) override;
   static void fillDescriptions(edm::ConfigurationDescriptions &descriptions);
@@ -52,12 +55,15 @@ public:
   void endJob();
 
   void beginRun(edm::Run const &iEvent, edm::EventSetup const &es) override;
+  static std::unique_ptr<ONNXRuntime> initializeGlobalCache(const edm::ParameterSet &iConfig);
+  static void globalEndJob(const ONNXRuntime *);
 
 private:
   void printTrackstersDebug(const std::vector<Trackster> &, const char *label) const;
   void dumpTrackster(const Trackster &) const;
 
   std::unique_ptr<TracksterLinkingAlgoBase> linkingAlgo_;
+  std::string algoType_;
 
   std::vector<edm::EDGetTokenT<std::vector<Trackster>>> tracksters_tokens_;
   const edm::EDGetTokenT<std::vector<reco::CaloCluster>> clusters_token_;
@@ -76,8 +82,9 @@ private:
   edm::ESGetToken<HGCalDDDConstants, IdealGeometryRecord> hdc_token_;
 };
 
-TracksterLinksProducer::TracksterLinksProducer(const edm::ParameterSet &ps)
-    : clusters_token_(consumes<std::vector<reco::CaloCluster>>(ps.getParameter<edm::InputTag>("layer_clusters"))),
+TracksterLinksProducer::TracksterLinksProducer(const edm::ParameterSet &ps, const ONNXRuntime *onnxRuntime)
+    : algoType_(ps.getParameter<edm::ParameterSet>("linkingPSet").getParameter<std::string>("type")),
+      clusters_token_(consumes<std::vector<reco::CaloCluster>>(ps.getParameter<edm::InputTag>("layer_clusters"))),
       clustersTime_token_(
           consumes<edm::ValueMap<std::pair<float, float>>>(ps.getParameter<edm::InputTag>("layer_clustersTime"))),
       geometry_token_(esConsumes<CaloGeometry, CaloGeometryRecord, edm::Transition::BeginRun>()),
@@ -100,24 +107,36 @@ TracksterLinksProducer::TracksterLinksProducer(const edm::ParameterSet &ps)
 
   // Links
   produces<std::vector<std::vector<unsigned int>>>();
+  produces<std::vector<std::vector<unsigned int>>>("linkedTracksterIdToInputTracksterId");
   // LayerClusters Mask
   produces<std::vector<float>>();
 
   auto linkingPSet = ps.getParameter<edm::ParameterSet>("linkingPSet");
-  auto algoType = linkingPSet.getParameter<std::string>("type");
 
-  if (algoType == "Skeletons") {
+  if (algoType_ == "Skeletons") {
     std::string detectorName_ = (detector_ == "HFNose") ? "HGCalHFNoseSensitive" : "HGCalEESensitive";
     hdc_token_ = esConsumes<HGCalDDDConstants, IdealGeometryRecord, edm::Transition::BeginRun>(
         edm::ESInputTag("", detectorName_));
   }
 
-  linkingAlgo_ = TracksterLinkingPluginFactory::get()->create(algoType, linkingPSet, consumesCollector());
+  linkingAlgo_ = TracksterLinkingPluginFactory::get()->create(algoType_, linkingPSet, consumesCollector(), onnxRuntime);
 }
 
+std::unique_ptr<ONNXRuntime> TracksterLinksProducer::initializeGlobalCache(const edm::ParameterSet &iConfig) {
+  auto const &pluginPset = iConfig.getParameter<edm::ParameterSet>("linkingPSet");
+  if (pluginPset.exists("onnxModelPath"))
+    return std::make_unique<ONNXRuntime>(pluginPset.getParameter<edm::FileInPath>("onnxModelPath").fullPath());
+  else
+    return std::unique_ptr<ONNXRuntime>(nullptr);
+}
+
+void TracksterLinksProducer::globalEndJob(const ONNXRuntime *) {}
+
 void TracksterLinksProducer::beginRun(edm::Run const &iEvent, edm::EventSetup const &es) {
-  edm::ESHandle<HGCalDDDConstants> hdc = es.getHandle(hdc_token_);
-  hgcons_ = hdc.product();
+  if (algoType_ == "Skeletons") {
+    edm::ESHandle<HGCalDDDConstants> hdc = es.getHandle(hdc_token_);
+    hgcons_ = hdc.product();
+  }
 
   edm::ESHandle<CaloGeometry> geom = es.getHandle(geometry_token_);
   rhtools_.setGeometry(*geom);
@@ -180,14 +199,14 @@ void TracksterLinksProducer::produce(edm::Event &evt, const edm::EventSetup &es)
 
   // Linking
   const typename TracksterLinkingAlgoBase::Inputs input(evt, es, layerClusters, layerClustersTimes, trackstersManager);
-  std::vector<std::vector<unsigned int>> linkedTracksterIdToInputTracksterId;
+  auto linkedTracksterIdToInputTracksterId = std::make_unique<std::vector<std::vector<unsigned int>>>();
 
   // LinkTracksters will produce a vector of vector of indices of tracksters that:
   // 1) are linked together if more than one
   // 2) are isolated if only one
   // Result tracksters contains the final version of the trackster collection
   // linkedTrackstersToInputTrackstersMap contains the mapping between the linked tracksters and the input tracksters
-  linkingAlgo_->linkTracksters(input, *resultTracksters, *linkedResultTracksters, linkedTracksterIdToInputTracksterId);
+  linkingAlgo_->linkTracksters(input, *resultTracksters, *linkedResultTracksters, *linkedTracksterIdToInputTracksterId);
 
   // Now we need to remove the tracksters that are not linked
   // We need to emplace_back in the resultTracksters only the tracksters that are linked
@@ -204,6 +223,7 @@ void TracksterLinksProducer::produce(edm::Event &evt, const edm::EventSetup &es)
   evt.put(std::move(linkedResultTracksters));
   evt.put(std::move(resultMask));
   evt.put(std::move(resultTracksters));
+  evt.put(std::move(linkedTracksterIdToInputTracksterId), "linkedTracksterIdToInputTracksterId");
 }
 
 void TracksterLinksProducer::printTrackstersDebug(const std::vector<Trackster> &tracksters, const char *label) const {
