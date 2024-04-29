@@ -23,8 +23,8 @@ photonCoreHGC = photonCore.clone(
     pixelSeedProducer = 'electronMergedSeeds',
     endcapOnly = True,
 )
-from Configuration.ProcessModifiers.ticl_v5_cff import ticl_v5
-ticl_v5.toModify(
+from Configuration.ProcessModifiers.ticl_v5_cff import ticl_v5, ticl_v5_mustache
+(ticl_v5 & ~ticl_v5_mustache).toModify(
     photonCoreHGC,
     scIslandEndcapProducer = cms.InputTag("ticlEGammaSuperClusterProducer")
 )

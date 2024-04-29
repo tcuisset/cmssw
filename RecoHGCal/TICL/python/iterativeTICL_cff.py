@@ -23,7 +23,7 @@ from RecoHGCal.TICL.ticlCandidateProducer_cfi import ticlCandidateProducer as _t
 
 from RecoHGCal.TICL.mtdSoAProducer_cfi import mtdSoAProducer as _mtdSoAProducer
 
-from Configuration.ProcessModifiers.ticl_v5_cff import ticl_v5
+from Configuration.ProcessModifiers.ticl_v5_cff import ticl_v5, ticl_v5_mustache
 
 ticlLayerTileTask = cms.Task(ticlLayerTileProducer)
 
@@ -63,9 +63,9 @@ ticlIterLabels = ["CLUE3DHigh"]
 
 ticlTracksterMergeTask = cms.Task(ticlTrackstersMerge)
 ticlTracksterLinksTask = cms.Task(ticlTracksterLinks) 
-ticl_v5.toModify(ticlTracksterLinksTask, func=lambda x : x.add(ticlTracksterLinksSuperclustering))
-ticl_v5.toModify(ticlTracksterLinksTask, func=lambda x : x.add(ticlEGammaSuperClusterProducer))
-ticl_v5.toReplaceWith(particleFlowSuperClusterHGCal, ticlEGammaSuperClusterProducer) # Replacing PFECALSuperClusterProducer by the TICL equivalent
+(ticl_v5 & ~ticl_v5_mustache).toModify(ticlTracksterLinksTask, func=lambda x : x.add(ticlTracksterLinksSuperclustering))
+(ticl_v5 & ~ticl_v5_mustache).toModify(ticlTracksterLinksTask, func=lambda x : x.add(ticlEGammaSuperClusterProducer))
+(ticl_v5 & ~ticl_v5_mustache).toReplaceWith(particleFlowSuperClusterHGCal, ticlEGammaSuperClusterProducer) # Replacing PFECALSuperClusterProducer by the TICL equivalent
 
 mergeTICLTask = cms.Task(ticlLayerTileTask
     ,ticlIterationsTask

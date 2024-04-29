@@ -1,7 +1,7 @@
 
 import FWCore.ParameterSet.Config as cms
 
-from Configuration.ProcessModifiers.ticl_v5_cff import ticl_v5
+from Configuration.ProcessModifiers.ticl_v5_cff import ticl_v5, ticl_v5_mustache
 
 mergedSuperClusters = cms.EDProducer("SuperClusterMerger",
   src = cms.VInputTag( 
@@ -11,7 +11,7 @@ mergedSuperClusters = cms.EDProducer("SuperClusterMerger",
      cms.InputTag("particleFlowSuperClusterECAL","particleFlowSuperClusterECALEndcapWithPreshower")
   )
 )
-ticl_v5.toModify(mergedSuperClusters, src=cms.VInputTag(
+(ticl_v5 & ~ticl_v5_mustache).toModify(mergedSuperClusters, src=cms.VInputTag(
      cms.InputTag("particleFlowSuperClusterECAL","particleFlowSuperClusterECALBarrel"),
      cms.InputTag("ticlEGammaSuperClusterProducer")
   ))
