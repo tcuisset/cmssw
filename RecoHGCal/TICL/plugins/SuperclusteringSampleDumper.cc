@@ -257,10 +257,10 @@ void SuperclusteringSampleDumper::analyze(const edm::Event& evt, const edm::Even
 
 void SuperclusteringSampleDumper::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
   edm::ParameterSetDescription desc;
-  desc.add<edm::InputTag>("tracksters", edm::InputTag("ticlTrackstersCLUE3DEM"))
+  desc.add<edm::InputTag>("tracksters", edm::InputTag("ticlTrackstersCLUE3DHigh"))
       ->setComment("Input trackster collection, same as what is used for superclustering inference.");
   desc.add<edm::InputTag>("recoToSimAssociatorCP",
-                          edm::InputTag("tracksterSimTracksterAssociationLinkingbyCLUE3DEM", "recoToSim"));
+                          edm::InputTag("tracksterSimTracksterAssociationLinkingbyCLUE3D", "recoToSim"));
   desc.add<std::string>("dnnVersion", "alessandro-v2")
       ->setComment("DNN version tag. Can be alessandro-v1 or alessandro-v2");
   // Cuts are intentionally looser than those used for inference in TracksterLinkingBySuperClustering.cpp
