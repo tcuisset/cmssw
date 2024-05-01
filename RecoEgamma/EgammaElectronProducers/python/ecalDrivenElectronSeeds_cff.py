@@ -20,6 +20,12 @@ phase2_hgcal.toModify(
     allowHGCal = True,
 )
 
+from Configuration.ProcessModifiers.ticl_v5_cff import ticl_v5, ticl_v5_mustache
+(ticl_v5 & ~ticl_v5_mustache).toModify(
+    ecalDrivenElectronSeeds,
+    endcapSuperClusters = cms.InputTag("ticlEGammaSuperClusterProducer")
+)
+
 from Configuration.ProcessModifiers.egamma_lowPt_exclusive_cff import egamma_lowPt_exclusive
 egamma_lowPt_exclusive.toModify(ecalDrivenElectronSeeds,
                            LowPtThreshold =1.0,
