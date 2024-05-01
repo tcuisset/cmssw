@@ -1115,7 +1115,8 @@ void TICLDumper::analyze(const edm::Event& event, const edm::EventSetup& setup) 
   const auto& trackPosMtd = *trackPosMtd_h;
 
   // superclustering
-  superclustering_linkedResultTracksters = event.get(superclustering_linkedResultTracksters_token);
+  if (saveSuperclustering_) // To support running with Mustache
+    superclustering_linkedResultTracksters = event.get(superclustering_linkedResultTracksters_token);
 
   // muons
   edm::Handle<std::vector<reco::Muon>> muons_h;
