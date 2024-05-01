@@ -102,6 +102,7 @@ ticl_v5.toModify(ticlDumper,
         ),
     ],
     ticlcandidates=cms.InputTag("ticlCandidate"),
+    recoSuperClusters_sourceTracksterCollection = cms.InputTag("ticlCandidate"),
     associators=[
         cms.PSet(
             branchName=cms.string("tsCLUE3D"),
