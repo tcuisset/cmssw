@@ -66,14 +66,14 @@ void EGammaSuperclusterProducer::produce(edm::Event& iEvent, const edm::EventSet
     });
 
     reco::CaloCluster& caloCluster = caloClustersEM->emplace_back(
-        emTrackster.regressed_energy(),            // energy
+        emTrackster.raw_energy(),                  // energy
         math::XYZPoint(emTrackster.barycenter()),  // position
         reco::CaloID(reco::CaloID::DET_HGCAL_ENDCAP),
         hitsAndFractions,
         reco::CaloCluster::particleFlow,  // algoID (copying from output of PFECALCSuperClusterProducer)
         hitsAndFractions.at(0).first  // seedId : TODO figure out if needed or if we need to put the highest energy hit
     );
-    caloCluster.setCorrectedEnergy(emTrackster.regressed_energy());
+    caloCluster.setCorrectedEnergy(emTrackster.raw_energy()); // TODO change this once we have supercluster regression
   }
 
   edm::OrphanHandle<reco::CaloClusterCollection> caloClustersEM_h = iEvent.put(std::move(caloClustersEM));
@@ -85,12 +85,12 @@ void EGammaSuperclusterProducer::produce(edm::Event& iEvent, const edm::EventSet
     std::vector<unsigned int> const& superclusterLink = ticlSuperclusterLinks[sc_i];
 
     reco::CaloClusterPtrVector trackstersEMInSupercluster;
-    /* TODO : for now, set as SuperCluster regressed energy the sum of regressed energies of CLUE3D EM tracksters 
+    /* TODO : for now, set as SuperCluster regressed energy the sum of raw energies of CLUE3D EM tracksters 
     A regression will most likely be included here */
-    double regressedEnergySum = 0.;
+    double rawEnergySum = 0.;
     for (unsigned int tsInSc_id : superclusterLink) {
       trackstersEMInSupercluster.push_back(reco::CaloClusterPtr(caloClustersEM_h, tsInSc_id));
-      regressedEnergySum += emTracksters[tsInSc_id].regressed_energy();
+      rawEnergySum += emTracksters[tsInSc_id].raw_energy();
     }
     reco::SuperCluster& egammaSc = egammaSuperclusters->emplace_back(
         ticlSupercluster.raw_energy(),
@@ -102,7 +102,7 @@ void EGammaSuperclusterProducer::produce(edm::Event& iEvent, const edm::EventSet
         0.046,                                      // phiwidth (TODO placeholder value for now)
         0.017                                       // etawidth (TODO placeholder value for now)
     );
-    egammaSc.setCorrectedEnergy(regressedEnergySum);
+    egammaSc.setCorrectedEnergy(rawEnergySum); // TODO energy regression here
     // correctedEnergyUncertainty is left at its default value for now
   }
 
