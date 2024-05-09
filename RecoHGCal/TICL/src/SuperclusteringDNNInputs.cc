@@ -92,7 +92,7 @@ std::vector<float> DNNInputAlessandroV2::computeVector(ticl::Trackster const& ts
       ts_base.raw_energy(),                                                              //seedEn
       (ts_base.raw_energy() * std::sin(ts_toCluster.barycenter().Theta())),              //seedPt
       static_cast<float>(Angle(pca_cand_cmsFrame, pca_seed_cmsFrame)),  // theta : angle between seed and candidate
-      Angle2D(XYVectorF(pca_cand_seedFrame.y(), pca_cand_seedFrame.z()), XYVectorF(0, 1)),  // theta_xz_seedFrame
+      Angle2D(XYVectorF(pca_cand_seedFrame.x(), pca_cand_seedFrame.z()), XYVectorF(0, 1)),  // theta_xz_seedFrame
       Angle2D(XYVectorF(pca_cand_seedFrame.y(), pca_cand_seedFrame.z()), XYVectorF(0, 1)),  // theta_yz_seedFrame
       Angle2D(XYVectorF(pca_cand_cmsFrame.x(), pca_cand_cmsFrame.y()),
               XYVectorF(pca_seed_cmsFrame.x(), pca_seed_cmsFrame.y())),  // theta_xy_cmsFrame
