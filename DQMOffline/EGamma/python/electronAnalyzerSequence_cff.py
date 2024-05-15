@@ -1,6 +1,8 @@
 
 import FWCore.ParameterSet.Config as cms
 
+from Configuration.ProcessModifiers.ticl_v5_cff import ticl_v5, ticl_v5_mustache
+
 mergedSuperClusters = cms.EDProducer("SuperClusterMerger",
   src = cms.VInputTag( 
 #    cms.InputTag("correctedHybridSuperClusters"),
@@ -54,6 +56,10 @@ mergedSuperClustersHGC = mergedSuperClusters.clone(
         ("particleFlowSuperClusterHGCal")
     )
  )
+(ticl_v5 & ~ticl_v5_mustache).toModify(mergedSuperClustersHGC, src=cms.VInputTag(
+     cms.InputTag("particleFlowSuperClusterECAL","particleFlowSuperClusterECALBarrel"),
+     cms.InputTag("ticlEGammaSuperClusterProducer")
+  ))
 dqmElectronAnalysisAllElectronsHGC = dqmElectronAnalysisAllElectrons.clone(
     OutputFolderName = 'Egamma/Electrons/Ele2HGC_All',
     MaxAbsEtaMatchingObject = 3.0,
@@ -68,6 +74,10 @@ _electronAnalyzerSequenceHGC += cms.Sequence(mergedSuperClustersHGC+dqmElectronA
 
 from Configuration.Eras.Modifier_phase2_hgcal_cff import phase2_hgcal
 phase2_hgcal.toModify( mergedSuperClusters, src = cms.VInputTag( cms.InputTag("particleFlowSuperClusterECAL","particleFlowSuperClusterECALBarrel"), cms.InputTag("particleFlowSuperClusterHGCal","") ) )
+(ticl_v5 & ~ticl_v5_mustache).toModify(mergedSuperClusters, src=cms.VInputTag(
+    cms.InputTag("particleFlowSuperClusterECAL","particleFlowSuperClusterECALBarrel"),
+    cms.InputTag("ticlEGammaSuperClusterProducer")
+))
 
 phase2_hgcal.toReplaceWith(
 electronAnalyzerSequence, _electronAnalyzerSequenceHGC
