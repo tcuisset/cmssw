@@ -37,6 +37,24 @@ tracksterSimTracksterAssociationPRbyCLUE3D = cms.EDProducer("TSToSimTSHitLCAssoc
     label_cp = cms.InputTag("mix","MergedCaloTruth"),
 )
 
+tracksterSimTracksterAssociationLinkingSuperclustering = cms.EDProducer("TSToSimTSHitLCAssociatorEDProducer",
+    associator = cms.InputTag('simTracksterHitLCAssociatorByEnergyScoreProducer'),
+    label_tst = cms.InputTag("ticlTracksterLinksSuperclustering"),
+    label_simTst = cms.InputTag("ticlSimTracksters", "fromCPs"),
+    label_lcl = cms.InputTag("hgcalMergeLayerClusters"),
+    label_scl = cms.InputTag("mix", "MergedCaloTruth"),
+    label_cp = cms.InputTag("mix","MergedCaloTruth"),
+)
+
+tracksterSimTracksterAssociationPRSuperclustering = cms.EDProducer("TSToSimTSHitLCAssociatorEDProducer",
+    associator = cms.InputTag('simTracksterHitLCAssociatorByEnergyScoreProducer'),
+    label_tst = cms.InputTag("ticlTracksterLinksSuperclustering"),
+    label_simTst = cms.InputTag("ticlSimTracksters"),
+    label_lcl = cms.InputTag("hgcalMergeLayerClusters"),
+    label_scl = cms.InputTag("mix", "MergedCaloTruth"),
+    label_cp = cms.InputTag("mix","MergedCaloTruth"),
+)
+
 tracksterSimTracksterAssociationLinkingPU = cms.EDProducer("TSToSimTSHitLCAssociatorEDProducer",
     associator = cms.InputTag('simTracksterHitLCAssociatorByEnergyScoreProducer'),
     label_tst = cms.InputTag("ticlTrackstersMerge"),
