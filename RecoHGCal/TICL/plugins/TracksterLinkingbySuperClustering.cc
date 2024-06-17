@@ -322,7 +322,7 @@ void TracksterLinkingbySuperClustering::linkTracksters(
 
 void TracksterLinkingbySuperClustering::fillPSetDescription(edm::ParameterSetDescription& desc) {
   TracksterLinkingAlgoBase::fillPSetDescription(desc);  // adds algo_verbosity
-  desc.add<edm::FileInPath>("onnxModelPath", edm::FileInPath("RecoHGCal/TICL/data/tf_models/supercls_v2.onnx"))
+  desc.add<edm::FileInPath>("onnxModelPath")
       ->setComment("Path to DNN (as ONNX model)");
   desc.ifValue(edm::ParameterDescription<std::string>("dnnInputsVersion", "v2", true),
                edm::allowedValues<std::string>("v1", "v2"))
@@ -333,7 +333,7 @@ void TracksterLinkingbySuperClustering::fillPSetDescription(edm::ParameterSetDes
           "Size of inference batches fed to DNN. Increasing it should produce faster inference but higher memory "
           "usage. "
           "Has no physics impact.");
-  desc.add<double>("nnWorkingPoint", 0.51)
+  desc.add<double>("nnWorkingPoint")
       ->setComment("Working point of DNN (in [0, 1]). DNN score above WP will attempt to supercluster.");
   desc.add<double>("deltaEtaWindow", 0.1)
       ->setComment(
