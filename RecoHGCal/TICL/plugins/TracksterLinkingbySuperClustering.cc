@@ -261,7 +261,7 @@ void TracksterLinkingbySuperClustering::linkTracksters(
       // Index of the supercluster into resultTracksters, outputSuperclusters and linkedTracksterIdToInputTracksterId collections (the indices are the same)
       unsigned int indexIntoOutputTracksters = seed_supercluster_it - outputSuperclusters.begin();
       seed_supercluster_it->push_back(ts_cand_idx);
-      resultTracksters[indexIntoOutputTracksters].mergeTracksters({inputTracksters[ts_cand_idx]});
+      resultTracksters[indexIntoOutputTracksters].mergeTracksters(inputTracksters[ts_cand_idx]);
       linkedTracksterIdToInputTracksterId[indexIntoOutputTracksters].push_back(ts_cand_idx);
 
       assert(outputSuperclusters.size() == resultTracksters.size() &&
