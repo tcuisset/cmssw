@@ -189,7 +189,7 @@ void SuperclusteringSampleDumper::analyze(const edm::Event& evt, const edm::Even
       // Check that the two tracksters are geometrically compatible for superclustering (using deltaEta, deltaPhi window)
       // There is no need to run training or inference for tracksters very far apart
       if (!(std::abs(ts_seed.barycenter().Eta() - ts_cand.barycenter().Eta()) < deltaEtaWindow_ &&
-            deltaPhi(ts_seed.barycenter().Phi(), ts_cand.barycenter().Phi()) < deltaPhiWindow_ &&
+            std::abs(deltaPhi(ts_seed.barycenter().Phi(), ts_cand.barycenter().Phi())) < deltaPhiWindow_ &&
             ts_cand.raw_energy() >= candidateEnergyThreshold_ && checkExplainedVarianceRatioCut(ts_cand)))
         continue;
 

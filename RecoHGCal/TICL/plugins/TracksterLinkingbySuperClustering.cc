@@ -155,7 +155,7 @@ void TracksterLinkingbySuperClustering::linkTracksters(
 
           // Check that the two tracksters are geometrically compatible for superclustering
           if (std::abs(ts_seed.barycenter().Eta() - ts_cand.barycenter().Eta()) < deltaEtaWindow_ &&
-              deltaPhi(ts_seed.barycenter().Phi(), ts_cand.barycenter().Phi()) < deltaPhiWindow_) {
+              std::abs(deltaPhi(ts_seed.barycenter().Phi(), ts_cand.barycenter().Phi())) < deltaPhiWindow_) {
             if (candidateIndexInCurrentBatch >= miniBatchSize) {
               // Create new minibatch
               assert(candidateIndexInCurrentBatch == miniBatchSize);
