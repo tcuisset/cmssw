@@ -1,6 +1,10 @@
 // Authors : Theo Cuisset <theo.cuisset@cern.ch>, Shamik Ghosh <shamik.ghosh@cern.ch>
 // Date : 01/2024
-/* Translates TICL superclusters to ECAL supercluster dataformats (reco::SuperCluster and reco::CaloCluster). Performs similar task as RecoEcal/EgammaCLusterProducers/PFECALSuperClusterProducer */
+/* 
+Translates TICL superclusters to ECAL supercluster dataformats (reco::SuperCluster and reco::CaloCluster).
+Performs similar task as RecoEcal/EgammaCLusterProducers/PFECALSuperClusterProducer
+Note that all tracksters are translated to reco::CaloCluster, even those that are not in any SuperCluster
+*/
 
 #include "FWCore/Framework/interface/stream/EDProducer.h"
 #include "FWCore/Framework/interface/Event.h"
@@ -30,6 +34,7 @@ private:
   edm::EDGetTokenT<std::vector<std::vector<unsigned int>>> superClusterLinksToken_;
   edm::EDGetTokenT<ticl::TracksterCollection> ticlTrackstersEMToken_;
   edm::EDGetTokenT<reco::CaloClusterCollection> layerClustersToken_;
+  float superclusterEtThreshold_;
 };
 
 EGammaSuperclusterProducer::EGammaSuperclusterProducer(const edm::ParameterSet& ps)
@@ -39,7 +44,8 @@ EGammaSuperclusterProducer::EGammaSuperclusterProducer(const edm::ParameterSet& 
                         "linkedTracksterIdToInputTracksterId",
                         ps.getParameter<edm::InputTag>("ticlSuperClusters").process()))),
       ticlTrackstersEMToken_(consumes<ticl::TracksterCollection>(ps.getParameter<edm::InputTag>("ticlTrackstersEM"))),
-      layerClustersToken_(consumes<reco::CaloClusterCollection>(ps.getParameter<edm::InputTag>("layerClusters"))) {
+      layerClustersToken_(consumes<reco::CaloClusterCollection>(ps.getParameter<edm::InputTag>("layerClusters"))),
+      superclusterEtThreshold_(ps.getParameter<double>("superclusterEtThreshold")) {
   produces<reco::SuperClusterCollection>();
   produces<reco::CaloClusterCollection>();  // The CaloCluster corresponding to each EM trackster
 }
@@ -82,15 +88,13 @@ void EGammaSuperclusterProducer::produce(edm::Event& iEvent, const edm::EventSet
   assert(ticlSuperclusters.size() == ticlSuperclusterLinks.size());
   for (std::size_t sc_i = 0; sc_i < ticlSuperclusters.size(); sc_i++) {
     ticl::Trackster const& ticlSupercluster = ticlSuperclusters[sc_i];
+    if (ticlSupercluster.raw_pt() < superclusterEtThreshold_)
+      continue;
     std::vector<unsigned int> const& superclusterLink = ticlSuperclusterLinks[sc_i];
 
     reco::CaloClusterPtrVector trackstersEMInSupercluster;
-    /* For now, set as SuperCluster regressed energy the sum of raw energies of CLUE3D EM tracksters 
-    A regression will be included here in the future */
-    double rawEnergySum = 0.;
     for (unsigned int tsInSc_id : superclusterLink) {
       trackstersEMInSupercluster.push_back(reco::CaloClusterPtr(caloClustersEM_h, tsInSc_id));
-      rawEnergySum += emTracksters[tsInSc_id].raw_energy();
     }
     reco::SuperCluster& egammaSc = egammaSuperclusters->emplace_back(
         ticlSupercluster.raw_energy(),
@@ -102,7 +106,9 @@ void EGammaSuperclusterProducer::produce(edm::Event& iEvent, const edm::EventSet
         -1,                                         // phiwidth (not implemented yet)
         -1                                          // etawidth (not implemented yet)
     );
-    egammaSc.setCorrectedEnergy(rawEnergySum);  // energy regression should be here
+    /* For now, set as SuperCluster regressed energy the sum of raw energies of CLUE3D EM tracksters 
+    A regression will be included here in the future */
+    egammaSc.setCorrectedEnergy(ticlSupercluster.raw_energy()); 
     // correctedEnergyUncertainty is left at its default value for now
   }
 
@@ -116,6 +122,8 @@ void EGammaSuperclusterProducer::fillDescriptions(edm::ConfigurationDescriptions
       ->setComment("The trackster collection used before superclustering, ie CLUE3D EM tracksters");
   desc.add<edm::InputTag>("layerClusters", edm::InputTag("hgcalMergeLayerClusters"))
       ->setComment("The layer cluster collection that goes with ticlTrackstersEM");
+  desc.add<double>("superclusterEtThreshold", 4.)
+      ->setComment("Minimum supercluster transverse energy.");
 
   descriptions.add("ticlEGammaSuperClusterProducer", desc);
 }
