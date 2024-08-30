@@ -26,6 +26,7 @@
 #include "DataFormats/CaloRecHit/interface/CaloCluster.h"
 #include "DataFormats/HGCalReco/interface/Trackster.h"
 #include "DataFormats/HGCalReco/interface/TICLCandidate.h"
+#include "DataFormats/HGCRecHit/interface/HGCRecHitCollections.h"
 #include "DataFormats/MuonReco/interface/Muon.h"
 #include "DataFormats/TrackReco/interface/Track.h"
 #include "DataFormats/TrackReco/interface/TrackFwd.h"
@@ -590,6 +591,7 @@ private:
   const edm::EDGetTokenT<std::vector<TICLCandidate>> ticl_candidates_token_;
   const edm::EDGetTokenT<std::vector<ticl::Trackster>>
       ticl_candidates_tracksters_token_;  ///< trackster collection used by TICLCandidate
+  const edm::EDGetTokenT<HGCRecHitCollection> recHitsEE_token_;
   const edm::EDGetTokenT<std::vector<reco::Track>> tracks_token_;
   const edm::EDGetTokenT<std::vector<bool>> tracks_mask_token_;
   const edm::EDGetTokenT<edm::ValueMap<float>> tracks_time_token_;
@@ -642,6 +644,7 @@ private:
   const edm::ESGetToken<Propagator, TrackingComponentsRecord> propagator_token_;
   edm::ESGetToken<HGCalDDDConstants, IdealGeometryRecord> hdc_token_;
   std::unique_ptr<DetectorTools> detectorTools_;
+  bool saveRechits_;
   bool saveLCs_;
   bool saveSuperclustering_;
   bool saveSuperclusteringDNNScore_;
@@ -705,6 +708,15 @@ private:
   std::vector<std::vector<uint32_t>> tracksters_in_candidate;
   std::vector<int> track_in_candidate;
 
+  // rechits
+  std::vector<float> rechit_x;
+  std::vector<float> rechit_y;
+  std::vector<float> rechit_z;
+  std::vector<short> rechit_layer;
+  std::vector<float> rechit_energy;
+  std::vector<unsigned int> rechit_detid;
+  std::vector<unsigned int> rechit_layerClusterId;
+  
   // Layer clusters
   std::vector<uint32_t> cluster_seedID;
   std::vector<float> cluster_energy;
@@ -720,6 +732,7 @@ private:
   std::vector<float> cluster_time;
   std::vector<float> cluster_timeErr;
   std::vector<uint32_t> cluster_number_of_hits;
+  std::vector<std::vector<uint32_t>> cluster_hits_indexes;
 
   // Tracks
   std::vector<unsigned int> track_id;
@@ -748,6 +761,7 @@ private:
   std::vector<int> track_isMuon;
   std::vector<int> track_isTrackerMuon;
 
+  TTree* rechits_tree_;
   TTree* cluster_tree_;
   TTree* candidate_tree_;
   TTree* superclustering_tree_;
@@ -809,6 +823,13 @@ void TICLDumper::clearVariables() {
     helper.clearVariables();
   }
 
+  rechit_x.clear();
+  rechit_y.clear();
+  rechit_z.clear();
+  rechit_layer.clear();
+  rechit_energy.clear();
+  rechit_detid.clear();
+
   cluster_seedID.clear();
   cluster_energy.clear();
   cluster_correctedEnergy.clear();
@@ -823,6 +844,7 @@ void TICLDumper::clearVariables() {
   cluster_time.clear();
   cluster_timeErr.clear();
   cluster_number_of_hits.clear();
+  cluster_hits_indexes.clear();
 
   track_id.clear();
   track_hgcal_x.clear();
@@ -860,6 +882,7 @@ TICLDumper::TICLDumper(const edm::ParameterSet& ps)
       ticl_candidates_token_(consumes<std::vector<TICLCandidate>>(ps.getParameter<edm::InputTag>("ticlcandidates"))),
       ticl_candidates_tracksters_token_(
           consumes<std::vector<ticl::Trackster>>(ps.getParameter<edm::InputTag>("ticlcandidates"))),
+      recHitsEE_token_(consumes<HGCRecHitCollection>(edm::InputTag("HGCalRecHit", "HGCEERecHits"))),
       tracks_token_(consumes<std::vector<reco::Track>>(ps.getParameter<edm::InputTag>("tracks"))),
       tracks_time_token_(consumes<edm::ValueMap<float>>(ps.getParameter<edm::InputTag>("tracksTime"))),
       tracks_time_quality_token_(consumes<edm::ValueMap<float>>(ps.getParameter<edm::InputTag>("tracksTimeQual"))),
@@ -895,6 +918,7 @@ TICLDumper::TICLDumper(const edm::ParameterSet& ps)
       bfield_token_(esConsumes<MagneticField, IdealMagneticFieldRecord, edm::Transition::BeginRun>()),
       propagator_token_(
           esConsumes<Propagator, TrackingComponentsRecord, edm::Transition::BeginRun>(edm::ESInputTag("", propName_))),
+      saveRechits_(ps.getParameter<bool>("saveRechits")),
       saveLCs_(ps.getParameter<bool>("saveLCs")),
       saveSuperclustering_(ps.getParameter<bool>("saveSuperclustering")),
       //saveSuperclusteringDNNScore_(ps.getParameter<bool>("saveSuperclusteringDNNScore")),
@@ -950,6 +974,15 @@ void TICLDumper::beginJob() {
     tracksters_trees.push_back(tree);
     tracksters_dumperHelpers_[i].initTree(tree, &eventId_);
   }
+  if (saveRechits_) {
+    rechits_tree_ = fs->make<TTree>("rechits", "CEE rechits");
+    rechits_tree_->Branch("rechit_x", &rechit_x);
+    rechits_tree_->Branch("rechit_y", &rechit_y);
+    rechits_tree_->Branch("rechit_z", &rechit_z);
+    rechits_tree_->Branch("rechit_layer", &rechit_layer);
+    rechits_tree_->Branch("rechit_energy", &rechit_energy);
+    rechits_tree_->Branch("rechit_detid", &rechit_detid);
+  }
   if (saveLCs_) {
     cluster_tree_ = fs->make<TTree>("clusters", "TICL tracksters");
     cluster_tree_->Branch("event", &eventId_);
@@ -967,6 +1000,8 @@ void TICLDumper::beginJob() {
     cluster_tree_->Branch("cluster_time", &cluster_time);
     cluster_tree_->Branch("cluster_timeErr", &cluster_timeErr);
     cluster_tree_->Branch("cluster_number_of_hits", &cluster_number_of_hits);
+    if (saveRechits_)
+      cluster_tree_->Branch("cluster_hits_indexes", &cluster_hits_indexes);
   }
   if (saveTICLCandidate_) {
     candidate_tree_ = fs->make<TTree>("candidates", "TICL candidates");
@@ -1242,8 +1277,23 @@ void TICLDumper::analyze(const edm::Event& event, const edm::EventSetup& setup) 
     }
   }
 
-  int c_id = 0;
+  std::map<DetId, unsigned int> rechitDetIdToIndex; // Mapping DetId to rechit index in rechit collection
+  if (saveRechits_) {
+    const HGCRecHitCollection &rechitsEE = event.get(recHitsEE_token_);
+    for (HGCRecHitCollection::const_iterator hit = rechitsEE.begin(); hit < rechitsEE.end();
+          ++hit) {
+      const GlobalPoint position = detectorTools_->rhtools.getPosition(hit->detid());
+      rechit_x.push_back(position.x());
+      rechit_y.push_back(position.y());
+      rechit_z.push_back(position.z());
+      rechit_layer.push_back(detectorTools_->rhtools.getLayerWithOffset(hit->detid()));
+      rechit_energy.push_back(hit->energy());
+      rechit_detid.push_back(hit->detid());
+      rechitDetIdToIndex.insert(std::make_pair(hit->detid(), hit - rechitsEE.begin()));
+    }
+  }
 
+  int c_id = 0;
   for (auto cluster_iterator = clusters.begin(); cluster_iterator != clusters.end(); ++cluster_iterator) {
     auto lc_seed = cluster_iterator->seed();
     cluster_seedID.push_back(lc_seed);
@@ -1263,6 +1313,14 @@ void TICLDumper::analyze(const edm::Event& event, const edm::EventSetup& setup) 
     cluster_type.push_back(detectorTools_->rhtools.getCellType(lc_seed));
     cluster_timeErr.push_back(layerClustersTimes.get(c_id).second);
     cluster_time.push_back(layerClustersTimes.get(c_id).first);
+
+    if (saveRechits_) {
+      auto& hits_indexed = cluster_hits_indexes.emplace_back();
+      hits_indexed.reserve(haf.size());
+      for (std::pair<DetId, float> const& hitAndFraction : haf) {
+        hits_indexed.push_back(rechitDetIdToIndex[hitAndFraction.first]);
+      }
+    }
     c_id += 1;
   }
 
@@ -1355,6 +1413,8 @@ void TICLDumper::analyze(const edm::Event& event, const edm::EventSetup& setup) 
     }
   }
 
+  if (saveRechits_)
+    rechits_tree_->Fill();
   if (saveLCs_)
     cluster_tree_->Fill();
   if (saveTICLCandidate_)
@@ -1432,6 +1492,7 @@ void TICLDumper::fillDescriptions(edm::ConfigurationDescriptions& descriptions) 
   desc.add<std::string>("detector", "HGCAL");
   desc.add<std::string>("propagator", "PropagatorWithMaterial");
 
+  desc.add<bool>("saveRechits", false);
   desc.add<bool>("saveLCs", true);
   desc.add<bool>("saveTICLCandidate", true);
   desc.add<bool>("saveSimTICLCandidate", true);
