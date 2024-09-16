@@ -74,7 +74,7 @@ slimmedboostedTauWithUserData = cms.EDProducer("PATTauUserDataEmbedder",
         SubLeadingElectronrho = cms.InputTag("boostedTauLeadingLeptonIso:SubLeadingElectronrho"),
         SubLeadingElectrontausumPFChargedHadronPt = cms.InputTag("boostedTauLeadingLeptonIso:SubLeadingElectrontausumPFChargedHadronPt"),
         SubLeadingElectrontausumPFNeutralHadronPt = cms.InputTag("boostedTauLeadingLeptonIso:SubLeadingElectrontausumPFNeutralHadronPt"),
-        SubLeadingElectrontausumPFPhotonPt = cms.InputTag("boostedTauLeadingLeptonIso:SubLeadingElectrontausumPFPhotonPt"),        
+        SubLeadingElectrontausumPFPhotonPt = cms.InputTag("boostedTauLeadingLeptonIso:SubLeadingElectrontausumPFPhotonPt"),  
 
         SubSubLeadingElectronPt = cms.InputTag("boostedTauLeadingLeptonIso:SubSubLeadingElectronPt"),
         SubSubLeadingElectronEta = cms.InputTag("boostedTauLeadingLeptonIso:SubSubLeadingElectronEta"),
@@ -88,7 +88,7 @@ slimmedboostedTauWithUserData = cms.EDProducer("PATTauUserDataEmbedder",
         SubSubLeadingElectronrho = cms.InputTag("boostedTauLeadingLeptonIso:SubSubLeadingElectronrho"),
         SubSubLeadingElectrontausumPFChargedHadronPt = cms.InputTag("boostedTauLeadingLeptonIso:SubSubLeadingElectrontausumPFChargedHadronPt"),
         SubSubLeadingElectrontausumPFNeutralHadronPt = cms.InputTag("boostedTauLeadingLeptonIso:SubSubLeadingElectrontausumPFNeutralHadronPt"),
-        SubSubLeadingElectrontausumPFPhotonPt = cms.InputTag("boostedTauLeadingLeptonIso:SubSubLeadingElectrontausumPFPhotonPt"),        
+        SubSubLeadingElectrontausumPFPhotonPt = cms.InputTag("boostedTauLeadingLeptonIso:SubSubLeadingElectrontausumPFPhotonPt"),  
         ##############################################################################
 
 
@@ -135,6 +135,14 @@ slimmedboostedTauWithUserData = cms.EDProducer("PATTauUserDataEmbedder",
      userInts = cms.PSet(
       Ecounter = cms.InputTag("boostedTauLeadingLeptonIso:Ecounter"),
       Mcounter = cms.InputTag("boostedTauLeadingLeptonIso:Mcounter"),
+
+      LeadingElectron_electronIdx = cms.InputTag("boostedTauLeadingLeptonIso:LeadingElectronelectronIdx"),
+     SubLeadingElectron_electronIdx = cms.InputTag("boostedTauLeadingLeptonIso:SubLeadingElectronelectronIdx"),      
+     SubSubLeadingElectron_electronIdx = cms.InputTag("boostedTauLeadingLeptonIso:SubSubLeadingElectronelectronIdx"),
+
+      LeadingMuon_muonIdx = cms.InputTag("boostedTauLeadingLeptonIso:LeadingMuonmuonIdx"),
+     SubLeadingMuon_muonIdx = cms.InputTag("boostedTauLeadingLeptonIso:SubLeadingMuonmuonIdx"),      
+     SubSubLeadingMuon_muonIdx = cms.InputTag("boostedTauLeadingLeptonIso:SubSubLeadingMuonmuonIdx"),
      ),
 
 )
@@ -180,7 +188,8 @@ _boostedTauVarsBase = cms.PSet(P4Vars,
        LeadingElectronrho = Var("userFloat('LeadingElectronrho')",float,doc="Electronrho for the Leading Electron matched"),
        LeadingElectrontausumPFChargedHadronPt = Var("userFloat('LeadingElectrontausumPFChargedHadronPt')",float,doc="tausumPFChargedHadronPt for the Leading Electron matched"),
        LeadingElectrontausumPFNeutralHadronPt = Var("userFloat('LeadingElectrontausumPFNeutralHadronPt')",float,doc="tausumPFNeutralHadronPt for the Leading Electron matched"),
-       LeadingElectrontausumPFPhotonPt = Var("userFloat('LeadingElectrontausumPFPhotonPt')",float,doc="tausumPFPhotonPt for the Leading Electron matched"),              
+       LeadingElectrontausumPFPhotonPt = Var("userFloat('LeadingElectrontausumPFPhotonPt')",float,doc="tausumPFPhotonPt for the Leading Electron matched"),
+       LeadingElectron_electronIdx = Var("userInt('LeadingElectron_electronIdx')","int16",doc="index of the associated electron (-1 if none)"), 
 
        SubLeadingElectronPt = Var("userFloat('SubLeadingElectronPt')",float,doc="Sub Leading Matched Electron Pt"),
        SubLeadingElectronEta = Var("userFloat('SubLeadingElectronEta')",float,doc="Sub Leading Matched Electron eta"),
@@ -195,6 +204,7 @@ _boostedTauVarsBase = cms.PSet(P4Vars,
        SubLeadingElectrontausumPFChargedHadronPt = Var("userFloat('SubLeadingElectrontausumPFChargedHadronPt')",float,doc="tausumPFChargedHadronPt for the Sub Leading Electron matched"),
        SubLeadingElectrontausumPFNeutralHadronPt = Var("userFloat('SubLeadingElectrontausumPFNeutralHadronPt')",float,doc="tausumPFNeutralHadronPt for the Sub Leading Electron matched"),
        SubLeadingElectrontausumPFPhotonPt = Var("userFloat('SubLeadingElectrontausumPFPhotonPt')",float,doc="tausumPFPhotonPt for the Sub Leading Electron matched"),
+       SubLeadingElectron_electronIdx = Var("userInt('SubLeadingElectron_electronIdx')","int16",doc="index of the associated electron (-1 if none)"), 
 
        SubSubLeadingElectronPt =  Var("userFloat('SubSubLeadingElectronPt')",float,doc="Sub Sub Leading Matched Electron Pt"),
        SubSubLeadingElectronEta = Var("userFloat('SubSubLeadingElectronEta')",float,doc="Sub Sub Leading Matched Electron eta"), 
@@ -208,7 +218,8 @@ _boostedTauVarsBase = cms.PSet(P4Vars,
        SubSubLeadingElectronrho = Var("userFloat('SubSubLeadingElectronrho')",float,doc="Electronrho for the Sub Sub Leading Electron matched"),
        SubSubLeadingElectrontausumPFChargedHadronPt = Var("userFloat('SubSubLeadingElectrontausumPFChargedHadronPt')",float,doc="tausumPFChargedHadronPt for the Sub Sub Leading Electron matched"),
        SubSubLeadingElectrontausumPFNeutralHadronPt = Var("userFloat('SubSubLeadingElectrontausumPFNeutralHadronPt')",float,doc="tausumPFNeutralHadronPt for the Sub Sub Leading Electron matched"),
-       SubSubLeadingElectrontausumPFPhotonPt = Var("userFloat('SubSubLeadingElectrontausumPFPhotonPt')",float,doc="tausumPFPhotonPt for the Sub Sub Leading Electron matched"),              
+       SubSubLeadingElectrontausumPFPhotonPt = Var("userFloat('SubSubLeadingElectrontausumPFPhotonPt')",float,doc="tausumPFPhotonPt for the Sub Sub Leading Electron matched"),      
+       SubSubLeadingElectron_electronIdx = Var("userInt('SubSubLeadingElectron_electronIdx')","int16",doc="index of the associated electron (-1 if none)"),         
 
        #variables added by Ganesh for Muon Match
        Mcounter = Var("userInt('Mcounter')",int,doc="Number of muons that passed and matched with the Tau and has the Loose ID and the delta R < 0.4 and > 0.02 requirements. But sadly we only store 3"),
@@ -225,7 +236,7 @@ _boostedTauVarsBase = cms.PSet(P4Vars,
        LeadingMuontausumPFChargedHadronPt = Var("userFloat('LeadingMuontausumPFChargedHadronPt')",float,doc="tausumPFChargedHadronPt for the Muon Leading matched"),
        LeadingMuontausumPFNeutralHadronPt = Var("userFloat('LeadingMuontausumPFNeutralHadronPt')",float,doc="tausumPFNeutralHadronPt for the Muon Leading matched"),
        LeadingMuontausumPFPhotonPt = Var("userFloat('LeadingMuontausumPFPhotonPt')",float,doc="tausumPFPhotonPt for the Muon Leading matched"),
-
+       LeadingMuon_muonIdx = Var("userInt('LeadingMuon_muonIdx')","int16",doc="index of the associated muon (-1 if none)"), 
 
        SubLeadingMuonPt = Var("userFloat('SubLeadingMuonPt')",float,doc="Sub Leading Matched Muon Pt"),
        SubLeadingMuonEta = Var("userFloat('SubLeadingMuonEta')",float,doc="Sub Leading Matched Muon eta"),
@@ -239,6 +250,7 @@ _boostedTauVarsBase = cms.PSet(P4Vars,
        SubLeadingMuontausumPFChargedHadronPt = Var("userFloat('SubLeadingMuontausumPFChargedHadronPt')",float,doc="tausumPFChargedHadronPt for the Muon Sub Leading matched"),
        SubLeadingMuontausumPFNeutralHadronPt = Var("userFloat('SubLeadingMuontausumPFNeutralHadronPt')",float,doc="tausumPFNeutralHadronPt for the Muon Sub Leading matched"),
        SubLeadingMuontausumPFPhotonPt = Var("userFloat('SubLeadingMuontausumPFPhotonPt')",float,doc="tausumPFPhotonPt for the Muon Sub Leading matched"),
+       SubLeadingMuon_muonIdx = Var("userInt('SubLeadingMuon_muonIdx')","int16",doc="index of the associated muon (-1 if none)"), 
 
        SubSubLeadingMuonPt = Var("userFloat('SubSubLeadingMuonPt')",float,doc="Sub-Sub Leading Matched Muon Pt"),
        SubSubLeadingMuonEta = Var("userFloat('SubSubLeadingMuonEta')",float,doc="Sub-Sub Leading Matched Muon eta"),
@@ -252,6 +264,7 @@ _boostedTauVarsBase = cms.PSet(P4Vars,
        SubSubLeadingMuontausumPFChargedHadronPt = Var("userFloat('SubSubLeadingMuontausumPFChargedHadronPt')",float,doc="tausumPFChargedHadronPt for the Muon Sub Sub Leading matched"),
        SubSubLeadingMuontausumPFNeutralHadronPt = Var("userFloat('SubSubLeadingMuontausumPFNeutralHadronPt')",float,doc="tausumPFNeutralHadronPt for the Muon Sub Sub Leading matched"),
        SubSubLeadingMuontausumPFPhotonPt = Var("userFloat('SubSubLeadingMuontausumPFPhotonPt')",float,doc="tausumPFPhotonPt for the Muon Sub Sub Leading matched"),
+       SubSubLeadingMuon_muonIdx = Var("userInt('SubSubLeadingMuon_muonIdx')","int16",doc="index of the associated muon (-1 if none)"),        
 
 
        rawIso = Var( "tauID('byCombinedIsolationDeltaBetaCorrRaw3Hits')", float, doc = "combined isolation (deltaBeta corrections)", precision=10),

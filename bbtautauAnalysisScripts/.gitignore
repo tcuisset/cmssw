@@ -1,0 +1,10 @@
+*.pdf
+*.png
+*.txt
+*.root
+*~
+*~
+*#*
+*.pyc
+*__init__.py
+.git-*/

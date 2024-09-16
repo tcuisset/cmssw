@@ -1,0 +1,3 @@
+[submodule "ReweightScheme"]
+	path = ReweightScheme
+	url = git@github.com:aloeliger/ReweightScheme.git
