@@ -76,7 +76,7 @@ void MultiParticleProducer::produce(edm::Event& e, const edm::EventSetup& es) {
       const double start_phi = CLHEP::RandFlat::shoot(engine, 0., (2.*M_PI));
       for (unsigned int i_phi = 0; i_phi < fNParticlesInPhi; i_phi++) {
         double average_phi = start_phi + i_phi * (2.*M_PI) / fNParticlesInPhi;
-        double phi = reco::reduceRange(CLHEP::RandFlat::shoot(engine, average_phi-fPhiRandomSpread/2., average_phi+fPhiRandomSpread/2.));
+        double phi = reco::reducePhiRange(CLHEP::RandFlat::shoot(engine, average_phi-fPhiRandomSpread/2., average_phi+fPhiRandomSpread/2.));
         double eta = CLHEP::RandFlat::shoot(engine, eta_central-fEtaRandomSpread/2., eta_central+fEtaRandomSpread/2.);
 
         double energy = CLHEP::RandFlat::shoot(engine, fMinE, fMaxE);
