@@ -36,6 +36,7 @@
 #include "DataFormats/HGCalReco/interface/Common.h"
 #include "SimDataFormats/CaloAnalysis/interface/CaloParticle.h"
 #include "SimDataFormats/CaloAnalysis/interface/SimCluster.h"
+#include "SimDataFormats/CaloAnalysis/interface/SimTauCPLink.h"
 #include "DataFormats/EgammaReco/interface/SuperClusterFwd.h"
 #include "DataFormats/EgammaReco/interface/SuperCluster.h"
 
@@ -618,6 +619,7 @@ private:
 
   const edm::EDGetTokenT<std::vector<SimCluster>> simclusters_token_;
   const edm::EDGetTokenT<std::vector<CaloParticle>> caloparticles_token_;
+  const edm::EDGetTokenT<std::vector<SimTauCPLink>> simTauCPLink_token_;
 
   const edm::ESGetToken<CaloGeometry, CaloGeometryRecord> geometry_token_;
   const std::string detector_;
@@ -634,6 +636,7 @@ private:
   bool saveTICLCandidate_;
   bool saveSimTICLCandidate_;
   bool saveTracks_;
+  bool saveSimTauCPLink_;
 
   // Output tree
   TTree* tree_;
@@ -743,12 +746,21 @@ private:
   std::vector<int> track_isMuon;
   std::vector<int> track_isTrackerMuon;
 
+  // SimTauCPLink
+  std::vector<int> simTauCPLink_decayMode;
+  // Following vectors are indexed by : outer=SimTau, inner=tau decay product index
+  std::vector<std::vector<int>> simTauCPLink_daughters_pdgId; // pdgId of tau decay product (can be pi0, pi+-, kaon, intermediate mesons, and rarely electrons in case of pi0 Dalitz decay)
+  std::vector<std::vector<int>> simTauCPLink_daughters_caloParticle_indexes; // Index of CaloParticle associated to the tau decay product (-1 if no CaloParticle associated, for ex. for unstable particle)
+  std::vector<std::vector<int>> simTauCPLink_daughters_resonance_index; // Parent resonance index of the tau decay product (for ex. in case of 2 pi0 resonances, can separate the two)
+  std::vector<std::vector<int>> simTauCPLink_daughters_resonance_pdgId; // pdg ID of the parent resonance (ex: 111 for photon from pi0)
+
   TTree* rechits_tree_;
   TTree* cluster_tree_;
   TTree* candidate_tree_;
   TTree* superclustering_tree_;
   TTree* tracks_tree_;
   TTree* simTICLCandidate_tree;
+  TTree* simTauCPLink_tree;
 };
 
 void TICLDumper::clearVariables() {
@@ -853,6 +865,12 @@ void TICLDumper::clearVariables() {
   track_nhits.clear();
   track_isMuon.clear();
   track_isTrackerMuon.clear();
+
+  simTauCPLink_decayMode.clear();
+  simTauCPLink_daughters_pdgId.clear();
+  simTauCPLink_daughters_caloParticle_indexes.clear();
+  simTauCPLink_daughters_resonance_index.clear();
+  simTauCPLink_daughters_resonance_pdgId.clear();
 };
 
 TICLDumper::TICLDumper(const edm::ParameterSet& ps)
@@ -894,6 +912,7 @@ TICLDumper::TICLDumper(const edm::ParameterSet& ps)
       associations_dumperHelpers_(associations_parameterSets_.size()),
       simclusters_token_(consumes(ps.getParameter<edm::InputTag>("simclusters"))),
       caloparticles_token_(consumes(ps.getParameter<edm::InputTag>("caloparticles"))),
+      simTauCPLink_token_(consumes(ps.getParameter<edm::InputTag>("simTauCPLink"))),
       geometry_token_(esConsumes<CaloGeometry, CaloGeometryRecord, edm::Transition::BeginRun>()),
       detector_(ps.getParameter<std::string>("detector")),
       propName_(ps.getParameter<std::string>("propagator")),
@@ -907,7 +926,8 @@ TICLDumper::TICLDumper(const edm::ParameterSet& ps)
       saveRecoSuperclusters_(ps.getParameter<bool>("saveRecoSuperclusters")),
       saveTICLCandidate_(ps.getParameter<bool>("saveSimTICLCandidate")),
       saveSimTICLCandidate_(ps.getParameter<bool>("saveSimTICLCandidate")),
-      saveTracks_(ps.getParameter<bool>("saveTracks")) {
+      saveTracks_(ps.getParameter<bool>("saveTracks")),
+      saveSimTauCPLink_(ps.getParameter<bool>("saveSimTauCPLink")) {
   if (saveSuperclustering_) {
     superclustering_linkedResultTracksters_token =
         consumes<std::vector<std::vector<unsigned int>>>(ps.getParameter<edm::InputTag>("superclustering"));
@@ -1081,6 +1101,16 @@ void TICLDumper::beginJob() {
     simTICLCandidate_tree->Branch("simTICLCandidate_pdgId", &simTICLCandidate_pdgId);
     simTICLCandidate_tree->Branch("simTICLCandidate_charge", &simTICLCandidate_charge);
     simTICLCandidate_tree->Branch("simTICLCandidate_track_in_candidate", &simTICLCandidate_track_in_candidate);
+  }
+
+  if (saveSimTauCPLink_) {
+    simTauCPLink_tree = fs->make<TTree>("simTauCPLink", "SimTauCPLink : links between simulated tau decay products and CaloParticles");
+    simTauCPLink_tree->Branch("event", &eventId_);
+    simTauCPLink_tree->Branch("decayMode", &simTauCPLink_decayMode);
+    simTauCPLink_tree->Branch("daughters_pdgId", &simTauCPLink_daughters_pdgId);
+    simTauCPLink_tree->Branch("daughters_caloParticle_indexes", &simTauCPLink_daughters_caloParticle_indexes);
+    simTauCPLink_tree->Branch("daughters_resonance_index", &simTauCPLink_daughters_resonance_index);
+    simTauCPLink_tree->Branch("daughters_resonance_pdgId", &simTauCPLink_daughters_resonance_pdgId);
   }
 }
 
@@ -1398,6 +1428,38 @@ void TICLDumper::analyze(const edm::Event& event, const edm::EventSetup& setup) 
     }
   }
 
+  if (saveSimTauCPLink_) {
+    std::vector<SimTauCPLink> const& simTaus = event.get(simTauCPLink_token_);
+    for (SimTauCPLink const& simTau : simTaus) {
+      /* A SimTauCPLink is built according to the procedure : 
+       - start with a tau GenParticle, and recursively navigate its daughters
+       - if the daughter has no children, find if it is also a CaloParticle and add it to calo_particle_leaves
+       - if has children, add the resonance pdgId in resonances and recurse
+      Possible sample generation of taus : 
+       - tau decayed by Pythia (general case) : all tau decay products (pi+-, gammas) are GenParticle thus CaloParticle
+       - tau decayed by Geant4 (HepMC guns ie not Pythia guns) : decay products are not CaloParticle, only the tau is
+      */
+      // nTaus*[nPi0s*[nGammas*[pdgId, caloParticleId]]]
+      simTauCPLink_decayMode.push_back(simTau.decayMode);
+      simTauCPLink_daughters_caloParticle_indexes.emplace_back();
+      simTauCPLink_daughters_pdgId.emplace_back();
+      simTauCPLink_daughters_resonance_index.emplace_back();
+      simTauCPLink_daughters_resonance_pdgId.emplace_back();
+      for (SimTauCPLink::DecayNav const& tauDecayLeaf : simTau.leaves) {
+        simTauCPLink_daughters_caloParticle_indexes.back().push_back(tauDecayLeaf.calo_particle_idx()); // Index into SimTracksterCP collection (possibly -1)
+        simTauCPLink_daughters_pdgId.back().push_back(tauDecayLeaf.pdgId());
+        // We want to save the parent resonance index so as to pair photons by parent pi0
+        simTauCPLink_daughters_resonance_index.back().push_back(tauDecayLeaf.resonance_idx());
+        // simTau.resonances is std::vector<pair<int=pdgId, int=resonance_idx>>
+        auto resonance_it = std::find_if(simTau.resonances.begin(), simTau.resonances.end(), [&tauDecayLeaf](std::pair<int, int> resonance) { return resonance.second == tauDecayLeaf.resonance_idx(); });
+        if (resonance_it != simTau.resonances.end())
+          simTauCPLink_daughters_resonance_pdgId.back().push_back(resonance_it->first);
+        else
+          simTauCPLink_daughters_resonance_pdgId.back().push_back(0);
+      }
+    }
+  }
+
   if (saveRechits_)
     rechits_tree_->Fill();
   if (saveLCs_)
@@ -1410,6 +1472,8 @@ void TICLDumper::analyze(const edm::Event& event, const edm::EventSetup& setup) 
     tracks_tree_->Fill();
   if (saveSimTICLCandidate_)
     simTICLCandidate_tree->Fill();
+  if (saveSimTauCPLink_)
+    simTauCPLink_tree->Fill();
 }
 
 void TICLDumper::endJob() {}
@@ -1472,6 +1536,7 @@ void TICLDumper::fillDescriptions(edm::ConfigurationDescriptions& descriptions) 
 
   desc.add<edm::InputTag>("simclusters", edm::InputTag("mix", "MergedCaloTruth"));
   desc.add<edm::InputTag>("caloparticles", edm::InputTag("mix", "MergedCaloTruth"));
+  desc.add<edm::InputTag>("simTauCPLink", edm::InputTag("SimTauProducer"));
   desc.add<std::string>("detector", "HGCAL");
   desc.add<std::string>("propagator", "PropagatorWithMaterial");
 
@@ -1483,6 +1548,7 @@ void TICLDumper::fillDescriptions(edm::ConfigurationDescriptions& descriptions) 
   desc.add<bool>("saveSuperclustering", true);
   desc.add<bool>("saveRecoSuperclusters", true)
       ->setComment("Save superclustering Egamma collections (as reco::SuperCluster)");
+  desc.add<bool>("saveSimTauCPLink", false)->setComment("Save SimTauCPLink : sim information on taus & links to their CaloParticles");
   descriptions.add("ticlDumper", desc);
 }
 
