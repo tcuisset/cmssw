@@ -293,11 +293,6 @@ public:
 
         simtrackster_timeBoundary.push_back(trackster_iterator->boundaryTime());
 
-        if (tracksterType_ == TracksterType::SimTracksterCP)
-          simtrackster_pdgID.push_back(caloparticles[trackster_iterator->seedIndex()].pdgId());
-        else if (tracksterType_ == TracksterType::SimTracksterSC)
-          simtrackster_pdgID.push_back(simclusters[trackster_iterator->seedIndex()].pdgId());
-
         using CaloObjectVariant = std::variant<CaloParticle, SimCluster>;
         CaloObjectVariant caloObj;
         if (trackster_iterator->seedID() == caloparticles_h.id()) {
@@ -306,6 +301,7 @@ public:
           caloObj = simclusters[trackster_iterator->seedIndex()];
         }
 
+        simtrackster_pdgID.push_back(std::visit([](auto&& obj) { return obj.pdgId(); }, caloObj));
         auto const& simTrack = std::visit([](auto&& obj) { return obj.g4Tracks()[0]; }, caloObj);
         auto const& caloPt = std::visit([](auto&& obj) { return obj.pt(); }, caloObj);
         simtrackster_regressed_pt.push_back(caloPt);
