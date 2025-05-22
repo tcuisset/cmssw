@@ -261,10 +261,16 @@ void AllTracksterToSimTracksterAssociatorsByLCsProducer::produce(edm::StreamID,
             float recoSharedEnergy = recoTracksterElement.sharedEnergy();
             edm::Ref<std::vector<ticl::Trackster>> recoTracksterRef(recoTrackstersHandle, recoTracksterIndex);
             float sharedEnergy = std::min(recoSharedEnergy, simSharedEnergy);
-            float recoFraction = recoSharedEnergy * invLayerClusterEnergy;
-            float score = invDenominator *
-                          std::min(squaredSimFraction, (simFraction - recoFraction) * (simFraction - recoFraction)) *
-                          squaredLayerClusterEnergy;
+            float recoFraction = recoSharedEnergy * invLayerClusterEnergy; // Either zero or one when no sharing of rechits between tracksters
+            /* SimToReco score logic:
+             - simFraction = 0 && recoFraction >= 0 : trackster contains non-sim associated elements : ignore in simToReco
+             - simFraction > 0 && recoFraction == 0 : simhits not present in reco trackster : penalty in score by simFraction*E
+             - simFraction == 1 && recoFraction == 1 : good association
+             - 1 > simFraction > recoFraction > 0 :  we are missing some sim energy, penalty in score by the missing part : (simFraction-recoFraction)*E
+             - 1 > recoFraction > simFraction > 0 : consider as good association, as there is enough reco to cover the sim
+            */
+            float simMinusRecoFraction = std::max(0., simFraction-recoFraction);
+            float score = invDenominator * simMinusRecoFraction * simMinusRecoFraction * squaredLayerClusterEnergy;
             simTracksterToTracksterMap->insert(tracksterIndex, recoTracksterIndex, sharedEnergy, score);
           }
         }
