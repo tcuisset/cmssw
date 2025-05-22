@@ -293,6 +293,13 @@ public:
 
         simtrackster_timeBoundary.push_back(trackster_iterator->boundaryTime());
 
+        /* SimTracksters can be built from either a CaloParticle or a SimCluster 
+        The SimTrackster "fromCP" collection is built solely from CaloParticle (all CPs that have association to reco in HGCAL)
+        SimTrackster "from SC" is built from either :
+           - a CaloParticle (when the CaloParticle first SimTrack has crossedBoundary=True)
+           - a SimCluster (other cases) 
+        Thus trackster.seedIndex() can point to either CaloParticle or SimCluster collection (check seedID to differentiate)
+        */
         using CaloObjectVariant = std::variant<CaloParticle, SimCluster>;
         CaloObjectVariant caloObj;
         if (trackster_iterator->seedID() == caloparticles_h.id()) {
