@@ -172,10 +172,16 @@ if ticl_v5._isChosen():
         ticlIterLabels.append("ticlTracksterLinksSuperclusteringDNN")
 
 
+from RecoHGCal.TICL.SimTracksters_cff import simTracksterCollections_inputTags
+
 associatorsInstances = []
 
 for labelts in ticlIterLabels:
-    for labelsts in ['ticlSimTracksters', 'ticlSimTrackstersfromCPs']:
+    for sts_inputTag in simTracksterCollections_inputTags:
+        # The AllTracksterToSimTracksterAssociators store as product instance 
+        # "{trackster module label}{trackster product instance label}To{Simtrackster module label}{Simtrackster product instance label}"
+        # (and vice versa)
+        labelsts = sts_inputTag.getModuleLabel() + sts_inputTag.getProductInstanceLabel()
         associatorsInstances.append(labelts+'To'+labelsts)
         associatorsInstances.append(labelsts+'To'+labelts)
 

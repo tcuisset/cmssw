@@ -8,9 +8,10 @@ from Configuration.ProcessModifiers.ticl_superclustering_mustache_ticl_cff impor
 
 
 from RecoHGCal.TICL.iterativeTICL_cff import ticlIterLabels, associatorsInstances
+from RecoHGCal.TICL.SimTracksters_cff import simTracksterCollections_inputTags
 
 
-simTrackstersCollections = ["ticlSimTracksters", "ticlSimTrackstersfromCPs"]
+simTrackstersCollections = ["ticlSimTracksters", "ticlSimTrackstersfromCPs", "ticlSimTrackstersMerged"]
 dumperAssociators = []
 
 for simTrackstersCollection in simTrackstersCollections:
@@ -37,6 +38,11 @@ ticlDumper = ticlDumper_.clone(
             treeName=cms.string("simtrackstersCP"),
             inputTag=cms.InputTag("ticlSimTracksters", "fromCPs"),
             tracksterType=cms.string("SimTracksterCP")
+        ),
+        cms.PSet(
+            treeName=cms.string("simtrackstersMerge"),
+            inputTag=cms.InputTag("ticlSimTrackstersMerged"),
+            tracksterType=cms.string("SimTracksterCP") # actually a mix of CP and SC
         ),
     ],
 

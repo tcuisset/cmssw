@@ -8,6 +8,7 @@
 #include "SimDataFormats/CaloHit/interface/PCaloHit.h"
 #include "SimDataFormats/Track/interface/SimTrack.h"
 #include <vector>
+#include <Math/PositionVector2D.h>
 
 #include "DataFormats/DetId/interface/DetId.h"
 #include "DataFormats/EcalDetId/interface/EcalSubdetector.h"
@@ -48,6 +49,31 @@ public:
 
   SimCluster(const SimTrack &simtrk);
   SimCluster(EncodedEventId eventID, uint32_t particleID);  // for PU
+  template <typename R>
+  requires std::ranges::input_range<R> && std::same_as<std::ranges::range_value_t<R>, SimCluster>
+SimCluster(const R& collection) {  // For merging of multiple SimClusters
+  //assert(!std::ranges::empty(collection));
+  event_ = (*std::ranges::begin(collection)).eventId();
+  // particleId_ = simtrk.trackId();
+
+  std::vector<ROOT::Math::PositionVector2D<ROOT::Math::Cartesian2D<double>>> positionsAtBoundary;
+  std::vector<float> momentumsAtBoundary;
+
+  for (SimCluster const& other : collection) {
+    nsimhits_ += other.nsimhits_;
+    simhit_energy_ += other.simhit_energy_;
+
+    hits_.insert(hits_.end(), other.hits_.begin(), other.hits_.end());
+    fractions_.insert(fractions_.end(), other.fractions_.begin(), other.fractions_.end());
+    energies_.insert(energies_.end(), other.energies_.begin(), other.energies_.end());
+
+    g4Tracks_.insert(g4Tracks_.end(), other.g4Tracks_.begin(), other.g4Tracks_.end());
+
+    for (auto const& genPartRef : other.genParticles_) {
+      genParticles_.push_back(genPartRef);
+    }
+  }
+}
 
   // destructor
   ~SimCluster();
@@ -245,6 +271,9 @@ public:
     simhit_energy_ += hit.energy();
     ++nsimhits_;
   }
+
+  math::XYZTLorentzVectorF weightedPositionAtBoundary() const;
+  math::XYZTLorentzVectorF sumMomentumAtBoundary() const;
 
 protected:
   uint64_t nsimhits_{0};

@@ -28,12 +28,12 @@ ticl_v5.toModify(layerClusterToTracksterMergeAssociation, tracksters = cms.Input
 
 from SimCalorimetry.HGCalAssociatorProducers.AllLayerClusterToTracksterAssociatorsProducer_cfi import AllLayerClusterToTracksterAssociatorsProducer
 from RecoHGCal.TICL.iterativeTICL_cff import ticlIterLabels
+from RecoHGCal.TICL.SimTracksters_cff import simTracksterCollections_inputTags
 
 allLayerClusterToTracksterAssociations = AllLayerClusterToTracksterAssociatorsProducer.clone(    
     tracksterCollections = cms.VInputTag(
         *[cms.InputTag(label) for label in ticlIterLabels],
-        cms.InputTag("ticlSimTracksters"),
-        cms.InputTag("ticlSimTracksters", "fromCPs"),
+        *simTracksterCollections_inputTags
     )
 )
 

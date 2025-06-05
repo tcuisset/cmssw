@@ -12,7 +12,7 @@ SimCluster::SimCluster() {
   // No operation
 }
 
-SimCluster::SimCluster(const SimTrack &simtrk) {
+SimCluster::SimCluster(const SimTrack& simtrk) {
   addG4Track(simtrk);
   event_ = simtrk.eventId();
   particleId_ = simtrk.trackId();
@@ -28,7 +28,34 @@ SimCluster::SimCluster(EncodedEventId eventID, uint32_t particleID) {
 
 SimCluster::~SimCluster() {}
 
-std::ostream &operator<<(std::ostream &s, SimCluster const &tp) {
+math::XYZTLorentzVectorF SimCluster::weightedPositionAtBoundary() const {
+  if (g4Tracks_.size() == 1)
+    return g4Tracks_[0].getPositionAtBoundary();
+  ROOT::Math::PositionVector3D<ROOT::Math::Cartesian3D<double>> barycenter;
+  double momentumSum = 0.;
+  for (SimTrack const& simtrack : g4Tracks_) {
+    barycenter +=
+        ROOT::Math::DisplacementVector3D<ROOT::Math::Cartesian3D<double>>(simtrack.getPositionAtBoundary().x(),
+        simtrack.getPositionAtBoundary().y(),
+        simtrack.getPositionAtBoundary().z()) *
+        simtrack.getMomentumAtBoundary().P();
+        momentumSum += simtrack.getMomentumAtBoundary().P();
+  }
+  barycenter /= momentumSum;
+
+  return math::XYZTLorentzVectorF(barycenter.X(), barycenter.Y(), barycenter.Z(), momentumSum);
+}
+math::XYZTLorentzVectorF SimCluster::sumMomentumAtBoundary() const {
+  if (g4Tracks_.size() == 1)
+    return g4Tracks_[0].getMomentumAtBoundary();
+  math::XYZTLorentzVectorF momentumSum;
+  for (SimTrack const& simtrk : g4Tracks_) {
+    momentumSum += simtrk.getMomentumAtBoundary();
+  }
+  return momentumSum;
+}
+
+std::ostream& operator<<(std::ostream& s, SimCluster const& tp) {
   s << "CP momentum, q, ID, & Event #: " << tp.p4() << " " << tp.charge() << " " << tp.pdgId() << " "
     << tp.eventId().bunchCrossing() << "." << tp.eventId().event() << std::endl;
 

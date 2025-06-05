@@ -7,13 +7,11 @@ from Configuration.ProcessModifiers.ticl_superclustering_mustache_ticl_cff impor
 
 from SimCalorimetry.HGCalAssociatorProducers.AllTracksterToSimTracksterAssociatorsByLCsProducer_cfi import AllTracksterToSimTracksterAssociatorsByLCsProducer
 from RecoHGCal.TICL.iterativeTICL_cff import ticlIterLabels, associatorsInstances
+from RecoHGCal.TICL.SimTracksters_cff import simTracksterCollections_inputTags
 
 allTrackstersToSimTrackstersAssociationsByLCs = AllTracksterToSimTracksterAssociatorsByLCsProducer.clone(    
     tracksterCollections = cms.VInputTag(
         *[cms.InputTag(label) for label in ticlIterLabels]
     ),
-    simTracksterCollections = cms.VInputTag(
-      cms.InputTag('ticlSimTracksters'),
-      cms.InputTag('ticlSimTracksters','fromCPs')
-    ),
+    simTracksterCollections = cms.VInputTag(simTracksterCollections_inputTags),
 )

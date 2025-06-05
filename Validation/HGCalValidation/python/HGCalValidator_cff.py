@@ -3,10 +3,11 @@ import FWCore.ParameterSet.Config as cms
 from DQMServices.Core.DQM_cfg import *
 from Validation.HGCalValidation.hgcalValidator_cfi import hgcalValidator as _hgcalValidator
 from RecoHGCal.TICL.iterativeTICL_cff import ticlIterLabels, associatorsInstances
+from RecoHGCal.TICL.SimTracksters_cff import simTracksterCollections_inputTags
 
 
 hgcalValidator = _hgcalValidator.clone(
-    label_tst = cms.VInputTag(*[cms.InputTag(label) for label in ticlIterLabels] + [cms.InputTag("ticlSimTracksters", "fromCPs"), cms.InputTag("ticlSimTracksters")]),
+    label_tst = cms.VInputTag(*[cms.InputTag(label) for label in ticlIterLabels] + simTracksterCollections_inputTags),
     allTracksterTracksterAssociatorsLabels = cms.VInputTag( *[cms.InputTag('allTrackstersToSimTrackstersAssociationsByLCs:'+associator) for associator in associatorsInstances] ),
     allTracksterTracksterByHitsAssociatorsLabels = cms.VInputTag( *[cms.InputTag('allTrackstersToSimTrackstersAssociationsByHits:'+associator) for associator in associatorsInstances] )
 )
@@ -27,7 +28,7 @@ phase2_hgcalV16.toModify(hgcalValidator, totallayers_to_monitor = cms.int32(47))
 from Configuration.ProcessModifiers.ticl_v5_cff import ticl_v5
 
 lcInputMask_v5  = ["ticlTrackstersCLUE3DHigh"]
-lcInputMask_v5.extend([cms.InputTag("ticlSimTracksters", "fromCPs"), cms.InputTag("ticlSimTracksters")])
+lcInputMask_v5.extend(simTracksterCollections_inputTags)
 
 ticl_v5.toModify(hgcalValidator,
     LayerClustersInputMask = cms.VInputTag(lcInputMask_v5),

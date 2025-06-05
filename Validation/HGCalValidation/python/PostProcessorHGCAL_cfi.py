@@ -1,10 +1,11 @@
 import FWCore.ParameterSet.Config as cms
 from DQMServices.Core.DQMEDHarvester import DQMEDHarvester
 from RecoHGCal.TICL.iterativeTICL_cff import ticlIterLabels
+from RecoHGCal.TICL.SimTracksters_cff import simTracksterCollections_inputTags
 from Validation.HGCalValidation.HGCalValidator_cff import hgcalValidator
 
 tracksterLabels = ticlIterLabels.copy()
-tracksterLabels.extend(['ticlSimTracksters', 'ticlSimTracksters_fromCPs'])
+tracksterLabels.extend([x.getModuleLabel()+("_" if len(x.getProductInstanceLabel())>0 else "")+x.getProductInstanceLabel() for x in simTracksterCollections_inputTags])
 
 prefix = 'HGCAL/HGCalValidator/'
 maxlayerzm = hgcalValidator.totallayers_to_monitor.value()# last layer of BH -z

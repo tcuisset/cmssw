@@ -5,6 +5,7 @@ import argparse
 import datetime
 
 from RecoHGCal.TICL.iterativeTICL_cff import ticlIterLabels, ticlIterLabels_v5
+from RecoHGCal.TICL.SimTracksters_cff import simTracksterCollections_inputTags
 
 from Validation.RecoTrack.plotting.validation import SeparateValidation, SimpleValidation, SimpleSample
 from Validation.HGCalValidation.HGCalValidator_cff import hgcalValidator
@@ -58,7 +59,7 @@ def main(opts):
         trackstersIters.extend(['ticlTracksterLinksSuperclusteringDNN','ticlTracksterLinksSuperclusteringMustache'])
     else:
         trackstersIters = ticlIterLabels.copy()
-    trackstersIters.extend(['ticlSimTracksters', 'ticlSimTracksters_fromCPs'])
+    trackstersIters.extend([x.getModuleLabel()+("_" if len(x.getProductInstanceLabel())>0 else "")+x.getProductInstanceLabel() for x in simTracksterCollections_inputTags])
     #layerClusters
     def plot_LC():
         hgclayclus = [hgcalPlots.hgcalLayerClustersPlotter]
