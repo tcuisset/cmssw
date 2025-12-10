@@ -60,7 +60,7 @@ struct EdgeProperty {
   EdgeProperty(const SimTrack *t, int h, int c) : simTrack(t), simHits(h), cumulative_simHits(c) {}
   const SimTrack *simTrack;
   int simHits;
-  int cumulative_simHits;
+  int cumulative_simHits; // Might be bugged (might count part of siblings cumulative simhits energies as well, depends on graph traversal order)
 };
 
 struct VertexProperty {
@@ -131,14 +131,14 @@ namespace {
       auto src = source(e, g);
       auto trg = target(e, g);
       auto cumulative = edge_property.simHits + get(vertex_name, g, trg).cumulative_simHits +
-                        (get(vertex_name, g, src).simTrack ? get(vertex_name, g, src).cumulative_simHits
+                        (get(vertex_name, g, src).simTrack ? get(vertex_name, g, src).cumulative_simHits // I don't understand why this condition is necessary (maybe in case of collapsed brem ??)
                                                            : 0);  // when we hit the root vertex we have to stop
                                                                   // adding back its contribution.
       auto const src_vertex_property = get(vertex_name, g, src);
       put(get(vertex_name, const_cast<Graph &>(g)), src, VertexProperty(src_vertex_property.simTrack, cumulative));
       put(get(edge_weight, const_cast<Graph &>(g)),
-          e,
-          EdgeProperty(edge_property.simTrack, edge_property.simHits, cumulative));
+          e, // Here EdgeProperty.cumulative_simHits has also the source vertex cumulative_simHits added, which seems weird (depends on graph traversal order ?). It's not used in this algo though
+          EdgeProperty(edge_property.simTrack, edge_property.simHits, cumulative)); 
       IfLogDebug(DEBUG, messageCategoryGraph_)
           << " Finished edge: " << e << " Track id: " << get(edge_weight, g, e).simTrack->trackId()
           << " has accumulated " << cumulative << " hits" << std::endl;
