@@ -45,8 +45,9 @@ hltAllLayerClusterToTracksterAssociations = _AllLayerClusterToTracksterAssociato
     layer_clusters = cms.InputTag("hltMergeLayerClusters"),
     tracksterCollections = cms.VInputTag(
         *[cms.InputTag(label) for label in _hltTiclIterLabels],
-        cms.InputTag("hltTiclSimTracksters"),
-        cms.InputTag("hltTiclSimTracksters", "fromCPs"),
+        cms.InputTag("hltTiclSimTracksters", "fromLegacySimCluster"),
+        cms.InputTag("hltTiclSimTracksters", "fromBoundarySimCluster"),
+        cms.InputTag("hltTiclSimTracksters", "fromCaloParticle"),
     )
 )
 
@@ -57,8 +58,9 @@ hltAllTrackstersToSimTrackstersAssociationsByLCs = _allTrackstersToSimTracksters
         *[cms.InputTag(label) for label in _hltTiclIterLabels]
     ),
     simTracksterCollections = cms.VInputTag(
-      cms.InputTag('hltTiclSimTracksters'),
-      cms.InputTag('hltTiclSimTracksters','fromCPs')
+        cms.InputTag("hltTiclSimTracksters", "fromLegacySimCluster"),
+        cms.InputTag("hltTiclSimTracksters", "fromBoundarySimCluster"),
+        cms.InputTag("hltTiclSimTracksters", "fromCaloParticle"),
     ),
 )
 
@@ -77,8 +79,9 @@ hltAllHitToTracksterAssociations =  _AllHitToTracksterAssociatorsProducer.clone(
     layerClusters = cms.InputTag("hltMergeLayerClusters"),
     tracksterCollections = cms.VInputTag(
         *[cms.InputTag(label) for label in _hltTiclIterLabels],
-        cms.InputTag("hltTiclSimTracksters"),
-        cms.InputTag("hltTiclSimTracksters", "fromCPs"),
+        cms.InputTag("hltTiclSimTracksters", "fromLegacySimCluster"),
+        cms.InputTag("hltTiclSimTracksters", "fromBoundarySimCluster"),
+        cms.InputTag("hltTiclSimTracksters", "fromCaloParticle"),
     )
 )
 
@@ -91,8 +94,9 @@ hltAllTrackstersToSimTrackstersAssociationsByHits = _AllTracksterToSimTracksterA
         *[cms.InputTag(label) for label in _hltTiclIterLabels]
     ),
     simTracksterCollections = cms.VInputTag(
-      'hltTiclSimTracksters',
-      'hltTiclSimTracksters:fromCPs'
+        cms.InputTag("hltTiclSimTracksters", "fromLegacySimCluster"),
+        cms.InputTag("hltTiclSimTracksters", "fromBoundarySimCluster"),
+        cms.InputTag("hltTiclSimTracksters", "fromCaloParticle"),
     ),
 )
 

@@ -199,7 +199,7 @@ if ticl_v5._isChosen():
 associatorsInstances = []
 
 for labelts in ticlIterLabels:
-    for labelsts in ['ticlSimTracksters', 'ticlSimTrackstersfromCPs']:
+    for labelsts in ['ticlSimTrackstersfromLegacySimCluster', 'ticlSimTrackstersfromBoundarySimCluster', 'ticlSimTrackstersfromCaloParticle']:
         associatorsInstances.append(labelts+'To'+labelsts)
         associatorsInstances.append(labelsts+'To'+labelts)
 

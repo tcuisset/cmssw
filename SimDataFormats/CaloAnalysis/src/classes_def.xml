@@ -33,6 +33,7 @@
   <class name="edm::Wrapper<SimClusterRefVector>"/>
   <class name="SimClusterRefProd"/>
   <class name="SimClusterContainer"/>
+  <class name="edm::Wrapper<SimCluster>"/> <!-- TODO check who uses this-->
 
   <class name="std::pair<edm::RefProd<std::vector<SimCluster> >, edm::RefProd<std::vector<CaloParticle> > >"/>
 

@@ -1618,7 +1618,7 @@ void TICLDumper::fillDescriptions(edm::ConfigurationDescriptions& descriptions) 
 
   desc.add<edm::InputTag>("simtrackstersSC", edm::InputTag("ticlSimTracksters"))
       ->setComment("SimTrackster from CaloParticle collection to use for simTICLcandidates");
-  desc.add<edm::InputTag>("simTICLCandidates", edm::InputTag("ticlSimTracksters"));
+  desc.add<edm::InputTag>("simTICLCandidates", edm::InputTag("ticlSimTICLCandidates"));
   desc.add<std::vector<edm::InputTag>>("label_rechits",
                                        {edm::InputTag("HGCalRecHit", "HGCEERecHits"),
                                         edm::InputTag("HGCalRecHit", "HGCHEFRecHits"),

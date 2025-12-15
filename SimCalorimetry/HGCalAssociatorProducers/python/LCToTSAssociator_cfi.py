@@ -1,5 +1,6 @@
 import FWCore.ParameterSet.Config as cms
 
+# the "allLayerClusterToTracksterAssociations" is now used, the individual-producer version (LCToTSAssociatorProducer) is not used anymore
 layerClusterToTracksterAssociation = cms.EDProducer("LCToTSAssociatorProducer",
     layer_clusters = cms.InputTag("hgcalMergeLayerClusters"),
     tracksters = cms.InputTag("ticlTracksters"),
@@ -16,11 +17,11 @@ layerClusterToTracksterMergeAssociation = LCToTSAssociatorProducer.clone(
 )
 
 layerClusterToSimTracksterAssociation = LCToTSAssociatorProducer.clone(
-    tracksters = cms.InputTag("ticlSimTracksters")
+    tracksters = cms.InputTag("ticlSimTracksters", "fromLegacySimCluster")
 )
 
 layerClusterToSimTracksterFromCPsAssociation = LCToTSAssociatorProducer.clone(
-    tracksters = cms.InputTag("ticlSimTracksters", "fromCPs")
+    tracksters = cms.InputTag("ticlSimTracksters", "fromCaloParticle")
 )
 
 from Configuration.ProcessModifiers.ticl_v5_cff import ticl_v5
@@ -32,8 +33,9 @@ from RecoHGCal.TICL.iterativeTICL_cff import ticlIterLabels
 allLayerClusterToTracksterAssociations = AllLayerClusterToTracksterAssociatorsProducer.clone(    
     tracksterCollections = cms.VInputTag(
         *[cms.InputTag(label) for label in ticlIterLabels],
-        cms.InputTag("ticlSimTracksters"),
-        cms.InputTag("ticlSimTracksters", "fromCPs"),
+        cms.InputTag("ticlSimTracksters", "fromLegacySimCluster"),
+        cms.InputTag("ticlSimTracksters", "fromBoundarySimCluster"),
+        cms.InputTag("ticlSimTracksters", "fromCaloParticle"),
     )
 )
 

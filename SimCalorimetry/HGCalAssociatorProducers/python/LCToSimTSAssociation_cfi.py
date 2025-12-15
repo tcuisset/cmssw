@@ -2,7 +2,7 @@ import FWCore.ParameterSet.Config as cms
 
 layerClusterSimTracksterAssociation = cms.EDProducer("LCToSimTSAssociatorEDProducer",
     label_lc = cms.InputTag("hgcalMergeLayerClusters"),
-    label_simTst = cms.InputTag("ticlSimTracksters"),
+    label_simTst = cms.InputTag("ticlSimTracksters", "fromLegacySimCluster"),
     associator = cms.InputTag('lcSimTSAssocByEnergyScoreProducer'),
     label_cp = cms.InputTag("mix","MergedCaloTruth"),
     associator_cp = cms.InputTag('layerClusterCaloParticleAssociationProducer'),
