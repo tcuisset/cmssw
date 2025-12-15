@@ -1,6 +1,7 @@
 import FWCore.ParameterSet.Config as cms
 from SimCalorimetry.HGCalAssociatorProducers.hitToTracksterAssociator_cfi import hitToTracksterAssociator
 
+# the "single" hitToTrackstersAssociation are not used (only the allHitToTracksterAssociations one is used)
 hitToTrackstersAssociationLinking = hitToTracksterAssociator.clone(
     tracksters = cms.InputTag("ticlTrackstersMerge"),
 )
@@ -11,11 +12,11 @@ hitToTrackstersAssociationPR = hitToTracksterAssociator.clone(
 )
 
 hitToSimTracksterAssociation = hitToTracksterAssociator.clone(
-    tracksters = cms.InputTag("ticlSimTracksters"),
+    tracksters = cms.InputTag("ticlSimTracksters", "fromLegacySimCluster"),
 )
 
 hitToSimTracksterFromCPsAssociation = hitToTracksterAssociator.clone(
-    tracksters = cms.InputTag("ticlSimTracksters", "fromCPs"),
+    tracksters = cms.InputTag("ticlSimTracksters", "fromCaloParticle"),
 )
 
 
@@ -29,8 +30,9 @@ from RecoHGCal.TICL.iterativeTICL_cff import ticlIterLabels
 allHitToTracksterAssociations = AllHitToTracksterAssociatorsProducer.clone(    
     tracksterCollections = cms.VInputTag(
         *[cms.InputTag(label) for label in ticlIterLabels],
-        cms.InputTag("ticlSimTracksters"),
-        cms.InputTag("ticlSimTracksters", "fromCPs"),
+        cms.InputTag("ticlSimTracksters", "fromLegacySimCluster"),
+        cms.InputTag("ticlSimTracksters", "fromBoundarySimCluster"),
+        cms.InputTag("ticlSimTracksters", "fromCaloParticle"),
     )
 )
 

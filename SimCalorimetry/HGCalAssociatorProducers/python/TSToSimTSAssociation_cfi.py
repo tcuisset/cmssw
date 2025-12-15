@@ -13,7 +13,8 @@ allTrackstersToSimTrackstersAssociationsByLCs = AllTracksterToSimTracksterAssoci
         *[cms.InputTag(label) for label in ticlIterLabels]
     ),
     simTracksterCollections = cms.VInputTag(
-      cms.InputTag('ticlSimTracksters'),
-      cms.InputTag('ticlSimTracksters','fromCPs')
+        cms.InputTag("ticlSimTracksters", "fromLegacySimCluster"),
+        cms.InputTag("ticlSimTracksters", "fromBoundarySimCluster"),
+        cms.InputTag("ticlSimTracksters", "fromCaloParticle"),
     ),
 )

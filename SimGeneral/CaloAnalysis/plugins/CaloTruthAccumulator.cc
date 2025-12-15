@@ -118,25 +118,33 @@ private:
 
   const double minEnergy_, maxPseudoRapidity_;
   const bool premixStage1_;
-
-  struct OutputCollections {
-    SimClusterCollection pLegacySimClusters;  // Legacy SimCluster from every SimTrack with simhits
-    CaloParticleRefVector pLegacySimClustersToCaloParticleMap;
-    CaloParticleCollection pCaloParticles;
-    SimClusterCollection pSimClustersBoundary;  // SimClusters from each SimTrack crossing boundary
-    CaloParticleRefVector pSimClustersBoundaryToCaloParticleMap;
-  };
-  edm::EDPutTokenT<SimClusterCollection> pLegacySimClusters_token_;
-  edm::EDPutTokenT<CaloParticleRefVector> pLegacySimClusters_map_token_;
-  edm::EDPutTokenT<CaloParticleCollection> pCaloParticles_token_;
+  
+  CaloParticleCollection outputCaloParticles_;
+  edm::EDPutTokenT<CaloParticleCollection> outputCaloParticles_token_;
   edm::RefProd<CaloParticleCollection> caloParticles_refProd_;  // To build the RefVector from SimCLuster to CaloParticle
-  edm::EDPutTokenT<SimClusterCollection> pSimClustersBoundary_token_;
-  edm::EDPutTokenT<CaloParticleRefVector> pSimClustersBoundary_map_token_;
+
+  struct SimClusterConfig {
+    SimClusterCollection outputClusters;
+    edm::EDPutTokenT<SimClusterCollection> outputClusters_token;
+
+    CaloParticleRefVector clustersToCaloParticleMap;
+    edm::EDPutTokenT<CaloParticleRefVector> clustersToCaloParticleMap_token;
+
+    SimClusterConfig(edm::ProducesCollector& c, std::string tag) 
+      : outputClusters_token(c.produces<SimClusterCollection>(tag)), clustersToCaloParticleMap_token(c.produces<CaloParticleRefVector>(tag))
+    {}
+    void clear() {
+      outputClusters.clear();
+      clustersToCaloParticleMap.clear();
+    }
+  };
+  SimClusterConfig legacySimClusters_config_;   ///< Legacy SimCluster from every SimTrack with simhits
+  SimClusterConfig boundarySimClusters_config_; ///< SimClusters from each SimTrack crossing boundary
+  SimClusterConfig caloParticleSimClusters_config_; ///< SimCluster that are identical to CaloParticle (to make it easier on downstream code, only one dataformat for everything)
 
   const HGCalTopology *hgtopo_[3] = {nullptr, nullptr, nullptr};
   const HGCalDDDConstants *hgddd_[3] = {nullptr, nullptr, nullptr};
   const HcalDDDRecConstants *hcddd_ = nullptr;
-  OutputCollections output_;
   // geometry type (0 pre-TDR; 1 TDR)
   int geometryType_;
   bool doHGCAL;
@@ -365,13 +373,10 @@ CaloTruthAccumulator::CaloTruthAccumulator(const edm::ParameterSet &config,
       minEnergy_(config.getParameter<double>("MinEnergy")),
       maxPseudoRapidity_(config.getParameter<double>("MaxPseudoRapidity")),
       premixStage1_(config.getParameter<bool>("premixStage1")),
-      pLegacySimClusters_token_(producesCollector.produces<SimClusterCollection>("MergedCaloTruth")),
-      pLegacySimClusters_map_token_(producesCollector.produces<CaloParticleRefVector>("MergedCaloTruth")),
-      pCaloParticles_token_(producesCollector.produces<CaloParticleCollection>("MergedCaloTruth")),
-      pSimClustersBoundary_token_(
-          producesCollector.produces<SimClusterCollection>("MergedCaloTruthBoundaryTrackSimCluster")),
-      pSimClustersBoundary_map_token_(
-          producesCollector.produces<CaloParticleRefVector>("MergedCaloTruthBoundaryTrackSimCluster")),
+      outputCaloParticles_token_(producesCollector.produces<CaloParticleCollection>("MergedCaloTruth")),
+      legacySimClusters_config_(producesCollector, "MergedCaloTruth"),
+      boundarySimClusters_config_(producesCollector, "MergedCaloTruthBoundaryTrackSimCluster"),
+      caloParticleSimClusters_config_(producesCollector, "MergedCaloTruthCaloParticle"),
       geometryType_(-1),
       doHGCAL(config.getParameter<bool>("doHGCAL")) {
   if (premixStage1_) {
@@ -399,7 +404,10 @@ CaloTruthAccumulator::CaloTruthAccumulator(const edm::ParameterSet &config,
 }
 
 void CaloTruthAccumulator::initializeEvent(edm::Event const &event, edm::EventSetup const &setup) {
-  output_ = OutputCollections();
+  outputCaloParticles_.clear();
+  legacySimClusters_config_.clear();
+  boundarySimClusters_config_.clear();
+  caloParticleSimClusters_config_.clear();
 
   m_detIdToTotalSimEnergy.clear();
 
@@ -442,7 +450,7 @@ void CaloTruthAccumulator::initializeEvent(edm::Event const &event, edm::EventSe
   }
   // Seems const_cast is necessary here
   caloParticles_refProd_ =
-      const_cast<edm::Event &>(event).getRefBeforePut<CaloParticleCollection>(pCaloParticles_token_);
+      const_cast<edm::Event &>(event).getRefBeforePut<CaloParticleCollection>(outputCaloParticles_token_);
 }
 
 /** Create handle to edm::HepMCProduct here because event.getByLabel with
@@ -500,8 +508,8 @@ void normalizeCollection(SimCaloCollection &simClusters,
 };
 
 void CaloTruthAccumulator::finalizeEvent(edm::Event &event, edm::EventSetup const &setup) {
-  edm::LogInfo(messageCategory_) << "Adding " << output_.pLegacySimClusters.size() << " SimParticles and "
-                                 << output_.pCaloParticles.size() << " CaloParticles to the event.";
+  edm::LogInfo(messageCategory_) << "Adding " << legacySimClusters_config_.outputClusters.size() << " legacy SimClusters and "
+                                 << outputCaloParticles_.size() << " CaloParticles to the event.";
 
   // We need to normalize the hits and energies into hits and fractions (since
   // we have looped over all pileup events)
@@ -515,25 +523,29 @@ void CaloTruthAccumulator::finalizeEvent(edm::Event &event, edm::EventSetup cons
     std::sort(totalEnergies->begin(), totalEnergies->end());
     event.put(std::move(totalEnergies), "MergedCaloTruth");
   } else {
-    normalizeCollection(output_.pCaloParticles, m_detIdToTotalSimEnergy);
-    normalizeCollection(output_.pLegacySimClusters, m_detIdToTotalSimEnergy);
-    normalizeCollection(output_.pSimClustersBoundary, m_detIdToTotalSimEnergy);
+    normalizeCollection(outputCaloParticles_, m_detIdToTotalSimEnergy);
+    normalizeCollection(legacySimClusters_config_.outputClusters, m_detIdToTotalSimEnergy);
+    normalizeCollection(boundarySimClusters_config_.outputClusters, m_detIdToTotalSimEnergy);
+    normalizeCollection(caloParticleSimClusters_config_.outputClusters, m_detIdToTotalSimEnergy);
   }
 
-  event.emplace(pSimClustersBoundary_token_, std::move(output_.pSimClustersBoundary));
-  // save the SimCluster orphan handle so we can fill the calo particles
-  auto legacySimClustersHandle = event.emplace(pLegacySimClusters_token_, std::move(output_.pLegacySimClusters));
-
-  // now fill the calo particles
-  for (unsigned i = 0; i < output_.pCaloParticles.size(); ++i) {
-    auto &cp = output_.pCaloParticles[i];
-    for (unsigned j = 0; j < output_.pLegacySimClusters.size(); ++j) {
-      if (output_.pLegacySimClusters[j].genParticles().begin() == cp.genParticles().begin())
-        cp.addSimCluster(edm::Ref<SimClusterCollection>(legacySimClustersHandle, j));
-    }
+  // fill the calo particles with their ref to SimCluster
+  auto legacySimClustersRefProd = event.getRefBeforePut(legacySimClusters_config_.outputClusters_token);
+  for (unsigned i = 0; i < legacySimClusters_config_.outputClusters.size(); ++i) {
+    auto& cp = outputCaloParticles_[legacySimClusters_config_.clustersToCaloParticleMap[i].key()]; // get the key of the edm::Ref<CaloParticle>
+    cp.addSimCluster(edm::Ref<SimClusterCollection>(legacySimClustersRefProd, i));
   }
 
-  event.emplace(pCaloParticles_token_, std::move(output_.pCaloParticles));
+  event.emplace(outputCaloParticles_token_, std::move(outputCaloParticles_));
+  
+  event.emplace(legacySimClusters_config_.outputClusters_token, std::move(legacySimClusters_config_.outputClusters));
+  event.emplace(legacySimClusters_config_.clustersToCaloParticleMap_token, std::move(legacySimClusters_config_.clustersToCaloParticleMap));
+
+  event.emplace(boundarySimClusters_config_.outputClusters_token, std::move(boundarySimClusters_config_.outputClusters));
+  event.emplace(boundarySimClusters_config_.clustersToCaloParticleMap_token, std::move(boundarySimClusters_config_.clustersToCaloParticleMap));
+
+  event.emplace(caloParticleSimClusters_config_.outputClusters_token, std::move(caloParticleSimClusters_config_.outputClusters));
+  event.emplace(caloParticleSimClusters_config_.clustersToCaloParticleMap_token, std::move(caloParticleSimClusters_config_.clustersToCaloParticleMap));
 
   m_detIdToTotalSimEnergy.clear();
   m_simHitBarcodeToIndex.clear();
@@ -677,21 +689,29 @@ void CaloTruthAccumulator::accumulateEvent(const T &event,
   // Do the graph search for all 3 vistors at the same tim
   PrimaryVisitor primaryVisitor(
       visitorHelper,
-      output_.pCaloParticles,
+      outputCaloParticles_,
       passGenPartSelections_lambda,
       std::make_tuple(
           // std::vector<SubClusterT>& clusters, ClusterParentIndexRecorder<ParentClusterCollectionT> parentIndexRecorder, VisitorHelper const& helper, Selector_t selector
           SubClusterVisitor(
-              output_.pLegacySimClusters,
-              ClusterParentIndexRecorder(output_.pLegacySimClustersToCaloParticleMap, caloParticles_refProd_),
+            caloParticleSimClusters_config_.outputClusters,
+            ClusterParentIndexRecorder(caloParticleSimClusters_config_.clustersToCaloParticleMap, caloParticles_refProd_),
+            visitorHelper,
+            [&](EdgeProperty const &edge_property) -> bool {
+              // Create a SimCluster for every CaloParticle (duplicates the CaloParticle for convenience of use, to have one single dataformat)
+              return true;
+            }),
+          SubClusterVisitor(
+              legacySimClusters_config_.outputClusters,
+              ClusterParentIndexRecorder(legacySimClusters_config_.clustersToCaloParticleMap, caloParticles_refProd_),
               visitorHelper,
               [&](EdgeProperty const &edge_property) -> bool {
                 // Create SimCluster from every SimTrack with simhits
                 return edge_property.simHits != 0;
               }),
           SubClusterVisitor(
-              output_.pSimClustersBoundary,
-              ClusterParentIndexRecorder(output_.pSimClustersBoundaryToCaloParticleMap, caloParticles_refProd_),
+              boundarySimClusters_config_.outputClusters,
+              ClusterParentIndexRecorder(boundarySimClusters_config_.clustersToCaloParticleMap, caloParticles_refProd_),
               visitorHelper,
               [&](EdgeProperty const &edge_property) -> bool {
                 // Create SimCluster from every SimTrack crossing boundary (and which has simhits either itself as in its descendants), and that is inside a CaloParticle

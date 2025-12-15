@@ -6,7 +6,7 @@ from RecoHGCal.TICL.iterativeTICL_cff import ticlIterLabels, associatorsInstance
 
 
 hgcalValidator = _hgcalValidator.clone(
-    label_tst = cms.VInputTag(*[cms.InputTag(label) for label in ticlIterLabels] + [cms.InputTag("ticlSimTracksters", "fromCPs"), cms.InputTag("ticlSimTracksters")]),
+    label_tst = cms.VInputTag(*[cms.InputTag(label) for label in ticlIterLabels] + [cms.InputTag('ticlSimTracksters', 'fromCaloParticle'), cms.InputTag("ticlSimTracksters", "fromLegacySimCluster"), cms.InputTag("hltTiclSimTracksters", "fromBoundarySimCluster")]),
     allTracksterTracksterAssociatorsLabels = cms.VInputTag( *[cms.InputTag('allTrackstersToSimTrackstersAssociationsByLCs:'+associator) for associator in associatorsInstances] ),
     allTracksterTracksterByHitsAssociatorsLabels = cms.VInputTag( *[cms.InputTag('allTrackstersToSimTrackstersAssociationsByHits:'+associator) for associator in associatorsInstances] )
 )
@@ -33,6 +33,6 @@ ticl_v5.toModify(hgcalValidator,
     LayerClustersInputMask = cms.VInputTag(lcInputMask_v5),
     ticlTrackstersMerge = cms.InputTag("ticlCandidate"),
     isticlv5 = cms.untracked.bool(True),
-    mergeSimToRecoAssociator = cms.InputTag("allTrackstersToSimTrackstersAssociationsByLCs:ticlSimTrackstersfromCPsToticlCandidate"),
-    mergeRecoToSimAssociator = cms.InputTag("allTrackstersToSimTrackstersAssociationsByLCs:ticlCandidateToticlSimTrackstersfromCPs"),
+    mergeSimToRecoAssociator = cms.InputTag("allTrackstersToSimTrackstersAssociationsByLCs:ticlSimTrackstersfromfromCaloParticleToticlCandidate"),
+    mergeRecoToSimAssociator = cms.InputTag("allTrackstersToSimTrackstersAssociationsByLCs:ticlCandidateToticlSimTrackstersfromfromCaloParticle"),
 )

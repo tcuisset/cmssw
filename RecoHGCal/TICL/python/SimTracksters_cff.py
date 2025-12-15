@@ -14,15 +14,55 @@ filteredLayerClustersSimTracksters = _filteredLayerClustersProducer.clone(
 )
 
 ticlSimTracksters = _simTrackstersProducer.clone(
-    computeLocalTime = cms.bool(False)
+    computeLocalTime = cms.bool(False),
+    simClusterCollections =  cms.VPSet(
+      cms.PSet( # associator only for backwards compatibility (to emulate old behaviour where sometimes SimCluster had a SimTrack without crossedBoundary flag)
+        outputProductLabel = cms.string('fromLegacySimCluster'),
+        tracksterIterationIndex = cms.int32(5), #  See Trackster.h (ticl::Trackster::IterationIndex enum). 5=SIM (ie from SimCluster), 6=SIM_CP (ie from CaloParticle)
+        simClusterCollection = cms.InputTag('mix', 'MergedCaloTruth'),
+        simClusterToLayerClusterAssociationMap = cms.InputTag('layerClusterSimClusterAssociationProducer'),
+      ),
+      cms.PSet(
+        outputProductLabel = cms.string('fromBoundarySimCluster'),
+        tracksterIterationIndex = cms.int32(5),
+        simClusterCollection = cms.InputTag('mix', 'MergedCaloTruthBoundaryTrackSimCluster'),
+        simClusterToLayerClusterAssociationMap = cms.InputTag('layerClusterBoundaryTrackSimClusterAssociationProducer')
+      ),
+      cms.PSet(
+        outputProductLabel = cms.string('fromCaloParticle'),
+        tracksterIterationIndex = cms.int32(6),
+        simClusterCollection = cms.InputTag('mix', 'MergedCaloTruthCaloParticle'),
+        simClusterToLayerClusterAssociationMap = cms.InputTag('layerClusterCaloParticleSimClusterAssociationProducer')
+      ),
+    ),
 )
 from Configuration.ProcessModifiers.ticl_v5_cff import ticl_v5
 ticl_v5.toModify(ticlSimTracksters, computeLocalTime = cms.bool(True))
 
 from Configuration.ProcessModifiers.premix_stage2_cff import premix_stage2
-premix_stage2.toModify(ticlSimTracksters,
-    simclusters = "mixData:MergedCaloTruth",
-    caloparticles = "mixData:MergedCaloTruth",
+premix_stage2.toModify(ticlSimTracksters, simClusterCollections={
+  i : dict(simClusterCollection=cms.InputTag("mixData", pset.simClusterCollection.productInstanceLabel, pset.simClusterCollection.processName))
+  for i, pset in enumerate(ticlSimTracksters.simClusterCollections)
+})
+
+# from RecoHGCal.TICL.simTICLCandidateProducer_cfi import simTICLCandidateProducer as _simTICLCandidateProducer
+from RecoHGCal.TICL.simTICLCandidateProducerUsingSimCluster_cfi import simTICLCandidateProducerUsingSimCluster as _simTICLCandidateProducerUsingSimCluster
+from RecoHGCal.TICL.simTICLCandidateProducerUsingCaloParticle_cfi import simTICLCandidateProducerUsingCaloParticle as _simTICLCandidateProducerUsingCaloParticle
+
+ticlSimTICLCandidatesFromLegacy = _simTICLCandidateProducerUsingSimCluster.clone(
+    baseCaloSimObjects = cms.InputTag('mix', 'MergedCaloTruthCaloParticle'), # CaloParticle as SimCluster
+    subCaloSimObjects = cms.InputTag('mix', 'MergedCaloTruth'),  # legacy SimCluster collection
+    subToBaseMap = cms.InputTag('mix', 'MergedCaloTruth'),     # map SimCluster -> CaloParticle
+    baseSimTracksters = cms.InputTag('ticlSimTracksters', 'fromCaloParticle'),
+    baseSimTracksterToBaseSimObject_map = cms.InputTag('ticlSimTracksters', 'fromCaloParticle'),
+    subSimTracksters = cms.InputTag('ticlSimTracksters', 'fromLegacySimCluster'),
+    subSimTracksterToSubSimObject_map = cms.InputTag('ticlSimTracksters', 'fromLegacySimCluster'),
+)
+ticlSimTICLCandidatesFromBoundary = _simTICLCandidateProducerUsingCaloParticle.clone(
+    subCaloSimObjects = cms.InputTag('mix', 'MergedCaloTruthBoundaryTrackSimCluster'),  # legacy SimCluster collection
+    subToBaseMap = cms.InputTag('mix', 'MergedCaloTruthBoundaryTrackSimCluster'),     # map SimCluster -> CaloParticle
+    subSimTracksters = cms.InputTag('ticlSimTracksters', 'fromBoundarySimCluster'),
+    subSimTracksterToSubSimObject_map = cms.InputTag('ticlSimTracksters', 'fromBoundarySimCluster'),
 )
 
-ticlSimTrackstersTask = cms.Task(filteredLayerClustersSimTracksters, ticlSimTracksters)
+ticlSimTrackstersTask = cms.Task(filteredLayerClustersSimTracksters, ticlSimTracksters, ticlSimTICLCandidatesFromLegacy, ticlSimTICLCandidatesFromBoundary)
