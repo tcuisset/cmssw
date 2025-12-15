@@ -40,8 +40,9 @@ hgcalPFJetValidation = _hgcalPFJetValidation.clone(BenchmarkLabel = 'PFJetValida
     VariablePtBins=[10., 30., 80., 120., 250., 600.],
     DeltaPtOvPtHistoParameter = dict(EROn=True,EREtaMax=3.0, EREtaMin=1.6, slicingOn=True))
 
+layerClusterBoundaryTrackSimClusterAssociationProducer = layerClusterSimClusterAssociationProducer.clone(label_scl=cms.InputTag("mix", "MergedCaloTruthBoundaryTrackSimCluster"))
 hgcalAssociators = cms.Task(lcAssocByEnergyScoreProducer, layerClusterCaloParticleAssociationProducer,
-                            scAssocByEnergyScoreProducer, layerClusterSimClusterAssociationProducer,
+                            scAssocByEnergyScoreProducer, layerClusterSimClusterAssociationProducer, layerClusterBoundaryTrackSimClusterAssociationProducer,
                             SimTauProducer,
                             # FP 07/2024 new associators:
                             # layerClusterToCLUE3DTracksterAssociation, layerClusterToTracksterMergeAssociation,
