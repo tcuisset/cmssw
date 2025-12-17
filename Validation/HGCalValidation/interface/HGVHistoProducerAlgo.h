@@ -232,8 +232,6 @@ public:
   typedef dqm::legacy::MonitorElement MonitorElement;
   using TracksterToTracksterMap =
       ticl::AssociationMap<ticl::mapWithSharedEnergyAndScore, std::vector<ticl::Trackster>, std::vector<ticl::Trackster>>;
-  using SimClusterToCaloParticleMap =
-      ticl::AssociationMap<ticl::oneToOneMapWithFraction, std::vector<SimCluster>, std::vector<CaloParticle>>;
   enum validationType { byHits_CP = 0, byLCs, byLCs_CP, byHits };
 
   HGVHistoProducerAlgo(const edm::ParameterSet& pset);
@@ -303,7 +301,7 @@ public:
                                       const TracksterToTracksterMap& trackstersToSimTrackstersMap,
                                       const TracksterToTracksterMap& simTrackstersToTrackstersMap,
                                       const validationType valType,
-                                      const SimClusterToCaloParticleMap& scToCpMap,
+                                      const SimClusterRefVector& scToCpMap,
                                       const std::vector<size_t>& cPIndices,
                                       const std::vector<size_t>& cPSelectedIndices,
                                       const edm::ProductID& cPHandle_id) const;
@@ -374,7 +372,7 @@ public:
                              const edm::Handle<TracksterToTracksterMap>& simTrackstersToTrackstersByHitsMapH,
                              const edm::Handle<TracksterToTracksterMap>& trackstersToSimTrackstersFromCPsByHitsMapH,
                              const edm::Handle<TracksterToTracksterMap>& simTrackstersFromCPsToTrackstersByHitsMapH,
-                             const SimClusterToCaloParticleMap& scToCpMap) const;
+                             const SimClusterRefVector& scToCpMap) const;
   double distance2(const double x1, const double y1, const double x2, const double y2) const;
   double distance(const double x1, const double y1, const double x2, const double y2) const;
 

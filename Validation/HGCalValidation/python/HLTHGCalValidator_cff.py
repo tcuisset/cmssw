@@ -6,7 +6,7 @@ from Validation.HGCalValidation.HLT_TICLIterLabels_cff import hltTiclIterLabels 
 hltAssociatorInstances = []
 
 for labelts in _hltTiclIterLabels:
-    for labelsts in ['hltTiclSimTrackstersfromLegacySimCluster',  "hltTiclSimTrackstersfromBoundarySimCluster", 'hltTiclSimTrackstersfromCaloParticle']:
+    for labelsts in ["hltTiclSimTrackstersfromBoundarySimCluster", 'hltTiclSimTrackstersfromCaloParticle']:
         hltAssociatorInstances.append(labelts+'To'+labelsts)
         hltAssociatorInstances.append(labelsts+'To'+labelts)
 
@@ -20,13 +20,13 @@ hltHgcalValidator = _hgcalValidator.clone(
     dirName = cms.string('HLT/HGCAL/HGCalValidator/'),
     hits = cms.InputTag("hltRecHitMapProducer", "RefProdVectorHGCRecHitCollection"),
     hitMap = cms.InputTag("hltRecHitMapProducer","hgcalRecHitMap"),
-    simTrackstersMap = cms.InputTag("hltTiclSimTracksters", "fromLegacySimCluster"),
+    simTrackstersMap = cms.InputTag("hltTiclSimTracksters", "fromBoundarySimCluster"),
     label_layerClustersPlots = cms.string("hltHgcalMergeLayerClusters"),
     label_lcl = cms.InputTag("hltMergeLayerClusters"),
-    label_simTS = cms.InputTag("hltTiclSimTracksters", "fromLegacySimCluster"),
-    label_simTSFromCP = cms.InputTag("hltTiclSimTracksters","hltTiclSimTrackstersfromCaloParticle"),
+    label_simTS = cms.InputTag("hltTiclSimTracksters", "fromBoundarySimCluster"),
+    label_simTSFromCP = cms.InputTag("hltTiclSimTracksters","fromCaloParticle"),
     recoTracks = cms.InputTag("hltGeneralTracks"),
-    simClustersToCaloParticlesMap = cms.InputTag("SimClusterToCaloParticleAssociation","simClusterToCaloParticleMap"),
+    simClustersToCaloParticlesMap = cms.InputTag("mix", "MergedCaloTruth"),
     simTiclCandidates = cms.InputTag("hltTiclSimTICLCandidatesFromLegacy"),
     ticlCandidates = cms.string('hltTiclCandidate'),
     ticlTrackstersMerge = cms.InputTag("hltTiclTrackstersMerge"),
@@ -37,7 +37,7 @@ hltHgcalValidator = _hgcalValidator.clone(
 from Configuration.ProcessModifiers.ticl_v5_cff import ticl_v5
 
 lcInputMask_v5  = ["hltTiclTrackstersCLUE3DHigh"]
-lcInputMask_v5.extend([cms.InputTag("hltTiclSimTracksters", "fromCPs"), cms.InputTag("hltTiclSimTracksters")])
+lcInputMask_v5.extend([cms.InputTag("hltTiclSimTracksters", "fromCaloParticle"), cms.InputTag("hltTiclSimTracksters", "fromBoundarySimCluster")])
 
 ticl_v5.toModify(hltHgcalValidator,
                  LayerClustersInputMask = cms.VInputTag(lcInputMask_v5),
