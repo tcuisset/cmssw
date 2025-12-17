@@ -50,8 +50,6 @@ public:
   using Histograms = HGCalValidatorHistograms;
   using TracksterToTracksterMap =
       ticl::AssociationMap<ticl::mapWithSharedEnergyAndScore, std::vector<ticl::Trackster>, std::vector<ticl::Trackster>>;
-  using SimClusterToCaloParticleMap =
-      ticl::AssociationMap<ticl::oneToOneMapWithFraction, std::vector<SimCluster>, std::vector<CaloParticle>>;
 
   /// Constructor
   HGCalValidator(const edm::ParameterSet& pset);
@@ -119,7 +117,7 @@ protected:
   std::unique_ptr<TICLCandidateValidator> candidateVal_;
   std::vector<edm::EDGetTokenT<TracksterToTracksterMap>> tracksterToTracksterAssociatorsTokens_;
   std::vector<edm::EDGetTokenT<TracksterToTracksterMap>> tracksterToTracksterByHitsAssociatorsTokens_;
-  edm::EDGetTokenT<SimClusterToCaloParticleMap> scToCpMapToken_;
+  edm::EDGetTokenT<SimClusterRefVector> scToCpMapToken_;
   const StringCutObjectSelector<reco::Track> cutTk_;
 
 private:

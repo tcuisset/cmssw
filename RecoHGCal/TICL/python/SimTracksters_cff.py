@@ -16,13 +16,14 @@ filteredLayerClustersSimTracksters = _filteredLayerClustersProducer.clone(
 ticlSimTracksters = _simTrackstersProducer.clone(
     computeLocalTime = cms.bool(False),
     simClusterCollections =  cms.VPSet(
-      cms.PSet( # associator only for backwards compatibility (to emulate old behaviour where sometimes SimCluster had a SimTrack without crossedBoundary flag)
+      cms.PSet( # creates a SimTrackster for every SimCluster. Creates a lot of SImTrackster (including backscattering etc)
         outputProductLabel = cms.string('fromLegacySimCluster'),
         tracksterIterationIndex = cms.int32(5), #  See Trackster.h (ticl::Trackster::IterationIndex enum). 5=SIM (ie from SimCluster), 6=SIM_CP (ie from CaloParticle)
         simClusterCollection = cms.InputTag('mix', 'MergedCaloTruth'),
         simClusterToLayerClusterAssociationMap = cms.InputTag('layerClusterSimClusterAssociationProducer'),
       ),
-      cms.PSet(
+      cms.PSet( # the "fromBoundarySimCluster" output is what resembles the most the old behaviour : if CaloParticle simTrack crosses boundary, makes only one trackster (ignore any backscattering); 
+       # else one trackster per simtrack crossing boundary (collapsing tracks that leave&reenter, different than previous behaviour that created a SimTrackster for backscattering that re-entered the calorimeter volume)
         outputProductLabel = cms.string('fromBoundarySimCluster'),
         tracksterIterationIndex = cms.int32(5),
         simClusterCollection = cms.InputTag('mix', 'MergedCaloTruthBoundaryTrackSimCluster'),
