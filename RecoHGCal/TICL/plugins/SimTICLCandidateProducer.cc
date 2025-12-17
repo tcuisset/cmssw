@@ -108,7 +108,8 @@ void SimTICLCandidateProducerT<BaseSimObject_t, SubSimObject_t>::fillDescription
   
   desc.add<edm::InputTag>("baseCaloSimObjects", edm::InputTag("mix", "MergedCaloTruth")); // CaloParticle
   desc.add<edm::InputTag>("subCaloSimObjects", edm::InputTag("mix", "MergedCaloTruth")); // Legacy SimCluster
-  desc.add<edm::InputTag>("subToBaseMap", edm::InputTag("mix", "MergedCaloTruth"));
+  desc.add<edm::InputTag>("subToBaseMap", edm::InputTag("mix", "MergedCaloTruth"))
+    ->setComment("Map (edm::RefVector) from 'subCaloSimObjects' collection to 'baseCaloSimObjects' collections (ie SimCluster -> CaloParticle map)");
 
   desc.add<edm::InputTag>("baseSimTracksters", edm::InputTag("mix", "MergedCaloTruth")); // SimTrackster from CP
   desc.add<edm::InputTag>("baseSimTracksterToBaseSimObject_map", edm::InputTag("mix", "MergedCaloTruth"));
