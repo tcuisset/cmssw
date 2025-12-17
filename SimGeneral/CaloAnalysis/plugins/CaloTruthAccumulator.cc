@@ -121,17 +121,18 @@ private:
   
   CaloParticleCollection outputCaloParticles_;
   edm::EDPutTokenT<CaloParticleCollection> outputCaloParticles_token_;
-  edm::RefProd<CaloParticleCollection> caloParticles_refProd_;  // To build the RefVector from SimCLuster to CaloParticle
 
   struct SimClusterConfig {
     SimClusterCollection outputClusters;
     edm::EDPutTokenT<SimClusterCollection> outputClusters_token;
 
-    CaloParticleRefVector clustersToCaloParticleMap;
-    edm::EDPutTokenT<CaloParticleRefVector> clustersToCaloParticleMap_token;
+    // For the map back to "CaloParticle" it can be either to CaloParticle dataformat or "CaloParticle" SimCluster dataformat.
+    // We choose SimCluster dataformat
+    SimClusterRefVector clustersToCaloParticleMap;
+    edm::EDPutTokenT<SimClusterRefVector> clustersToCaloParticleMap_token;
 
     SimClusterConfig(edm::ProducesCollector& c, std::string tag) 
-      : outputClusters_token(c.produces<SimClusterCollection>(tag)), clustersToCaloParticleMap_token(c.produces<CaloParticleRefVector>(tag))
+      : outputClusters_token(c.produces<SimClusterCollection>(tag)), clustersToCaloParticleMap_token(c.produces<SimClusterRefVector>(tag))
     {}
     void clear() {
       outputClusters.clear();
@@ -141,6 +142,8 @@ private:
   SimClusterConfig legacySimClusters_config_;   ///< Legacy SimCluster from every SimTrack with simhits
   SimClusterConfig boundarySimClusters_config_; ///< SimClusters from each SimTrack crossing boundary
   SimClusterConfig caloParticleSimClusters_config_; ///< SimCluster that are identical to CaloParticle (to make it easier on downstream code, only one dataformat for everything)
+
+  edm::RefProd<SimClusterCollection> caloParticles_refProd_;  // To build the RefVector from SimCluster to "CaloParticle" SimCluster collection
 
   const HGCalTopology *hgtopo_[3] = {nullptr, nullptr, nullptr};
   const HGCalDDDConstants *hgddd_[3] = {nullptr, nullptr, nullptr};
@@ -308,18 +311,24 @@ namespace {
         &refProd_;  // Need the RefProd to build the edm::Ref to insert into RefVector
   };
 
+  /** Does nothing */
+  class ClusterParentIndexRecorderVoid {
+    public:
+      void recordParentClusterIndex(std::size_t parentClusterIndex) {}
+  };
+
   /** 
    * Visitor that creates cluster with reference to another "parent" cluster collection, like SimCluster inside CaloParticle
    * Does not make "nested sub-clusters"
    * @tparam SubClusterT typically SimCluster
-   * @tparam ParentClusterCollectionT typically std::vector<CaloParticle>
+   * @tparam ClusterParentIndexRecorderT type of the object in charge of building the RefVector to parent (@see ClusterParentIndexRecorder)
    * @tparam Selector_t lambda for criteria for creating a subcluster
    */
-  template <typename SubClusterT, typename ParentClusterCollectionT, typename Selector_t>
+  template <typename SubClusterT, typename ClusterParentIndexRecorderT, typename Selector_t>
   class SubClusterVisitor {
   public:
     SubClusterVisitor(std::vector<SubClusterT> &clusters,
-                      ClusterParentIndexRecorder<ParentClusterCollectionT> parentIndexRecorder,
+                      ClusterParentIndexRecorderT parentIndexRecorder,
                       VisitorHelper const &helper,
                       Selector_t selector)
         : clusters_(clusters), accumulator(helper), indexRecorder(parentIndexRecorder), selector_(selector) {}
@@ -350,7 +359,7 @@ namespace {
   private:
     std::vector<SubClusterT> &clusters_;
     ClusterEnergyAccumulator<SubClusterT> accumulator;
-    ClusterParentIndexRecorder<ParentClusterCollectionT> indexRecorder;
+    ClusterParentIndexRecorderT indexRecorder;
     Selector_t selector_;
     bool insideCluster_{false};
     DecayChain::edge_descriptor clusterRootEdge_;
@@ -450,7 +459,7 @@ void CaloTruthAccumulator::initializeEvent(edm::Event const &event, edm::EventSe
   }
   // Seems const_cast is necessary here
   caloParticles_refProd_ =
-      const_cast<edm::Event &>(event).getRefBeforePut<CaloParticleCollection>(outputCaloParticles_token_);
+      const_cast<edm::Event &>(event).getRefBeforePut<SimClusterCollection>(caloParticleSimClusters_config_.outputClusters_token);
 }
 
 /** Create handle to edm::HepMCProduct here because event.getByLabel with
@@ -545,7 +554,7 @@ void CaloTruthAccumulator::finalizeEvent(edm::Event &event, edm::EventSetup cons
   event.emplace(boundarySimClusters_config_.clustersToCaloParticleMap_token, std::move(boundarySimClusters_config_.clustersToCaloParticleMap));
 
   event.emplace(caloParticleSimClusters_config_.outputClusters_token, std::move(caloParticleSimClusters_config_.outputClusters));
-  event.emplace(caloParticleSimClusters_config_.clustersToCaloParticleMap_token, std::move(caloParticleSimClusters_config_.clustersToCaloParticleMap));
+  // event.emplace(caloParticleSimClusters_config_.clustersToCaloParticleMap_token, std::move(caloParticleSimClusters_config_.clustersToCaloParticleMap)); // not needed (reference to self)
 
   m_detIdToTotalSimEnergy.clear();
   m_simHitBarcodeToIndex.clear();
@@ -695,7 +704,8 @@ void CaloTruthAccumulator::accumulateEvent(const T &event,
           // std::vector<SubClusterT>& clusters, ClusterParentIndexRecorder<ParentClusterCollectionT> parentIndexRecorder, VisitorHelper const& helper, Selector_t selector
           SubClusterVisitor(
             caloParticleSimClusters_config_.outputClusters,
-            ClusterParentIndexRecorder(caloParticleSimClusters_config_.clustersToCaloParticleMap, caloParticles_refProd_),
+            //ClusterParentIndexRecorder(caloParticleSimClusters_config_.clustersToCaloParticleMap, caloParticles_refProd_),
+            ClusterParentIndexRecorderVoid(), // We don't need to make references to self
             visitorHelper,
             [&](EdgeProperty const &edge_property) -> bool {
               // Create a SimCluster for every CaloParticle (duplicates the CaloParticle for convenience of use, to have one single dataformat)
