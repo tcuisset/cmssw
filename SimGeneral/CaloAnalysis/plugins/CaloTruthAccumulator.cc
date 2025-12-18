@@ -365,6 +365,35 @@ namespace {
     DecayChain::edge_descriptor clusterRootEdge_;
   };
 
+  /**
+   * Creates SimCluster for every SimTrack with simHits. One SimCluster only includes the simHits from the SimTrack it was made of (depends on SimTrack saving criteria)
+   */
+  template <typename SubClusterT, typename ClusterParentIndexRecorderT>
+  class LegacySimClusterVisitor {
+  public:
+    LegacySimClusterVisitor(std::vector<SubClusterT> &clusters,
+                      ClusterParentIndexRecorderT parentIndexRecorder,
+                      VisitorHelper const &helper)
+        : clusters_(clusters), accumulator(helper), indexRecorder(parentIndexRecorder) {}
+
+    void examine_edge(DecayChain::edge_descriptor e, const DecayChain &g, std::size_t currentCaloParticleIndex) {
+      auto edge_property = get(edge_weight, g, e);
+      if (edge_property.simHits != 0) {
+        // Create a new cluster
+        clusters_.emplace_back(*edge_property.simTrack);
+        indexRecorder.recordParentClusterIndex(currentCaloParticleIndex);
+        accumulator.accumulate_edge_in_cluster(e, g);
+        accumulator.doEndCluster(clusters_.back());
+      }
+    }
+    void finish_edge(DecayChain::edge_descriptor e, const DecayChain &g) {}
+
+  private:
+    std::vector<SubClusterT> &clusters_;
+    ClusterEnergyAccumulator<SubClusterT> accumulator;
+    ClusterParentIndexRecorderT indexRecorder;
+  };
+
 }  // namespace
 
 CaloTruthAccumulator::CaloTruthAccumulator(const edm::ParameterSet &config,
@@ -711,14 +740,11 @@ void CaloTruthAccumulator::accumulateEvent(const T &event,
               // Create a SimCluster for every CaloParticle (duplicates the CaloParticle for convenience of use, to have one single dataformat)
               return true;
             }),
-          SubClusterVisitor(
+          LegacySimClusterVisitor(
               legacySimClusters_config_.outputClusters,
               ClusterParentIndexRecorder(legacySimClusters_config_.clustersToCaloParticleMap, caloParticles_refProd_),
-              visitorHelper,
-              [&](EdgeProperty const &edge_property) -> bool {
-                // Create SimCluster from every SimTrack with simhits
-                return edge_property.simHits != 0;
-              }),
+              visitorHelper
+          ),
           SubClusterVisitor(
               boundarySimClusters_config_.outputClusters,
               ClusterParentIndexRecorder(boundarySimClusters_config_.clustersToCaloParticleMap, caloParticles_refProd_),
@@ -726,7 +752,9 @@ void CaloTruthAccumulator::accumulateEvent(const T &event,
               [&](EdgeProperty const &edge_property) -> bool {
                 // Create SimCluster from every SimTrack crossing boundary (and which has simhits either itself as in its descendants), and that is inside a CaloParticle
                 return edge_property.cumulative_simHits != 0 && edge_property.simTrack->crossedBoundary();
-              })));
+              })
+      )
+  );
   depth_first_search(decay, visitor(primaryVisitor));  //  "visitor()" is a Boost BGL named parameter
 
 #if DEBUG
