@@ -29,6 +29,7 @@
 #include "SimDataFormats/CaloAnalysis/interface/CaloParticle.h"
 #include "SimDataFormats/CaloAnalysis/interface/CaloParticleFwd.h"
 #include "SimDataFormats/CaloAnalysis/interface/SimCluster.h"
+#include "SimDataFormats/CaloAnalysis/interface/SimClusterFwd.h"
 #include "RecoLocalCalo/HGCalRecAlgos/interface/RecHitTools.h"
 
 #include "SimDataFormats/TrackingAnalysis/interface/TrackingParticle.h"
@@ -125,8 +126,11 @@ private:
 
   template <typename SimCaloObject_t>
   void produceOne(edm::Event& evt, const edm::EventSetup& es, InputHolder const& holder, SimTsConfig const& config);
+  
+  /** For HLT not all collections are always present, put empty collections in event in this case */
+  void returnEmptyCollections(edm::Event& e, const int lcSize);
 
-  std::string detector_;
+  const std::string detector_;
   const bool doNose_ = false;
   const bool computeLocalTime_;
   const edm::EDGetTokenT<std::vector<reco::CaloCluster>> clusters_token_;
@@ -267,6 +271,11 @@ void SimTrackstersProducer::produce(edm::Event& evt, const edm::EventSetup& es) 
   const auto& layerClustersTimesHandle = evt.getHandle(clustersTime_token_);
   const auto& inputClusterMaskHandle = evt.getHandle(filtered_layerclusters_mask_token_);
 
+  if (!layerClustersHandle.isValid() || !layerClustersTimesHandle.isValid() || !inputClusterMaskHandle.isValid()) {
+    returnEmptyCollections(evt, 0);
+    return;
+  }
+
   edm::Handle<std::vector<TrackingParticle>> trackingParticles_h;
   evt.getByToken(trackingParticleToken_, trackingParticles_h);
   edm::Handle<std::vector<reco::Track>> recoTracks_h;
@@ -286,6 +295,10 @@ void SimTrackstersProducer::produce(edm::Event& evt, const edm::EventSetup& es) 
                                  evt.get(associatormapStRsToken_),
                                  evt.get(associationSimTrackToTPToken_),
                                 evt.getHandle(caloParticles_token_)};
+  if (!inps.caloParticles_h.isValid() || !TPtoRecoTrackMapHandle.isValid()) {
+    returnEmptyCollections(evt, layerClustersHandle->size());
+    return;
+  }
   for (SimTsConfig const& conf : simTsConfigs_) {
     // if (conf.simClusterType == "SimCluster") {
       produceOne<SimCluster>(evt, es, inps, conf);
@@ -420,3 +433,17 @@ void SimTrackstersProducer::produceOne(edm::Event& evt,
           std::make_unique<edm::RefVector<std::vector<SimCaloObject_t>>>(std::move(simTracksterToSimObject_map)));
   evt.emplace(config.simTracksterToCaloParticle_map_token, std::move(simTracksterToCaloParticle_map));
 }
+
+
+void SimTrackstersProducer::returnEmptyCollections(edm::Event& evt,   const int lcSize) {
+  edm::LogWarning("SimTrackstersProducer") << "Missing input collections. Producing empty outputs.";
+  // put into the event empty collections
+  for (SimTsConfig const& config : simTsConfigs_) {
+    evt.emplace(config.simTrackster_token);
+    evt.emplace(config.outputMask_token, lcSize, 1.f);
+
+    evt.put(config.simTracksterToSimCluster_map_token, std::make_unique<SimClusterRefVector>());
+    evt.emplace(config.simTracksterToCaloParticle_map_token);
+  }
+}
+
