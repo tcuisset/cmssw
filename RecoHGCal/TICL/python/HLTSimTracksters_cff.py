@@ -59,17 +59,24 @@ premix_stage2.toModify(hltTiclSimTracksters, simClusterCollections={
 from RecoHGCal.TICL.simTICLCandidateProducerUsingSimCluster_cfi import simTICLCandidateProducerUsingSimCluster as _simTICLCandidateProducerUsingSimCluster
 from RecoHGCal.TICL.simTICLCandidateProducerUsingCaloParticle_cfi import simTICLCandidateProducerUsingCaloParticle as _simTICLCandidateProducerUsingCaloParticle
 
+_common_hltTiclSimTICLCandidates = dict(
+  baseCaloSimObjects = cms.InputTag('mix', 'MergedCaloTruthCaloParticle'), # CaloParticle as SimCluster
+  baseSimTracksters = cms.InputTag('hltTiclSimTracksters', 'fromCaloParticle'),
+  baseSimTracksterToBaseSimObject_map = cms.InputTag('hltTiclSimTracksters', 'fromCaloParticle'),
+  baseSimTracksterToCaloParticle_map = cms.InputTag('hltTiclSimTracksters', 'fromCaloParticle'),
+
+  MtdSimTracksters = cms.InputTag("mix", "MergedMtdTruthST"),
+  recoTracks = cms.InputTag("hltGeneralTracks"), 
+)
 hltTiclSimTICLCandidatesFromLegacy = _simTICLCandidateProducerUsingSimCluster.clone(
-    baseCaloSimObjects = cms.InputTag('mix', 'MergedCaloTruthCaloParticle'), # CaloParticle as SimCluster
+    **_common_hltTiclSimTICLCandidates,
     subCaloSimObjects = cms.InputTag('mix', 'MergedCaloTruth'),  # legacy SimCluster collection
     subToBaseMap = cms.InputTag('mix', 'MergedCaloTruth'),     # map SimCluster -> CaloParticle
-    baseSimTracksters = cms.InputTag('hltTiclSimTracksters', 'fromCaloParticle'),
-    baseSimTracksterToBaseSimObject_map = cms.InputTag('hltTiclSimTracksters', 'fromCaloParticle'),
     subSimTracksters = cms.InputTag('hltTiclSimTracksters', 'fromLegacySimCluster'),
     subSimTracksterToSubSimObject_map = cms.InputTag('hltTiclSimTracksters', 'fromLegacySimCluster'),
 )
-hltTiclSimTICLCandidatesFromBoundary = _simTICLCandidateProducerUsingCaloParticle.clone(
-    baseCaloSimObjects = cms.InputTag('mix', 'MergedCaloTruthCaloParticle'), # CaloParticle as SimCluster
+hltTiclSimTICLCandidatesFromBoundary = _simTICLCandidateProducerUsingSimCluster.clone(
+  **_common_hltTiclSimTICLCandidates,
     subCaloSimObjects = cms.InputTag('mix', 'MergedCaloTruthBoundaryTrackSimCluster'),  # legacy SimCluster collection
     subToBaseMap = cms.InputTag('mix', 'MergedCaloTruthBoundaryTrackSimCluster'),     # map SimCluster -> CaloParticle
     subSimTracksters = cms.InputTag('hltTiclSimTracksters', 'fromBoundarySimCluster'),
