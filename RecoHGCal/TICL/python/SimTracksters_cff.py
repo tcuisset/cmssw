@@ -46,6 +46,8 @@ premix_stage2.toModify(ticlSimTracksters, simClusterCollections={
   for i, pset in enumerate(ticlSimTracksters.simClusterCollections)
 })
 
+_simTrackstersCollections = [cms.InputTag("ticlSimTracksters", pset.outputProductLabel) for pset in ticlSimTracksters.simClusterCollections]
+
 # from RecoHGCal.TICL.simTICLCandidateProducer_cfi import simTICLCandidateProducer as _simTICLCandidateProducer
 from RecoHGCal.TICL.simTICLCandidateProducerUsingSimCluster_cfi import simTICLCandidateProducerUsingSimCluster as _simTICLCandidateProducerUsingSimCluster
 from RecoHGCal.TICL.simTICLCandidateProducerUsingCaloParticle_cfi import simTICLCandidateProducerUsingCaloParticle as _simTICLCandidateProducerUsingCaloParticle
@@ -59,7 +61,8 @@ ticlSimTICLCandidatesFromLegacy = _simTICLCandidateProducerUsingSimCluster.clone
     subSimTracksters = cms.InputTag('ticlSimTracksters', 'fromLegacySimCluster'),
     subSimTracksterToSubSimObject_map = cms.InputTag('ticlSimTracksters', 'fromLegacySimCluster'),
 )
-ticlSimTICLCandidatesFromBoundary = _simTICLCandidateProducerUsingCaloParticle.clone(
+ticlSimTICLCandidatesFromBoundary = _simTICLCandidateProducerUsingSimCluster.clone(
+    baseCaloSimObjects = cms.InputTag('mix', 'MergedCaloTruthCaloParticle'), # CaloParticle as SimCluster
     subCaloSimObjects = cms.InputTag('mix', 'MergedCaloTruthBoundaryTrackSimCluster'),  # legacy SimCluster collection
     subToBaseMap = cms.InputTag('mix', 'MergedCaloTruthBoundaryTrackSimCluster'),     # map SimCluster -> CaloParticle
     subSimTracksters = cms.InputTag('ticlSimTracksters', 'fromBoundarySimCluster'),
