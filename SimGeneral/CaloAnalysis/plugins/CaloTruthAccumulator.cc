@@ -583,7 +583,7 @@ void CaloTruthAccumulator::finalizeEvent(edm::Event &event, edm::EventSetup cons
   event.emplace(boundarySimClusters_config_.clustersToCaloParticleMap_token, std::move(boundarySimClusters_config_.clustersToCaloParticleMap));
 
   event.emplace(caloParticleSimClusters_config_.outputClusters_token, std::move(caloParticleSimClusters_config_.outputClusters));
-  // event.emplace(caloParticleSimClusters_config_.clustersToCaloParticleMap_token, std::move(caloParticleSimClusters_config_.clustersToCaloParticleMap)); // not needed (reference to self)
+  event.emplace(caloParticleSimClusters_config_.clustersToCaloParticleMap_token, std::move(caloParticleSimClusters_config_.clustersToCaloParticleMap)); // trivial mapping (kept for convenience)
 
   m_detIdToTotalSimEnergy.clear();
   m_simHitBarcodeToIndex.clear();
@@ -733,8 +733,8 @@ void CaloTruthAccumulator::accumulateEvent(const T &event,
           // std::vector<SubClusterT>& clusters, ClusterParentIndexRecorder<ParentClusterCollectionT> parentIndexRecorder, VisitorHelper const& helper, Selector_t selector
           SubClusterVisitor(
             caloParticleSimClusters_config_.outputClusters,
-            //ClusterParentIndexRecorder(caloParticleSimClusters_config_.clustersToCaloParticleMap, caloParticles_refProd_),
-            ClusterParentIndexRecorderVoid(), // We don't need to make references to self
+            ClusterParentIndexRecorder(caloParticleSimClusters_config_.clustersToCaloParticleMap, caloParticles_refProd_), // Trivial 1-1 mapping, kept for convenience
+            //ClusterParentIndexRecorderVoid(), // We don't need to make references to self
             visitorHelper,
             [&](EdgeProperty const &edge_property) -> bool {
               // Create a SimCluster for every CaloParticle (duplicates the CaloParticle for convenience of use, to have one single dataformat)
