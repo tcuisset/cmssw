@@ -10,32 +10,40 @@ from Configuration.ProcessModifiers.ticl_superclustering_mustache_ticl_cff impor
 from RecoHGCal.TICL.iterativeTICL_cff import ticlIterLabels, associatorsInstances
 
 
-simTrackstersCollections = ["ticlSimTracksters", "ticlSimTrackstersfromCPs"]
 dumperAssociators = []
 
-for simTrackstersCollection in simTrackstersCollections:
-    for tracksterIteration in ticlIterLabels:
-        suffix = "CP" if "fromCPs" in simTrackstersCollection else "SC"
-        dumperAssociators.append(
-            cms.PSet(
-                branchName=cms.string(tracksterIteration),
-                suffix=cms.string(suffix),
-                associatorRecoToSimInputTag=cms.InputTag(f"allTrackstersToSimTrackstersAssociationsByLCs:{tracksterIteration}To{simTrackstersCollection}"),
-                associatorSimToRecoInputTag=cms.InputTag(f"allTrackstersToSimTrackstersAssociationsByLCs:{simTrackstersCollection}To{tracksterIteration}")
-            )
+for tracksterIteration in ticlIterLabels:
+    simTrackstersCollection = "ticlSimTrackstersfromCaloParticle"
+    dumperAssociators.append(
+        cms.PSet(
+            branchName=cms.string(tracksterIteration),
+            suffix=cms.string("CP"),
+            associatorRecoToSimInputTag=cms.InputTag(f"allTrackstersToSimTrackstersAssociationsByLCs:{tracksterIteration}To{simTrackstersCollection}"),
+            associatorSimToRecoInputTag=cms.InputTag(f"allTrackstersToSimTrackstersAssociationsByLCs:{simTrackstersCollection}To{tracksterIteration}")
         )
+    )
+
+    simTrackstersCollection = "ticlSimTrackstersfromBoundarySimCluster"
+    dumperAssociators.append(
+        cms.PSet(
+            branchName=cms.string(tracksterIteration),
+            suffix=cms.string("SC"),
+            associatorRecoToSimInputTag=cms.InputTag(f"allTrackstersToSimTrackstersAssociationsByLCs:{tracksterIteration}To{simTrackstersCollection}"),
+            associatorSimToRecoInputTag=cms.InputTag(f"allTrackstersToSimTrackstersAssociationsByLCs:{simTrackstersCollection}To{tracksterIteration}")
+        )
+    )
 
 
 ticlDumper = ticlDumper_.clone(
     tracksterCollections = [*[cms.PSet(treeName=cms.string(label), inputTag=cms.InputTag(label)) for label in ticlIterLabels],
         cms.PSet(
             treeName=cms.string("simtrackstersSC"),
-            inputTag=cms.InputTag("ticlSimTracksters"),
+            inputTag=cms.InputTag("ticlSimTracksters", "fromBoundarySimCluster"),
             tracksterType=cms.string("SimTracksterSC")
         ),
         cms.PSet(
             treeName=cms.string("simtrackstersCP"),
-            inputTag=cms.InputTag("ticlSimTracksters", "fromCPs"),
+            inputTag=cms.InputTag("ticlSimTracksters", "fromCaloParticle"),
             tracksterType=cms.string("SimTracksterCP")
         ),
     ],
