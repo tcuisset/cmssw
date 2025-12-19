@@ -69,6 +69,7 @@ hltTiclSimTICLCandidatesFromLegacy = _simTICLCandidateProducerUsingSimCluster.cl
     subSimTracksterToSubSimObject_map = cms.InputTag('hltTiclSimTracksters', 'fromLegacySimCluster'),
 )
 hltTiclSimTICLCandidatesFromBoundary = _simTICLCandidateProducerUsingCaloParticle.clone(
+    baseCaloSimObjects = cms.InputTag('mix', 'MergedCaloTruthCaloParticle'), # CaloParticle as SimCluster
     subCaloSimObjects = cms.InputTag('mix', 'MergedCaloTruthBoundaryTrackSimCluster'),  # legacy SimCluster collection
     subToBaseMap = cms.InputTag('mix', 'MergedCaloTruthBoundaryTrackSimCluster'),     # map SimCluster -> CaloParticle
     subSimTracksters = cms.InputTag('hltTiclSimTracksters', 'fromBoundarySimCluster'),

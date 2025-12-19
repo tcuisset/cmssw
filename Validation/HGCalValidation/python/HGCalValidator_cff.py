@@ -34,6 +34,6 @@ ticl_v5.toModify(hgcalValidator,
     LayerClustersInputMask = cms.VInputTag(lcInputMask_v5),
     ticlTrackstersMerge = cms.InputTag("ticlCandidate"),
     isticlv5 = cms.untracked.bool(True),
-    mergeSimToRecoAssociator = cms.InputTag("allTrackstersToSimTrackstersAssociationsByLCs:ticlSimTrackstersfromfromCaloParticleToticlCandidate"),
-    mergeRecoToSimAssociator = cms.InputTag("allTrackstersToSimTrackstersAssociationsByLCs:ticlCandidateToticlSimTrackstersfromfromCaloParticle"),
+    mergeSimToRecoAssociator = cms.InputTag("allTrackstersToSimTrackstersAssociationsByLCs:ticlSimTrackstersfromCaloParticleToticlCandidate"),
+    mergeRecoToSimAssociator = cms.InputTag("allTrackstersToSimTrackstersAssociationsByLCs:ticlCandidateToticlSimTrackstersfromCaloParticle"),
 )
