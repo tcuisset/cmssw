@@ -1,7 +1,10 @@
-// Author: Felice Pantaleo, Leonardo Cristella - felice.pantaleo@cern.ch, leonardo.cristella@cern.ch
-// Date: 09/2021
+/**
+* Produce tracksters (in reco ticl::Trackster dataformat) from simulation truth objects.
+* Multiple simTrackster collections can be built, from different simulation truth collections
 
-// user include files
+* Author: Felice Pantaleo, Leonardo Cristella - felice.pantaleo@cern.ch, leonardo.cristella@cern.ch
+* Date: 09/2021
+*/
 
 #include "FWCore/Framework/interface/Event.h"
 #include "FWCore/Framework/interface/Frameworkfwd.h"
@@ -46,6 +49,69 @@
 
 using namespace ticl;
 
+
+namespace {
+/** Association map from SimCluster/CaloParticle to layer cluster (with (score, sharedEnergy) pair) */
+template <typename SimCaloObject_t>
+using SimToRecoLCAssociation = edm::AssociationMap<edm::OneToManyWithQualityGeneric<std::vector<SimCaloObject_t>,
+                                                                                    reco::CaloClusterCollection,
+                                                                                    std::pair<float, float>>>;
+
+enum class BoundaryTimeMode {
+  none,
+  simVertexTime, 
+  boundaryTime
+};
+BoundaryTimeMode stringBoundaryTimeModeToEnum(std::string s) {
+  if (s=="none") return BoundaryTimeMode::none;
+  if (s=="simVertexTime") return BoundaryTimeMode::simVertexTime;
+  if (s=="boundaryTime") return BoundaryTimeMode::boundaryTime;
+  throw cms::Exception("Configuration") << "Unkown BoundaryTimeMode";
+}
+
+/** Configuration for producing one SimTrackster collection */
+struct SimTsConfig {
+  using SimCaloObject_t = SimCluster;
+  using SimCaloObjectCollection_t = SimClusterCollection;
+  // template <typename SimCaloObject_t> (SimCaloObject_t tag)
+  SimTsConfig(edm::ParameterSet const& ps,
+              edm::ConsumesCollector consumesCollector,
+              edm::ProducesCollector prodCollector)
+      : simclusters_token(
+            consumesCollector.consumes<SimCaloObjectCollection_t>(ps.getParameter<edm::InputTag>("simClusterCollection"))),
+        // simClusterType(ps.getParameter<std::string>("simClusterType")),
+
+        associatorMapSimClusterToReco_token(consumesCollector.consumes<SimToRecoLCAssociation<SimCaloObject_t>>(
+            ps.getParameter<edm::InputTag>("simClusterToLayerClusterAssociationMap"))),
+        simClusterToCaloParticleSC_map_token(consumesCollector.consumes<SimClusterRefVector>(ps.getParameter<edm::InputTag>("simClusterCollection"))),
+
+        simTrackster_token(
+            prodCollector.produces<TracksterCollection>(ps.getParameter<std::string>("outputProductLabel"))),
+            outputMask_token(prodCollector.produces<std::vector<float>>(ps.getParameter<std::string>("outputProductLabel"))),
+        simTracksterToSimCluster_map_token(prodCollector.produces<edm::RefVector<std::vector<SimCaloObject_t>>>(
+            ps.getParameter<std::string>("outputProductLabel"))),
+        simTracksterToCaloParticle_map_token(prodCollector.produces<CaloParticleRefVector>(ps.getParameter<std::string>("outputProductLabel"))),
+
+        simTracksterBoundaryTime(stringBoundaryTimeModeToEnum(ps.getParameter<std::string>("simTracksterBoundaryTime"))),
+        tracksterIterationIndex(static_cast<ticl::Trackster::IterationIndex>(ps.getParameter<int>("tracksterIterationIndex"))) {}
+
+  const edm::EDGetTokenT<SimCaloObjectCollection_t> simclusters_token;  
+  // const std::string simClusterType;
+  const edm::EDGetTokenT<SimToRecoLCAssociation<SimCaloObject_t>> associatorMapSimClusterToReco_token;  //EDGetTokenT<SimToRecoLCAssociation<SimCaloObject_t>>
+  const edm::EDGetTokenT<SimClusterRefVector> simClusterToCaloParticleSC_map_token; ///< Map from simclusters_token collection to CaloParticle collection (here as SimCluster dataformat but 1-1 mapping to CaloParticle)
+
+  const edm::EDPutTokenT<TracksterCollection> simTrackster_token; ///< output collection
+  const edm::EDPutTokenT<std::vector<float>> outputMask_token; ///< output layer cluster mask after masking LCs from SimCluster
+  const edm::EDPutTokenT<edm::RefVector<std::vector<SimCaloObject_t>>>
+      simTracksterToSimCluster_map_token;  ///< output map from SimTrackster to SimCluster it was made from (1-1 mapping except when empty simts are removed)
+  const edm::EDPutTokenT<CaloParticleRefVector> simTracksterToCaloParticle_map_token; ///< output Map from SimTrackster to CaloParticle (for convenience, can be recomputed by chaining maps SimTs->SimCluster->CaloParticle)
+  // T<edm::RefVector<std::vector<SimCluster>>>
+  const BoundaryTimeMode simTracksterBoundaryTime; ///< configuration for setting boundary time
+  const ticl::Trackster::IterationIndex tracksterIterationIndex; ///< to be set in each output trackster
+};
+};
+
+
 class SimTrackstersProducer : public edm::stream::EDProducer<> {
 public:
   explicit SimTrackstersProducer(const edm::ParameterSet&);
@@ -55,53 +121,8 @@ public:
 
 
 private:
-  /** Association map from SimCluster/CaloParticle to layer cluster (with (score, sharedEnergy) pair) */
-  template <typename SimCaloObject_t>
-  using SimToRecoLCAssociation = edm::AssociationMap<edm::OneToManyWithQualityGeneric<std::vector<SimCaloObject_t>,
-                                                                                      reco::CaloClusterCollection,
-                                                                                      std::pair<float, float>>>;
 
-  struct SimTsConfig {
-    template <typename SimCaloObject_t>
-    SimTsConfig(edm::ParameterSet const& ps,
-                edm::ConsumesCollector consumesCollector,
-                edm::ProducesCollector prodCollector,
-                SimCaloObject_t tag)
-        : simclusters_token(
-              consumesCollector.consumes<std::vector<SimCaloObject_t>>(ps.getParameter<edm::InputTag>("simClusterCollection"))),
-          simClusterType(ps.getParameter<std::string>("simClusterType")),
-
-          associatorMapSimClusterToReco_token(consumesCollector.consumes<SimToRecoLCAssociation<SimCaloObject_t>>(
-              ps.getParameter<edm::InputTag>("simClusterToLayerClusterAssociationMap"))),
-          simClusterToCaloParticleSC_map_token(consumesCollector.consumes<SimClusterRefVector>(ps.getParameter<edm::InputTag>("simClusterCollection"))),
-
-          simTrackster_token(
-              prodCollector.produces<TracksterCollection>(ps.getParameter<std::string>("outputProductLabel"))),
-              outputMask_token(prodCollector.produces<std::vector<float>>(ps.getParameter<std::string>("outputProductLabel"))),
-          simTracksterToSimCluster_map_token(prodCollector.produces<edm::RefVector<std::vector<SimCaloObject_t>>>(
-              ps.getParameter<std::string>("outputProductLabel"))),
-          simTracksterToCaloParticle_map_token(prodCollector.produces<CaloParticleRefVector>(ps.getParameter<std::string>("outputProductLabel"))),
-
-          simTracksterBoundaryTime(ps.getParameter<std::string>("simTracksterBoundaryTime")),
-          tracksterIterationIndex(static_cast<ticl::Trackster::IterationIndex>(ps.getParameter<int>("tracksterIterationIndex"))) {}
-
-    const edm::EDGetToken
-        simclusters_token;  // not templated to allow different types (SimCluster/CaloParticle) edm::EDGetTokenT<std::vector<SimCluster>>
-    const std::string simClusterType;
-    const edm::EDGetToken associatorMapSimClusterToReco_token;  //EDGetTokenT<SimToRecoLCAssociation<SimCaloObject_t>>
-    const edm::EDGetTokenT<SimClusterRefVector> simClusterToCaloParticleSC_map_token; ///< Map from simclusters_token collection to CaloParticle collection (here as SimCluster dataformat but 1-1 mapping to CaloParticle)
-
-    const edm::EDPutTokenT<TracksterCollection> simTrackster_token;
-    const edm::EDPutTokenT<std::vector<float>> outputMask_token; // Layer cluster mask after masking LCs from SimCluster
-    const edm::EDPutToken
-        simTracksterToSimCluster_map_token;  // Map from SimTrackster to SimCluster it was made from (1-1 mapping except when empty simts are removed)
-    const edm::EDPutTokenT<CaloParticleRefVector> simTracksterToCaloParticle_map_token; // Map from SimTrackster to CaloParticle (for convenience, can be recomputed by chaining maps SimTs->SimCluster->CaloParticle)
-    // T<edm::RefVector<std::vector<SimCluster>>>
-    const std::string simTracksterBoundaryTime;
-    const ticl::Trackster::IterationIndex tracksterIterationIndex;
-    // const bool useBoundaryForRegressedEnergy
-  };
-
+  /** Holds input collection, convenience struct */
   struct InputHolder {
     std::vector<reco::CaloCluster> const& layerClusters;
     edm::ValueMap<std::pair<float, float>> const& layerClustersTimes;
@@ -117,12 +138,6 @@ private:
 
     edm::Handle<CaloParticleCollection> caloParticles_h;
   };
-
-  template <typename SimCaloCluster_t>
-  Trackster createTrackster(
-      std::vector<std::pair<edm::Ref<std::vector<SimCaloCluster_t>>, std::pair<float, float>>> const& lcVec,
-      const std::vector<float>& inputClusterMask,
-      std::vector<float>& output_mask);
 
   template <typename SimCaloObject_t>
   void produceOne(edm::Event& evt, const edm::EventSetup& es, InputHolder const& holder, SimTsConfig const& config);
@@ -178,11 +193,11 @@ SimTrackstersProducer::SimTrackstersProducer(const edm::ParameterSet& ps)
   if (configsParameterSets.size() == 0)
         edm::LogWarning("EmptyConfig") << "No config for input SimCluster collections. SimTrackstersProducer will not produce anything ";
   for (edm::ParameterSet const& configPs : configsParameterSets) {
-    if (configPs.getParameter<std::string>("simClusterType") == "SimCluster") {
-      simTsConfigs_.emplace_back(configPs, consumesCollector(), producesCollector(), SimCluster());
-    } else {
-      throw cms::Exception("Configuration") << "Wrong simClusterType";
-    }
+    // if (configPs.getParameter<std::string>("simClusterType") == "SimCluster") {
+      simTsConfigs_.emplace_back(configPs, consumesCollector(), producesCollector());
+    // } else {
+    //   throw cms::Exception("Configuration") << "Wrong simClusterType";
+    // }
   }
 }
 
@@ -212,10 +227,10 @@ void SimTrackstersProducer::fillDescriptions(edm::ConfigurationDescriptions& des
   edm::ParameterSetDescription simClusterDescValidator;
   simClusterDescValidator.add<edm::InputTag>("simClusterCollection")
       ->setComment("Input tag for the SimCluster collection to use");
-  simClusterDescValidator
-      .ifValue(edm::ParameterDescription<std::string>("simClusterType", "SimCluster", true),
-               edm::allowedValues<std::string>("SimCluster")) // for now only SimCluster
-      ->setComment("Type of the SimCluster collection to use (SimCluster or CaloParticle)");
+  // simClusterDescValidator
+  //     .ifValue(edm::ParameterDescription<std::string>("simClusterType", "SimCluster", true),
+  //              edm::allowedValues<std::string>("SimCluster")) // for now only SimCluster
+  //     ->setComment("Type of the SimCluster collection to use (SimCluster or CaloParticle)");
   simClusterDescValidator.add<edm::InputTag>("simClusterToLayerClusterAssociationMap")
       ->setComment(
           "Association map simToReco mapping SimCluster (same collection as simClusterCollection) to layer cluster. "
@@ -243,11 +258,13 @@ void SimTrackstersProducer::fillDescriptions(edm::ConfigurationDescriptions& des
 // simClustersToRecoColl is ticl::SimToRecoCollectionWithSimClustersT<reco::CaloClusterCollection> (aka AssociationMap OneToManyWithQuality SimCluster -> many LayerCluster along with score,sharedE)
 // typedef SimClusterToLCAssociation std::vector<std::pair<edm::Ref<reco::CaloClusterCollection>, std::pair<float, float>>>;
 
+namespace {
+/** Create a trackster from the given layer cluster association elements. Also updates the layer cluster mask */
 template <typename SimCaloCluster_t>
-Trackster SimTrackstersProducer::createTrackster(
+Trackster createTrackster(
     std::vector<std::pair<edm::Ref<std::vector<SimCaloCluster_t>>, std::pair<float, float>>> const& lcVec,
     const std::vector<float>& inputClusterMask,
-    std::vector<float>& output_mask) {
+    std::vector<float>& output_mask, float fractionCut_ ) {
   Trackster tmpTrackster;
 
   tmpTrackster.vertices().reserve(lcVec.size());
@@ -265,6 +282,7 @@ Trackster SimTrackstersProducer::createTrackster(
   }
   return tmpTrackster;
 }
+};
 
 void SimTrackstersProducer::produce(edm::Event& evt, const edm::EventSetup& es) {
   const auto& layerClustersHandle = evt.getHandle(clusters_token_);
@@ -281,7 +299,7 @@ void SimTrackstersProducer::produce(edm::Event& evt, const edm::EventSetup& es) 
   edm::Handle<std::vector<reco::Track>> recoTracks_h;
   evt.getByToken(recoTracksToken_, recoTracks_h);
 
-  //TP to reco track map
+  //TrackingParticle to reco track map
   const auto TPtoRecoTrackMapHandle = evt.getHandle(associatormapStRsToken_);
 
   const auto& geom = es.getData(geom_token_);
@@ -321,9 +339,9 @@ void SimTrackstersProducer::produceOne(edm::Event& evt,
 
   auto const& simClusterToCaloParticleSC_map = evt.get(config.simClusterToCaloParticleSC_map_token);
 
-  edm::Handle<SimToRecoLCAssociation<SimCaloObject_t>> associatorMapSimClusterToReco_h;
-  evt.getByToken(config.associatorMapSimClusterToReco_token, associatorMapSimClusterToReco_h);
-  const SimToRecoLCAssociation<SimCaloObject_t>& simClustersToRecoColl = *associatorMapSimClusterToReco_h;
+  // edm::Handle<SimToRecoLCAssociation<SimCaloObject_t>> associatorMapSimClusterToReco_h;
+  // evt.getByToken(config.associatorMapSimClusterToReco_token, associatorMapSimClusterToReco_h);
+  const SimToRecoLCAssociation<SimCaloObject_t>& simClustersToRecoColl = evt.get(config.associatorMapSimClusterToReco_token); //*associatorMapSimClusterToReco_h;
   
   TracksterCollection simTracksters; // output
   simTracksters.reserve(simclusters.size());
@@ -344,7 +362,7 @@ void SimTrackstersProducer::produceOne(edm::Event& evt,
     if (lcVec.size()==0)
       continue;
     
-    Trackster simTrackster = createTrackster(lcVec, holder.filtered_layerclusters_mask, output_mask);
+    Trackster simTrackster = createTrackster(lcVec, holder.filtered_layerclusters_mask, output_mask, fractionCut_);
     if (simTrackster.vertices().empty())
       continue; // The sim->reco associators expect non-empty tracksters
 
@@ -356,12 +374,10 @@ void SimTrackstersProducer::produceOne(edm::Event& evt,
     
     simTrackster.setIteration(config.tracksterIterationIndex);  
     simTrackster.setSeed(simClusterKey.id(), simClusterKey.index());
-    if (config.simTracksterBoundaryTime == "simVertexTime")
-      // simTrackster.setBoundaryTime()
-      throw cms::Exception("SimTrackstersProducer") << "simVertexTime not implemented yet";
-    else if (config.simTracksterBoundaryTime == "boundaryTime") 
+    if (config.simTracksterBoundaryTime == BoundaryTimeMode::simVertexTime)
+      simTrackster.setBoundaryTime((*holder.caloParticles_h)[simClusterToCaloParticleSC_map[simClusterKey.index()].index()].simTime());
+    else if (config.simTracksterBoundaryTime == BoundaryTimeMode::boundaryTime) 
       simTrackster.setBoundaryTime(simCluster.g4Tracks().at(0).getPositionAtBoundary().t() * CLHEP::s);
-    // setSimTime<SimCaloObject_t, SimTimeMode_t>(simTrackster, simCluster);
 
     simTracksters.emplace_back(std::move(simTrackster));
     simTracksterToSimObject_map.push_back(simClusterKey);

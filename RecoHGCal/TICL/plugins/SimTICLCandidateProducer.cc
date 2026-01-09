@@ -154,7 +154,9 @@ void SimTICLCandidateProducerT<BaseSimObject_t, SubSimObject_t>::produce(edm::St
   auto mapTICLCandidateToBaseSimTsIndex = [&](TracksterCollection::size_type ticlCand_i) -> TracksterCollection::size_type { return ticlCand_i; }; // 1-1 mapping (but kept as a function in case it needs to be changed)
   auto mapTICLCandidateToBaseSimObject = [&](TracksterCollection::size_type ticlCand_i) -> BaseSimObject_t const& { return *baseSimTracksterToBaseSimObject_map[ticlCand_i]; }; 
   
-  auto mapSubSimTsToTICLCandidate = [&](TracksterCollection::size_type subSimTs_i) -> TICLCandidate& { return mapBaseSimTsToTICLCandidate(subToBaseSimObject_map[subSimTracksterToSubSimObject_map[subSimTs_i].key()].key());}; // return TICLCandidate&
+  // Map from "base" SimObject to the SimTrackster corresponding. Reverse the RefVector. There is no check that the SimObject actually has a SimTrackster (in that case it will return an out of range index)
+  auto mapBaseSimObjectToBaseSimTs = [&](std::size_t baseSimObject_i) -> TracksterCollection::size_type { return std::ranges::find_if(baseSimTracksterToBaseSimObject_map, [baseSimObject_i](auto const& elem) { return elem.key() == baseSimObject_i;}) - baseSimTracksterToBaseSimObject_map.begin(); };
+  auto mapSubSimTsToTICLCandidate = [&](TracksterCollection::size_type subSimTs_i) -> TICLCandidate& { return mapBaseSimTsToTICLCandidate(mapBaseSimObjectToBaseSimTs(subToBaseSimObject_map[subSimTracksterToSubSimObject_map[subSimTs_i].key()].key()));}; // return TICLCandidate&
 
   MtdSimTracksterCollection const& MTDSimTracksters = evt.get(MTDSimTrackstersToken_);
 

@@ -20,6 +20,7 @@ ticlSimTracksters = _simTrackstersProducer.clone(
         outputProductLabel = cms.string('fromLegacySimCluster'),
         tracksterIterationIndex = cms.int32(5), #  See Trackster.h (ticl::Trackster::IterationIndex enum). 5=SIM (ie from SimCluster), 6=SIM_CP (ie from CaloParticle)
         simClusterCollection = cms.InputTag('mix', 'MergedCaloTruth'),
+        simTracksterBoundaryTime = cms.string("boundaryTime"),
         simClusterToLayerClusterAssociationMap = cms.InputTag('layerClusterSimClusterAssociationProducer'),
       ),
       cms.PSet( # the "fromBoundarySimCluster" output is what resembles the most the old behaviour : if CaloParticle simTrack crosses boundary, makes only one trackster (ignore any backscattering); 
@@ -27,12 +28,14 @@ ticlSimTracksters = _simTrackstersProducer.clone(
         outputProductLabel = cms.string('fromBoundarySimCluster'),
         tracksterIterationIndex = cms.int32(5),
         simClusterCollection = cms.InputTag('mix', 'MergedCaloTruthBoundaryTrackSimCluster'),
+        simTracksterBoundaryTime = cms.string("boundaryTime"),
         simClusterToLayerClusterAssociationMap = cms.InputTag('layerClusterBoundaryTrackSimClusterAssociationProducer')
       ),
       cms.PSet(
         outputProductLabel = cms.string('fromCaloParticle'),
         tracksterIterationIndex = cms.int32(6),
         simClusterCollection = cms.InputTag('mix', 'MergedCaloTruthCaloParticle'),
+        simTracksterBoundaryTime = cms.string("simVertexTime"),
         simClusterToLayerClusterAssociationMap = cms.InputTag('layerClusterCaloParticleSimClusterAssociationProducer')
       ),
     ),
