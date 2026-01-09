@@ -267,12 +267,13 @@ namespace {
     }
 
     void finish_edge(DecayChain::edge_descriptor e, const DecayChain &g) {
+      if (insideCluster_) {
+        // This loops over all elements of subClusterVisitors_ tuple and calls finish_edge on them
+        std::apply([&](auto &...x) { (..., x.finish_edge(e, g)); }, subClusterVisitors_);
+      }
       if (insideCluster_ && e == caloParticleEdge_) {
         insideCluster_ = false;
         caloParticleAccumulator_.doEndCluster(caloParticles_.back());
-
-        // This loops over all elements of subClusterVisitors_ tuple and calls finish_edge on them
-        std::apply([&](auto &...x) { (..., x.finish_edge(e, g)); }, subClusterVisitors_);
       }
     }
 
