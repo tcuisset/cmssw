@@ -32,18 +32,21 @@ hltTiclSimTracksters = _simTrackstersProducer.clone(
         outputProductLabel = cms.string('fromLegacySimCluster'),
         tracksterIterationIndex = cms.int32(5), #  See Trackster.h (ticl::Trackster::IterationIndex enum). 5=SIM (ie from SimCluster), 6=SIM_CP (ie from CaloParticle)
         simClusterCollection = cms.InputTag('mix', 'MergedCaloTruth'),
+        simTracksterBoundaryTime = cms.string("boundaryTime"),
         simClusterToLayerClusterAssociationMap = cms.InputTag('hltLayerClusterSimClusterAssociationProducer'),
       ),
       cms.PSet(
         outputProductLabel = cms.string('fromBoundarySimCluster'),
         tracksterIterationIndex = cms.int32(5),
         simClusterCollection = cms.InputTag('mix', 'MergedCaloTruthBoundaryTrackSimCluster'),
+        simTracksterBoundaryTime = cms.string("boundaryTime"),
         simClusterToLayerClusterAssociationMap = cms.InputTag('hltLayerClusterBoundaryTrackSimClusterAssociationProducer')
       ),
       cms.PSet(
         outputProductLabel = cms.string('fromCaloParticle'),
         tracksterIterationIndex = cms.int32(6),
         simClusterCollection = cms.InputTag('mix', 'MergedCaloTruthCaloParticle'),
+        simTracksterBoundaryTime = cms.string("simVertexTime"),
         simClusterToLayerClusterAssociationMap = cms.InputTag('hltLayerClusterCaloParticleSimClusterAssociationProducer')
       ),
     ),
