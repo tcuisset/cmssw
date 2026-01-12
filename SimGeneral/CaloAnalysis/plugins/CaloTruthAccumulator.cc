@@ -55,6 +55,24 @@ namespace {
   using Index_t = unsigned;
   using Barcode_t = int;
   const std::string messageCategoryGraph_("CaloTruthAccumulatorGraphProducer");
+
+  struct SimClusterConfig {
+    SimClusterCollection outputClusters;
+    edm::EDPutTokenT<SimClusterCollection> outputClusters_token;
+
+    // For the map back to "CaloParticle" it can be either to CaloParticle dataformat or "CaloParticle" SimCluster dataformat.
+    // We choose SimCluster dataformat
+    SimClusterRefVector clustersToCaloParticleMap;
+    edm::EDPutTokenT<SimClusterRefVector> clustersToCaloParticleMap_token;
+
+    SimClusterConfig(edm::ProducesCollector& c, std::string tag) 
+      : outputClusters_token(c.produces<SimClusterCollection>(tag)), clustersToCaloParticleMap_token(c.produces<SimClusterRefVector>(tag))
+    {}
+    void clear() {
+      outputClusters.clear();
+      clustersToCaloParticleMap.clear();
+    }
+  };
 }  // namespace
 
 class CaloTruthAccumulator : public DigiAccumulatorMixMod {
@@ -122,23 +140,6 @@ private:
   CaloParticleCollection outputCaloParticles_;
   edm::EDPutTokenT<CaloParticleCollection> outputCaloParticles_token_;
 
-  struct SimClusterConfig {
-    SimClusterCollection outputClusters;
-    edm::EDPutTokenT<SimClusterCollection> outputClusters_token;
-
-    // For the map back to "CaloParticle" it can be either to CaloParticle dataformat or "CaloParticle" SimCluster dataformat.
-    // We choose SimCluster dataformat
-    SimClusterRefVector clustersToCaloParticleMap;
-    edm::EDPutTokenT<SimClusterRefVector> clustersToCaloParticleMap_token;
-
-    SimClusterConfig(edm::ProducesCollector& c, std::string tag) 
-      : outputClusters_token(c.produces<SimClusterCollection>(tag)), clustersToCaloParticleMap_token(c.produces<SimClusterRefVector>(tag))
-    {}
-    void clear() {
-      outputClusters.clear();
-      clustersToCaloParticleMap.clear();
-    }
-  };
   SimClusterConfig legacySimClusters_config_;   ///< Legacy SimCluster from every SimTrack with simhits
   SimClusterConfig boundarySimClusters_config_; ///< SimClusters from each SimTrack crossing boundary
   SimClusterConfig caloParticleSimClusters_config_; ///< SimCluster that are identical to CaloParticle (to make it easier on downstream code, only one dataformat for everything)
