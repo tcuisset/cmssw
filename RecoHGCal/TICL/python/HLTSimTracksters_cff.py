@@ -58,9 +58,7 @@ premix_stage2.toModify(hltTiclSimTracksters, simClusterCollections={
 })
 
 
-# from RecoHGCal.TICL.simTICLCandidateProducer_cfi import simTICLCandidateProducer as _simTICLCandidateProducer
 from RecoHGCal.TICL.simTICLCandidateProducerUsingSimCluster_cfi import simTICLCandidateProducerUsingSimCluster as _simTICLCandidateProducerUsingSimCluster
-from RecoHGCal.TICL.simTICLCandidateProducerUsingCaloParticle_cfi import simTICLCandidateProducerUsingCaloParticle as _simTICLCandidateProducerUsingCaloParticle
 
 _common_hltTiclSimTICLCandidates = dict(
   baseCaloSimObjects = cms.InputTag('mix', 'MergedCaloTruthCaloParticle'), # CaloParticle as SimCluster
@@ -85,6 +83,13 @@ hltTiclSimTICLCandidatesFromBoundary = _simTICLCandidateProducerUsingSimCluster.
     subSimTracksters = cms.InputTag('hltTiclSimTracksters', 'fromBoundarySimCluster'),
     subSimTracksterToSubSimObject_map = cms.InputTag('hltTiclSimTracksters', 'fromBoundarySimCluster'),
 )
+for _simProducer in [hltTiclSimTICLCandidatesFromLegacy, hltTiclSimTICLCandidatesFromBoundary]:
+  premix_stage2.toModify(_simProducer,
+    baseCaloSimObjects=cms.InputTag("mixData", _simProducer.baseCaloSimObjects.productInstanceLabel),
+    subCaloSimObjects=cms.InputTag("mixData", _simProducer.subCaloSimObjects.productInstanceLabel),
+    subToBaseMap=cms.InputTag("mixData", _simProducer.subToBaseMap.productInstanceLabel),
+    MtdSimTracksters=cms.InputTag("mixData", _simProducer.MtdSimTracksters.productInstanceLabel)
+  )
 
 from Validation.Configuration.hltHGCalSimValid_cff import *
 
