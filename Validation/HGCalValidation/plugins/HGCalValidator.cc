@@ -98,8 +98,7 @@ HGCalValidator::HGCalValidator(const edm::ParameterSet& pset)
       cummatbudinxo_(pset.getParameter<edm::FileInPath>("cummatbudinxo")),
       isTICLv5_(pset.getUntrackedParameter<bool>("isticlv5")),
       hitsToken_(consumes<edm::RefProdVector<HGCRecHitCollection>>(pset.getParameter<edm::InputTag>("hits"))),
-      scToCpMapToken_(
-          consumes<SimClusterRefVector>(pset.getParameter<edm::InputTag>("simClustersToCaloParticlesMap"))),
+      scToCpMapToken_(consumes<SimClusterRefVector>(pset.getParameter<edm::InputTag>("simClustersToCaloParticlesMap"))),
       cutTk_(pset.getParameter<std::string>("cutTk")) {
   //In this way we can easily generalize to associations between other objects also.
   const edm::InputTag& label_cp_effic_tag = pset.getParameter<edm::InputTag>("label_cp_effic");
@@ -526,7 +525,7 @@ void HGCalValidator::dqmAnalyze(const edm::Event& event,
       auto simRecColl = *simtorecoCollectionH;
       edm::Handle<ticl::RecoToSimCollectionWithSimClustersT<reco::CaloClusterCollection>> recotosimCollectionH;
       event.getByToken(associatorMapRtSim, recotosimCollectionH);
-      auto recSimColl = *recotosimCollectionH; // Warning : variable shadowing here
+      auto recSimColl = *recotosimCollectionH;  // Warning : variable shadowing here
 
       histoProducerAlgo_->fill_simClusterAssociation_histos(histograms.histoProducerAlgo,
                                                             ws,
@@ -818,26 +817,38 @@ void HGCalValidator::fillDescriptions(edm::ConfigurationDescriptions& descriptio
   desc.add<std::string>("label_TSbyHits", "TSbyHits");
   desc.add<std::string>("label_TSbyLCs", "TSbyLCs");
   desc.add<std::string>("label_TSbyLCsCP", "TSbyLCs_CP");
-  desc.add<edm::InputTag>("simClustersToCaloParticlesMap", edm::InputTag("mix", "MergedCaloTruth")); // CaloTruthAccumulator produces a RefVector SimCluster -> CaloParticle (here we take the legacy SimCluster)
+  desc.add<edm::InputTag>(
+      "simClustersToCaloParticlesMap",
+      edm::InputTag(
+          "mix",
+          "MergedCaloTruth"));  // CaloTruthAccumulator produces a RefVector SimCluster -> CaloParticle (here we take the legacy SimCluster)
   desc.add<std::vector<edm::InputTag>>(
       "allTracksterTracksterAssociatorsLabels",
       {
-          edm::InputTag("allTrackstersToSimTrackstersAssociationsByLCs", "ticlTrackstersCLUE3DHighToticlSimTrackstersfromBoundarySimCluster"),
-          edm::InputTag("allTrackstersToSimTrackstersAssociationsByLCs", "ticlSimTrackstersfromBoundarySimClusterToticlTrackstersCLUE3DHigh"),
+          edm::InputTag("allTrackstersToSimTrackstersAssociationsByLCs",
+                        "ticlTrackstersCLUE3DHighToticlSimTrackstersfromBoundarySimCluster"),
+          edm::InputTag("allTrackstersToSimTrackstersAssociationsByLCs",
+                        "ticlSimTrackstersfromBoundarySimClusterToticlTrackstersCLUE3DHigh"),
           edm::InputTag("allTrackstersToSimTrackstersAssociationsByLCs",
                         "ticlTrackstersCLUE3DHighToticlSimTrackstersfromCaloParticle"),
           edm::InputTag("allTrackstersToSimTrackstersAssociationsByLCs",
                         "ticlSimTrackstersfromBoundarySimClusterfromCaloParticleToticlTrackstersCLUE3DHigh"),
-          edm::InputTag("allTrackstersToSimTrackstersAssociationsByLCs", "ticlTracksterLinksToticlSimTrackstersfromBoundarySimCluster"),
-          edm::InputTag("allTrackstersToSimTrackstersAssociationsByLCs", "ticlSimTrackstersfromBoundarySimClusterToticlTracksterLinks"),
+          edm::InputTag("allTrackstersToSimTrackstersAssociationsByLCs",
+                        "ticlTracksterLinksToticlSimTrackstersfromBoundarySimCluster"),
+          edm::InputTag("allTrackstersToSimTrackstersAssociationsByLCs",
+                        "ticlSimTrackstersfromBoundarySimClusterToticlTracksterLinks"),
           edm::InputTag("allTrackstersToSimTrackstersAssociationsByLCs",
                         "ticlTracksterLinksToticlSimTrackstersfromCaloParticle"),
           edm::InputTag("allTrackstersToSimTrackstersAssociationsByLCs",
                         "ticlSimTrackstersfromBoundarySimClusterfromCaloParticleToticlTracksterLinks"),
-          edm::InputTag("allTrackstersToSimTrackstersAssociationsByLCs", "ticlCandidateToticlSimTrackstersfromBoundarySimCluster"),
-          edm::InputTag("allTrackstersToSimTrackstersAssociationsByLCs", "ticlSimTrackstersfromBoundarySimClusterToticlCandidate"),
-          edm::InputTag("allTrackstersToSimTrackstersAssociationsByLCs", "ticlCandidateToticlSimTrackstersfromCaloParticle"),
-          edm::InputTag("allTrackstersToSimTrackstersAssociationsByLCs", "ticlSimTrackstersfromfromCaloParticleToticlCandidate"),
+          edm::InputTag("allTrackstersToSimTrackstersAssociationsByLCs",
+                        "ticlCandidateToticlSimTrackstersfromBoundarySimCluster"),
+          edm::InputTag("allTrackstersToSimTrackstersAssociationsByLCs",
+                        "ticlSimTrackstersfromBoundarySimClusterToticlCandidate"),
+          edm::InputTag("allTrackstersToSimTrackstersAssociationsByLCs",
+                        "ticlCandidateToticlSimTrackstersfromCaloParticle"),
+          edm::InputTag("allTrackstersToSimTrackstersAssociationsByLCs",
+                        "ticlSimTrackstersfromfromCaloParticleToticlCandidate"),
       });
   desc.add<std::vector<edm::InputTag>>(
       "allTracksterTracksterByHitsAssociatorsLabels",
@@ -850,28 +861,34 @@ void HGCalValidator::fillDescriptions(edm::ConfigurationDescriptions& descriptio
                         "ticlTrackstersCLUE3DHighToticlSimTrackstersfromCaloParticle"),
           edm::InputTag("allTrackstersToSimTrackstersAssociationsByHits",
                         "ticlSimTrackstersfromBoundarySimClusterfromCaloParticleToticlTrackstersCLUE3DHigh"),
-          edm::InputTag("allTrackstersToSimTrackstersAssociationsByHits", "ticlTracksterLinksToticlSimTrackstersfromBoundarySimCluster"),
-          edm::InputTag("allTrackstersToSimTrackstersAssociationsByHits", "ticlSimTrackstersfromBoundarySimClusterToticlTracksterLinks"),
+          edm::InputTag("allTrackstersToSimTrackstersAssociationsByHits",
+                        "ticlTracksterLinksToticlSimTrackstersfromBoundarySimCluster"),
+          edm::InputTag("allTrackstersToSimTrackstersAssociationsByHits",
+                        "ticlSimTrackstersfromBoundarySimClusterToticlTracksterLinks"),
           edm::InputTag("allTrackstersToSimTrackstersAssociationsByHits",
                         "ticlTracksterLinksToticlSimTrackstersfromCaloParticle"),
           edm::InputTag("allTrackstersToSimTrackstersAssociationsByHits",
                         "ticlSimTrackstersfromBoundarySimClusterfromCaloParticleToticlTracksterLinks"),
-          edm::InputTag("allTrackstersToSimTrackstersAssociationsByHits", "ticlCandidateToticlSimTrackstersfromBoundarySimCluster"),
-          edm::InputTag("allTrackstersToSimTrackstersAssociationsByHits", "ticlSimTrackstersfromBoundarySimClusterToticlCandidate"),
-          edm::InputTag("allTrackstersToSimTrackstersAssociationsByHits", "ticlCandidateToticlSimTrackstersfromCaloParticle"),
-          edm::InputTag("allTrackstersToSimTrackstersAssociationsByHits", "ticlSimTrackstersfromBoundarySimClusterfromCaloParticleToticlCandidate"),
+          edm::InputTag("allTrackstersToSimTrackstersAssociationsByHits",
+                        "ticlCandidateToticlSimTrackstersfromBoundarySimCluster"),
+          edm::InputTag("allTrackstersToSimTrackstersAssociationsByHits",
+                        "ticlSimTrackstersfromBoundarySimClusterToticlCandidate"),
+          edm::InputTag("allTrackstersToSimTrackstersAssociationsByHits",
+                        "ticlCandidateToticlSimTrackstersfromCaloParticle"),
+          edm::InputTag("allTrackstersToSimTrackstersAssociationsByHits",
+                        "ticlSimTrackstersfromBoundarySimClusterfromCaloParticleToticlCandidate"),
       });
   desc.addUntracked<bool>("doCandidatesPlots", true);
   desc.add<std::string>("ticlCandidates", "ticlCandidates");
   desc.add<edm::InputTag>("ticlTrackstersMerge", edm::InputTag("ticlTrackstersMerge"));
   desc.add<edm::InputTag>("simTiclCandidates", edm::InputTag("ticlSimTICLCandidatesFromBoundary"));
   desc.add<edm::InputTag>("recoTracks", edm::InputTag("generalTracks"));
-  desc.add<edm::InputTag>(
-      "mergeRecoToSimAssociator",
-      edm::InputTag("allTrackstersToSimTrackstersAssociationsByLCs", "ticlTrackstersMergeToticlSimTrackstersfromCaloParticle"));
-  desc.add<edm::InputTag>(
-      "mergeSimToRecoAssociator",
-      edm::InputTag("allTrackstersToSimTrackstersAssociationsByLCs", "ticlSimTrackstersfromCaloParticleToticlTrackstersMerge"));
+  desc.add<edm::InputTag>("mergeRecoToSimAssociator",
+                          edm::InputTag("allTrackstersToSimTrackstersAssociationsByLCs",
+                                        "ticlTrackstersMergeToticlSimTrackstersfromCaloParticle"));
+  desc.add<edm::InputTag>("mergeSimToRecoAssociator",
+                          edm::InputTag("allTrackstersToSimTrackstersAssociationsByLCs",
+                                        "ticlSimTrackstersfromCaloParticleToticlTrackstersMerge"));
   desc.add<edm::FileInPath>("cummatbudinxo", edm::FileInPath("Validation/HGCalValidation/data/D41.cumulative.xo"));
   desc.add<edm::InputTag>("label_cp_effic", edm::InputTag("mix", "MergedCaloTruth"));
   desc.add<edm::InputTag>("label_cp_fake", edm::InputTag("mix", "MergedCaloTruth"));

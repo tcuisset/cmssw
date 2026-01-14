@@ -433,14 +433,16 @@ void TICLCandidateValidator::fillCandidateHistos(const edm::Event& event,
 
   edm::Handle<ticl::TracksterToTracksterMap> mergeTsSimToReco_h;
   event.getByToken(associatorMapStRToken_, mergeTsSimToReco_h);
-  auto const& mergeTsSimToRecoMap = *mergeTsSimToReco_h; // Map : SimTrackster collection in 1-1 correspondance to simTICLCandidate => TICLCandidates tracksters
+  /// Map : SimTrackster collection in 1-1 correspondance to simTICLCandidate => TICLCandidates tracksters
+  auto const& mergeTsSimToRecoMap = *mergeTsSimToReco_h;
   assert(mergeTsSimToRecoMap.getCollectionIDs().second.id() == Tracksters_h.id());
 
-  // TICLv4 case 
+  // TICLv4 case
   // In TICLv4 TICLCandidates contains first the trackster-seeded candidates (with matching trackstersMerged), then the track-seeded candidates (without any correspondance in trackstersMerged)
-  assert((isTICLv5_ || TICLCandidates.size() >= trackstersMerged.size()) && "TICLCandidates (trackster-seeded part) & trackstersMerged collections must be in 1-1 correspondance");
+  assert((isTICLv5_ || TICLCandidates.size() >= trackstersMerged.size()) &&
+         "TICLCandidates (trackster-seeded part) & trackstersMerged collections must be in 1-1 correspondance");
   // TICLv5 case : there is no particular order
-  
+
   // candidates plots
   for (const auto& cand : TICLCandidates) {
     histograms.h_tracksters_in_candidate->Fill(cand.tracksters().size());
@@ -453,7 +455,7 @@ void TICLCandidateValidator::fillCandidateHistos(const edm::Event& event,
     histograms.h_candidate_partType->Fill(std::max_element(arr.begin(), arr.end()) - arr.begin());
   }
 
-  std::vector<int> chargedCandidates; // indices into SimTICLCandidate collection
+  std::vector<int> chargedCandidates;  // indices into SimTICLCandidate collection
   std::vector<int> neutralCandidates;
   chargedCandidates.reserve(simTICLCandidates.size());
   neutralCandidates.reserve(simTICLCandidates.size());
@@ -516,15 +518,16 @@ void TICLCandidateValidator::fillCandidateHistos(const edm::Event& event,
 
     int32_t cand_idx = -1;
     float shared_energy = 0.;
-    assert(i<(int)mergeTsSimToRecoMap.size());
-    const auto& ts_vec = mergeTsSimToRecoMap[i]; // take the SimTrackster used to build SimTICLCandidate ("base" ie CaloParticle one) and find simToReco-associated reco "ticlCandidate" tracksters (assume 1-1 mapping SimTICLCandidate-SimTrackster)
+    assert(i < (int)mergeTsSimToRecoMap.size());
+    const auto& ts_vec = mergeTsSimToRecoMap
+        [i];  // take the SimTrackster used to build SimTICLCandidate ("base" ie CaloParticle one) and find simToReco-associated reco "ticlCandidate" tracksters (assume 1-1 mapping SimTICLCandidate-SimTrackster)
     if (!ts_vec.empty()) {
       auto min_elem =
           std::min_element(ts_vec.begin(), ts_vec.end(), [](auto const& ts1_id_pair, auto const& ts2_id_pair) {
             return ts1_id_pair.score() < ts2_id_pair.score();
-          }); // take the best-associated trackster 
+          });  // take the best-associated trackster
       shared_energy = min_elem->sharedEnergy();
-      cand_idx = min_elem->index(); // index of reco TICLCandidate trackster best-associated to simTICLCandidate 
+      cand_idx = min_elem->index();  // index of reco TICLCandidate trackster best-associated to simTICLCandidate
     }
     // no reco associated to sim
     if (cand_idx == -1) {
@@ -535,11 +538,11 @@ void TICLCandidateValidator::fillCandidateHistos(const edm::Event& event,
       continue;
     }
 
-    TICLCandidate const *recoCand = nullptr;
-    if (!isTICLv5_) { 
+    TICLCandidate const* recoCand = nullptr;
+    if (!isTICLv5_) {
       // TICLv4 case : there is a 1-1 map from the target collection of mergeTsSimToRecoMap and reco TICLCandidates (works because in TICLv4 the producer ensures that trackster-seeded candidates are all at the beginning of the TICLCandidate output collection, so trackster-from-TICLCandidate.size()<=TICLCandidate.size())
-      recoCand = &TICLCandidates.at(cand_idx); 
-    } else { // TICLv5 case : there is no 1-1 mapping
+      recoCand = &TICLCandidates.at(cand_idx);
+    } else {  // TICLv5 case : there is no 1-1 mapping
       // we find the reco TICLCandidate that was formed from this trackster (ie whose first trackster has index in its trackster collection == cand_idx)
       auto cand_it =
           std::find_if(TICLCandidates.begin(), TICLCandidates.end(), [firstTs, cand_idx](TICLCandidate const& cand) {
@@ -552,7 +555,8 @@ void TICLCandidateValidator::fillCandidateHistos(const edm::Event& event,
       if (cand_it != TICLCandidates.end())
         recoCand = &*cand_it;
     }
-    if (!recoCand) continue;
+    if (!recoCand)
+      continue;
 
     if (recoCand->trackPtr().get() != nullptr) {
       const auto candTrackIdx = recoCand->trackPtr().get() - firstTrack;
@@ -603,7 +607,7 @@ void TICLCandidateValidator::fillCandidateHistos(const edm::Event& event,
 
     int32_t cand_idx = -1;
     float shared_energy = 0.;
-    assert(i<(int)mergeTsSimToRecoMap.size());
+    assert(i < (int)mergeTsSimToRecoMap.size());
     const auto& ts_vec = mergeTsSimToRecoMap[i];
     if (!ts_vec.empty()) {
       auto min_elem =
@@ -623,11 +627,11 @@ void TICLCandidateValidator::fillCandidateHistos(const edm::Event& event,
       continue;
     }
 
-    TICLCandidate const *recoCand = nullptr;
-    if (!isTICLv5_) { 
+    TICLCandidate const* recoCand = nullptr;
+    if (!isTICLv5_) {
       // TICLv4 case : there is a 1-1 map from the target collection of mergeTsSimToRecoMap and reco TICLCandidates (works because in TICLv4 the producer ensures that trackster-seeded candidates are all at the beginning of the TICLCandidate output collection, so trackster-from-TICLCandidate.size()<=TICLCandidate.size())
-      recoCand = &TICLCandidates.at(cand_idx); 
-    } else { // TICLv5 case : there is no 1-1 mapping
+      recoCand = &TICLCandidates.at(cand_idx);
+    } else {  // TICLv5 case : there is no 1-1 mapping
       // we find the reco TICLCandidate that was formed from this trackster (ie whose first trackster has index in its trackster collection == cand_idx)
       auto cand_it =
           std::find_if(TICLCandidates.begin(), TICLCandidates.end(), [firstTs, cand_idx](TICLCandidate const& cand) {
@@ -640,7 +644,8 @@ void TICLCandidateValidator::fillCandidateHistos(const edm::Event& event,
       if (cand_it != TICLCandidates.end())
         recoCand = &*cand_it;
     }
-    if (!recoCand) continue;
+    if (!recoCand)
+      continue;
 
     if (recoCand->trackPtr().get() != nullptr)
       continue;

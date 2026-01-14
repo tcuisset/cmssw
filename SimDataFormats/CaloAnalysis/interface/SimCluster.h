@@ -5,12 +5,14 @@
 #include "DataFormats/Math/interface/LorentzVector.h"
 #include "DataFormats/Math/interface/Point3D.h"
 #include "DataFormats/Math/interface/Vector3D.h"
+#include "DataFormats/DetId/interface/DetId.h"
 #include "SimDataFormats/CaloHit/interface/PCaloHit.h"
 #include "SimDataFormats/Track/interface/SimTrack.h"
-#include <vector>
-#include <functional>
 
-#include "DataFormats/DetId/interface/DetId.h"
+#include <vector>
+#include <unordered_map>
+#include <functional>
+#include <ranges>
 
 //
 // Forward declarations
@@ -49,8 +51,8 @@ public:
   SimCluster(EncodedEventId eventID, uint32_t particleID);  // for PU
   /** Build a SimCluster from a collection of SimCluster. Hits&fractions are merged, SimTracks are all added in g4Tracks_ */
   template <typename R>
-  requires std::ranges::input_range<R> && std::same_as<std::ranges::range_value_t<R>, SimCluster>
-  static SimCluster mergeHitsFromCollection(R const&);
+    requires std::ranges::input_range<R> && std::same_as<std::ranges::range_value_t<R>, SimCluster>
+  static SimCluster mergeHitsFromCollection(R const &);
 
   /** @brief PDG ID.
    *
@@ -81,10 +83,9 @@ public:
   g4t_iterator g4Track_end() const { return g4Tracks_.end(); }
 
   // Getters for Embd and Sim Tracks
-  const reco::GenParticleRefVector& genParticles() const { return genParticles_; }
+  const reco::GenParticleRefVector &genParticles() const { return genParticles_; }
   // Only for clusters from the signal vertex
-  const std::vector<SimTrack>& g4Tracks() const { return g4Tracks_; }
-  std::vector<SimTrack>& g4Tracks() { return g4Tracks_; }
+  const std::vector<SimTrack> &g4Tracks() const { return g4Tracks_; }
 
   /// @brief Electric charge. Note this is taken from the first SimTrack only.
   float charge() const { return g4Tracks_[0].charge(); }
@@ -254,16 +255,16 @@ protected:
 };
 
 template <typename R>
-requires std::ranges::input_range<R> && std::same_as<std::ranges::range_value_t<R>, SimCluster>
-SimCluster SimCluster::mergeHitsFromCollection(R const& inputs) {
-  assert(inputs.size()>0);
+  requires std::ranges::input_range<R> && std::same_as<std::ranges::range_value_t<R>, SimCluster>
+SimCluster SimCluster::mergeHitsFromCollection(R const &inputs) {
+  assert(!std::ranges::empty(inputs));
   SimCluster ret;
   ret.event_ = inputs[0].event_;
   ret.particleId_ = inputs[0].particleId_;
 
   ret.g4Tracks_.reserve(inputs.size());
   std::unordered_map<uint32_t, float> acc_fractions;  ///< Map DetId->(fraction)
-  for (SimCluster const& other : inputs) {
+  for (SimCluster const &other : inputs) {
     ret.simhit_energy_ += other.simhit_energy_;
 
     assert(other.hits_.size() == other.fractions_.size());
@@ -284,6 +285,5 @@ SimCluster SimCluster::mergeHitsFromCollection(R const& inputs) {
 
   return ret;
 }
-
 
 #endif  // SimDataFormats_SimCluster_H

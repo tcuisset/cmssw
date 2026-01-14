@@ -1376,7 +1376,7 @@ void TICLDumper::analyze(const edm::Event& event, const edm::EventSetup& setup) 
     simTICLCandidate_eta.push_back(cand.eta());
     std::vector<int> tmpIdxVec;
     for (auto const& simTS : cand.tracksters()) {
-      tmpIdxVec.push_back(simTS.key()); // Index of SimTrackster in its collection
+      tmpIdxVec.push_back(simTS.key());  // Index of SimTrackster in its collection
     }
     simTICLCandidate_simTracksterCPIndex.push_back(tmpIdxVec);
     tmpIdxVec.clear();
