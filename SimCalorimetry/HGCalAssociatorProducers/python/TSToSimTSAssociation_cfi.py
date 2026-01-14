@@ -15,6 +15,7 @@ allTrackstersToSimTrackstersAssociationsByLCs = AllTracksterToSimTracksterAssoci
     simTracksterCollections = cms.VInputTag(
         cms.InputTag("ticlSimTracksters", "fromLegacySimCluster"),
         cms.InputTag("ticlSimTracksters", "fromBoundarySimCluster"),
+        cms.InputTag("ticlSimTracksters", "fromMergedSimCluster"),
         cms.InputTag("ticlSimTracksters", "fromCaloParticle"),
     ),
 )

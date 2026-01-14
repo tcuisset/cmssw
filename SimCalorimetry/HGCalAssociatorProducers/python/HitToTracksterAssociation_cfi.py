@@ -32,6 +32,7 @@ allHitToTracksterAssociations = AllHitToTracksterAssociatorsProducer.clone(
         *[cms.InputTag(label) for label in ticlIterLabels],
         cms.InputTag("ticlSimTracksters", "fromLegacySimCluster"),
         cms.InputTag("ticlSimTracksters", "fromBoundarySimCluster"),
+        cms.InputTag("ticlSimTracksters", "fromMergedSimCluster"),
         cms.InputTag("ticlSimTracksters", "fromCaloParticle"),
     )
 )

@@ -8,13 +8,16 @@ hitToLegacySimClusterAssociator = _hitToSimClusterCaloParticleAssociator.clone(
 hitToBoundarySimClusterAssociator = _hitToSimClusterCaloParticleAssociator.clone(
     simClusters = cms.InputTag("mix", "MergedCaloTruthBoundaryTrackSimCluster")
 )
+hitToMergedSimClusterAssociator = _hitToSimClusterCaloParticleAssociator.clone(
+    simClusters = cms.InputTag("mix", "MergedCaloTruthMergedSimCluster")
+)
 hitToCPSimClusterAssociator = _hitToSimClusterCaloParticleAssociator.clone(
     simClusters = cms.InputTag("mix", "MergedCaloTruthCaloParticle") # CaloParticle but in SimCluster dataformat
 )
 
 
 from Configuration.ProcessModifiers.premix_stage2_cff import premix_stage2
-for _assoc in [hitToLegacySimClusterAssociator, hitToBoundarySimClusterAssociator, hitToCPSimClusterAssociator]:
+for _assoc in [hitToLegacySimClusterAssociator, hitToBoundarySimClusterAssociator, hitToMergedSimClusterAssociator, hitToCPSimClusterAssociator]:
     premix_stage2.toModify(_assoc, simClusters = cms.InputTag("mixData", _assoc.simClusters.productInstanceLabel))
 
 

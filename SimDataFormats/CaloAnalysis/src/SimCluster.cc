@@ -8,10 +8,6 @@
 
 const unsigned int SimCluster::longLivedTag = 65536;
 
-SimCluster::SimCluster() {
-  // No operation
-}
-
 SimCluster::SimCluster(const SimTrack &simtrk) {
   addG4Track(simtrk);
   event_ = simtrk.eventId();
@@ -26,7 +22,6 @@ SimCluster::SimCluster(EncodedEventId eventID, uint32_t particleID) {
   particleId_ = particleID;
 }
 
-SimCluster::~SimCluster() {}
 
 std::ostream &operator<<(std::ostream &s, SimCluster const &tp) {
   s << "CP momentum, q, ID, & Event #: " << tp.p4() << " " << tp.charge() << " " << tp.pdgId() << " "
