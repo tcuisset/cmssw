@@ -11,8 +11,6 @@
 #include <functional>
 
 #include "DataFormats/DetId/interface/DetId.h"
-#include "DataFormats/EcalDetId/interface/EcalSubdetector.h"
-#include "DataFormats/HcalDetId/interface/HcalSubdetector.h"
 
 //
 // Forward declarations
@@ -45,13 +43,14 @@ public:
   typedef reco::GenParticleRefVector::iterator genp_iterator;
   typedef std::vector<SimTrack>::const_iterator g4t_iterator;
 
-  SimCluster();
+  SimCluster() = default;
 
   SimCluster(const SimTrack &simtrk);
   SimCluster(EncodedEventId eventID, uint32_t particleID);  // for PU
-
-  // destructor
-  ~SimCluster();
+  /** Build a SimCluster from a collection of SimCluster. Hits&fractions are merged, SimTracks are all added in g4Tracks_ */
+  template <typename R>
+  requires std::ranges::input_range<R> && std::same_as<std::ranges::range_value_t<R>, SimCluster>
+  static SimCluster mergeHitsFromCollection(R const&);
 
   /** @brief PDG ID.
    *
@@ -82,9 +81,10 @@ public:
   g4t_iterator g4Track_end() const { return g4Tracks_.end(); }
 
   // Getters for Embd and Sim Tracks
-  const reco::GenParticleRefVector &genParticles() const { return genParticles_; }
+  const reco::GenParticleRefVector& genParticles() const { return genParticles_; }
   // Only for clusters from the signal vertex
-  const std::vector<SimTrack> &g4Tracks() const { return g4Tracks_; }
+  const std::vector<SimTrack>& g4Tracks() const { return g4Tracks_; }
+  std::vector<SimTrack>& g4Tracks() { return g4Tracks_; }
 
   /// @brief Electric charge. Note this is taken from the first SimTrack only.
   float charge() const { return g4Tracks_[0].charge(); }
@@ -252,5 +252,38 @@ protected:
   std::vector<SimTrack> g4Tracks_;
   reco::GenParticleRefVector genParticles_;
 };
+
+template <typename R>
+requires std::ranges::input_range<R> && std::same_as<std::ranges::range_value_t<R>, SimCluster>
+SimCluster SimCluster::mergeHitsFromCollection(R const& inputs) {
+  assert(inputs.size()>0);
+  SimCluster ret;
+  ret.event_ = inputs[0].event_;
+  ret.particleId_ = inputs[0].particleId_;
+
+  ret.g4Tracks_.reserve(inputs.size());
+  std::unordered_map<uint32_t, float> acc_fractions;  ///< Map DetId->(fraction)
+  for (SimCluster const& other : inputs) {
+    ret.simhit_energy_ += other.simhit_energy_;
+
+    assert(other.hits_.size() == other.fractions_.size());
+    for (std::size_t i = 0; i < other.hits_.size(); i++) {
+      acc_fractions[other.hits_[i]] += other.fractions_[i];
+    }
+
+    ret.g4Tracks_.insert(ret.g4Tracks_.end(), other.g4Tracks_.begin(), other.g4Tracks_.end());
+  }
+
+  ret.hits_.reserve(acc_fractions.size());
+  ret.fractions_.reserve(acc_fractions.size());
+  for (auto hit_and_fraction : acc_fractions) {
+    ret.hits_.push_back(hit_and_fraction.first);
+    ret.fractions_.push_back(hit_and_fraction.second);
+  }
+  ret.nsimhits_ = ret.hits_.size();
+
+  return ret;
+}
+
 
 #endif  // SimDataFormats_SimCluster_H

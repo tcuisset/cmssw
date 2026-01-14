@@ -17,6 +17,10 @@ allTrackstersToSimTrackstersAssociationsByHits = AllTracksterToSimTracksterAssoc
             hitToSimClusterMap=cms.InputTag("hitToBoundarySimClusterAssociator")
         ),
         cms.PSet(
+            simTracksterCollection=cms.InputTag("ticlSimTracksters", "fromMergedSimCluster"),
+            hitToSimClusterMap=cms.InputTag("hitToMergedSimClusterAssociator")
+        ),
+        cms.PSet(
             simTracksterCollection=cms.InputTag("ticlSimTracksters", "fromCaloParticle"),
             hitToSimClusterMap=cms.InputTag("hitToCPSimClusterAssociator")
         ),

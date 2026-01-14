@@ -15,7 +15,7 @@ from SimCalorimetry.HGCalAssociatorProducers.LCToTSAssociator_cfi import allLaye
 from SimCalorimetry.HGCalAssociatorProducers.HitToTracksterAssociation_cfi import allHitToTracksterAssociations
 from SimCalorimetry.HGCalAssociatorProducers.TSToSimTSAssociation_cfi import  allTrackstersToSimTrackstersAssociationsByLCs
 from SimCalorimetry.HGCalAssociatorProducers.TSToSimTSAssociationByHits_cfi import allTrackstersToSimTrackstersAssociationsByHits
-from SimCalorimetry.HGCalAssociatorProducers.HitToSimClusterAssociation_cff import hitToLegacySimClusterAssociator, hitToBoundarySimClusterAssociator, hitToCPSimClusterAssociator
+from SimCalorimetry.HGCalAssociatorProducers.HitToSimClusterAssociation_cff import hitToLegacySimClusterAssociator, hitToBoundarySimClusterAssociator, hitToMergedSimClusterAssociator, hitToCPSimClusterAssociator
 from SimCalorimetry.HGCalAssociatorProducers.SimClusterToCaloParticleAssociation_cfi import SimClusterToCaloParticleAssociation
 
 
@@ -41,12 +41,13 @@ hgcalPFJetValidation = _hgcalPFJetValidation.clone(BenchmarkLabel = 'PFJetValida
     DeltaPtOvPtHistoParameter = dict(EROn=True,EREtaMax=3.0, EREtaMin=1.6, slicingOn=True))
 
 layerClusterBoundaryTrackSimClusterAssociationProducer = layerClusterSimClusterAssociationProducer.clone(label_scl=cms.InputTag("mix", "MergedCaloTruthBoundaryTrackSimCluster"))
+layerClusterMergedSimClusterAssociationProducer = layerClusterSimClusterAssociationProducer.clone(label_scl=cms.InputTag("mix", "MergedCaloTruthMergedSimCluster"))
 # the next associator is an associator of LCs->SimCluster dataforamt but using SimCluster collection that is a 1-1 mapping to CaloParticle. 
 # this way downstream code only has one dataformat (SimCluster) instead of 2 (CaloParticle & SimCluster)
 # at some point layerClusterCaloParticleAssociationProducer will be removed, keeping only layerClusterBoundaryTrackSimClusterAssociationProducer (once downstream code is updated)
 layerClusterCaloParticleSimClusterAssociationProducer = layerClusterSimClusterAssociationProducer.clone(label_scl=cms.InputTag("mix", "MergedCaloTruthCaloParticle"))
 hgcalAssociators = cms.Task(lcAssocByEnergyScoreProducer, layerClusterCaloParticleAssociationProducer,
-                            scAssocByEnergyScoreProducer, layerClusterSimClusterAssociationProducer, layerClusterBoundaryTrackSimClusterAssociationProducer, layerClusterCaloParticleSimClusterAssociationProducer,
+                            scAssocByEnergyScoreProducer, layerClusterSimClusterAssociationProducer, layerClusterBoundaryTrackSimClusterAssociationProducer, layerClusterMergedSimClusterAssociationProducer, layerClusterCaloParticleSimClusterAssociationProducer,
                             SimTauProducer,
                             # FP 07/2024 new associators:
                             # layerClusterToCLUE3DTracksterAssociation, layerClusterToTracksterMergeAssociation,
@@ -54,7 +55,7 @@ hgcalAssociators = cms.Task(lcAssocByEnergyScoreProducer, layerClusterCaloPartic
                             allLayerClusterToTracksterAssociations, allHitToTracksterAssociations, allTrackstersToSimTrackstersAssociationsByLCs, allTrackstersToSimTrackstersAssociationsByHits,
                             # hitToTrackstersAssociationLinking, hitToTrackstersAssociationPR,
                             # hitToSimTracksterAssociation, hitToSimTracksterFromCPsAssociation,
-                            hitToLegacySimClusterAssociator, hitToBoundarySimClusterAssociator, hitToCPSimClusterAssociator,
+                            hitToLegacySimClusterAssociator, hitToBoundarySimClusterAssociator, hitToMergedSimClusterAssociator, hitToCPSimClusterAssociator,
                             SimClusterToCaloParticleAssociation, 
                             )
 

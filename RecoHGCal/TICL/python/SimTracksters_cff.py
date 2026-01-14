@@ -32,6 +32,13 @@ ticlSimTracksters = _simTrackstersProducer.clone(
         simClusterToLayerClusterAssociationMap = cms.InputTag('layerClusterBoundaryTrackSimClusterAssociationProducer')
       ),
       cms.PSet(
+        outputProductLabel = cms.string('fromMergedSimCluster'),
+        tracksterIterationIndex = cms.int32(5),
+        simClusterCollection = cms.InputTag('mix', 'MergedCaloTruthMergedSimCluster'),
+        simTracksterBoundaryTime = cms.string("boundaryTime"), # will pick the time of the first simtrack
+        simClusterToLayerClusterAssociationMap = cms.InputTag('layerClusterMergedSimClusterAssociationProducer')
+      ),
+      cms.PSet(
         outputProductLabel = cms.string('fromCaloParticle'),
         tracksterIterationIndex = cms.int32(6),
         simClusterCollection = cms.InputTag('mix', 'MergedCaloTruthCaloParticle'),
@@ -75,5 +82,15 @@ ticlSimTICLCandidatesFromBoundary = _simTICLCandidateProducerUsingSimCluster.clo
     subSimTracksters = cms.InputTag('ticlSimTracksters', 'fromBoundarySimCluster'),
     subSimTracksterToSubSimObject_map = cms.InputTag('ticlSimTracksters', 'fromBoundarySimCluster'),
 )
+ticlSimTICLCandidatesFromMergedSimCluster = _simTICLCandidateProducerUsingSimCluster.clone(
+    baseCaloSimObjects = cms.InputTag('mix', 'MergedCaloTruthCaloParticle'), # CaloParticle as SimCluster
+    subCaloSimObjects = cms.InputTag('mix', 'MergedCaloTruthMergedSimCluster'),  # legacy SimCluster collection
+    subToBaseMap = cms.InputTag('mix', 'MergedCaloTruthMergedSimCluster'),     # map SimCluster -> CaloParticle
+    baseSimTracksters = cms.InputTag('ticlSimTracksters', 'fromCaloParticle'),
+    baseSimTracksterToBaseSimObject_map = cms.InputTag('ticlSimTracksters', 'fromCaloParticle'),
+    baseSimTracksterToCaloParticle_map = cms.InputTag('ticlSimTracksters', 'fromCaloParticle'),
+    subSimTracksters = cms.InputTag('ticlSimTracksters', 'fromMergedSimCluster'),
+    subSimTracksterToSubSimObject_map = cms.InputTag('ticlSimTracksters', 'fromMergedSimCluster'),
+)
 
-ticlSimTrackstersTask = cms.Task(filteredLayerClustersSimTracksters, ticlSimTracksters, ticlSimTICLCandidatesFromLegacy, ticlSimTICLCandidatesFromBoundary)
+ticlSimTrackstersTask = cms.Task(filteredLayerClustersSimTracksters, ticlSimTracksters, ticlSimTICLCandidatesFromLegacy, ticlSimTICLCandidatesFromBoundary, ticlSimTICLCandidatesFromMergedSimCluster)
