@@ -4,9 +4,6 @@ from RecoHGCal.TICL.simTrackstersProducer_cfi import simTrackstersProducer as _s
 from RecoHGCal.TICL.filteredLayerClustersProducer_cfi import filteredLayerClustersProducer as _filteredLayerClustersProducer
 
 
-# CA - PATTERN RECOGNITION
-
-
 filteredLayerClustersSimTracksters = _filteredLayerClustersProducer.clone(
     clusterFilter = "ClusterFilterByAlgoAndSize",
     min_cluster_size = 0, # inclusive
@@ -58,9 +55,7 @@ premix_stage2.toModify(ticlSimTracksters, simClusterCollections={
 
 _simTrackstersCollections = [cms.InputTag("ticlSimTracksters", pset.outputProductLabel) for pset in ticlSimTracksters.simClusterCollections]
 
-# from RecoHGCal.TICL.simTICLCandidateProducer_cfi import simTICLCandidateProducer as _simTICLCandidateProducer
 from RecoHGCal.TICL.simTICLCandidateProducerUsingSimCluster_cfi import simTICLCandidateProducerUsingSimCluster as _simTICLCandidateProducerUsingSimCluster
-from RecoHGCal.TICL.simTICLCandidateProducerUsingCaloParticle_cfi import simTICLCandidateProducerUsingCaloParticle as _simTICLCandidateProducerUsingCaloParticle
 
 ticlSimTICLCandidatesFromLegacy = _simTICLCandidateProducerUsingSimCluster.clone(
     baseCaloSimObjects = cms.InputTag('mix', 'MergedCaloTruthCaloParticle'), # CaloParticle as SimCluster
@@ -92,5 +87,13 @@ ticlSimTICLCandidatesFromMergedSimCluster = _simTICLCandidateProducerUsingSimClu
     subSimTracksters = cms.InputTag('ticlSimTracksters', 'fromMergedSimCluster'),
     subSimTracksterToSubSimObject_map = cms.InputTag('ticlSimTracksters', 'fromMergedSimCluster'),
 )
+
+for _simProducer in [ticlSimTICLCandidatesFromLegacy, ticlSimTICLCandidatesFromBoundary, ticlSimTICLCandidatesFromMergedSimCluster]:
+  premix_stage2.toModify(_simProducer,
+    baseCaloSimObjects=cms.InputTag("mixData", _simProducer.baseCaloSimObjects.productInstanceLabel),
+    subCaloSimObjects=cms.InputTag("mixData", _simProducer.subCaloSimObjects.productInstanceLabel),
+    subToBaseMap=cms.InputTag("mixData", _simProducer.subToBaseMap.productInstanceLabel),
+    MtdSimTracksters=cms.InputTag("mixData", _simProducer.MtdSimTracksters.productInstanceLabel)
+  )
 
 ticlSimTrackstersTask = cms.Task(filteredLayerClustersSimTracksters, ticlSimTracksters, ticlSimTICLCandidatesFromLegacy, ticlSimTICLCandidatesFromBoundary, ticlSimTICLCandidatesFromMergedSimCluster)
