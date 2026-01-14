@@ -2556,7 +2556,8 @@ void HGVHistoProducerAlgo::tracksters_to_SimTracksters_fp(const Histograms& hist
     else if (simTS.ticlIteration() == ticl::Trackster::SIM)
       return int(scToCpMap.at(simTS.seedIndex()).index());
     else
-      throw cms::Exception("WrongMapping") << "A SimTrackster object has no valid Trackster iterationIndex (need SIM or SIM_CP)";
+      throw cms::Exception("WrongMapping")
+          << "A SimTrackster object has no valid Trackster iterationIndex (need SIM or SIM_CP)";
   };
 
   auto ScoreCutSTStoTSPurDup = ScoreCutSTStoTSPurDup_[0];

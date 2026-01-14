@@ -34,7 +34,6 @@ private:
   edm::EDGetTokenT<edm::RefProdVector<HGCRecHitCollection>> hitsToken_;
 };
 
-
 HitToSimClusterCaloParticleAssociatorProducer::HitToSimClusterCaloParticleAssociatorProducer(
     const edm::ParameterSet &pset)
     : simClusterToken_(consumes<std::vector<SimCluster>>(pset.getParameter<edm::InputTag>("simClusters"))),

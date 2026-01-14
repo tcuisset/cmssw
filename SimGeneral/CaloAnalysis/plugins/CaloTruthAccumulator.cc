@@ -1,9 +1,3 @@
-#define DEBUG false
-
-#if DEBUG
-#pragma GCC diagnostic pop
-#endif
-
 #include <iterator>
 #include <algorithm>
 #include <memory>
@@ -21,6 +15,7 @@
 #include "FWCore/Framework/interface/ProducesCollector.h"
 #include "FWCore/MessageLogger/interface/MessageLogger.h"
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
+#include "FWCore/ParameterSet/interface/ParameterSetDescription.h"
 #include "FWCore/Utilities/interface/InputTag.h"
 
 #include "DataFormats/ForwardDetId/interface/HGCalDetId.h"
@@ -49,14 +44,119 @@
 #include "Geometry/Records/interface/CaloGeometryRecord.h"
 
 #include <CLHEP/Units/SystemOfUnits.h>
-
-#include "SimGeneral/CaloAnalysis/interface/SimClusterBuilder.h"
-#include "SimGeneral/CaloAnalysis/interface/SimClusterMergerByFastJet.h"
+#include <fastjet/ClusterSequence.hh>
 
 namespace {
   using Index_t = unsigned;
   using Barcode_t = int;
-  const std::string messageCategoryGraph_("CaloTruthAccumulatorGraphProducer");
+
+  /** Config for building one SimCluster collection */
+  struct SimClusterConfig {
+    SimClusterCollection outputClusters;
+    edm::EDPutTokenT<SimClusterCollection> outputClusters_token;
+
+    /// For the map back to "CaloParticle" in SimCluster dataformat
+    SimClusterRefVector clustersToCaloParticleMap;
+    edm::EDPutTokenT<SimClusterRefVector> clustersToCaloParticleMap_token;
+
+    SimClusterConfig(edm::ProducesCollector &c, std::string tag)
+        : outputClusters_token(c.produces<SimClusterCollection>(tag)),
+          clustersToCaloParticleMap_token(c.produces<SimClusterRefVector>(tag)) {}
+
+    void clear() {
+      outputClusters.clear();
+      clustersToCaloParticleMap.clear();
+    }
+  };
+
+  /**
+  * Base class for a builder of SimCluster that has callbacks both when a CaloParticle is ended or when a SimCluster (inside a CaloParticle) is started
+  * Typically used by SimCluster merging algorithm, in the following way : 
+  *  1) a CaloParticle is started
+  *     2) nested inside CaloParticle, several SimCluster can be built
+  *  3) when a CaloParticle is ended, the merging algorithm merges some SimCluster and adds some "merged" SimCluster to another collection
+  */
+  class SubClusterMergerBase {
+  public:
+    /// Called when a SimCluster is started (along with the index of the SimCluster in its output collection)
+    void start_subcluster(DecayChain::edge_descriptor e, const DecayChain &g, std::size_t currentSubClusterIndex);
+    /**
+     * Called when a CaloParticle is finished.
+     * @param subClustersBuilt is the list of SimCluster built such that the indices "currentSubClusterIndex" passed to "start_subcluster" match
+     */
+    void end_parentCluster(std::span<SimCluster> subClustersBuilt, std::size_t currentCaloParticleIndex);
+  };
+
+  /// Uses fastjet jet clustering algorithm to merge SimCluster (only those from the same CaloParticle)
+  template <typename ClusterParentIndexRecorderT>
+  class SimClusterMergerByFastJet : public SubClusterMergerBase {
+  public:
+    SimClusterMergerByFastJet(SimClusterCollection &clusters,
+                              ClusterParentIndexRecorderT parentIndexRecorder,
+                              fastjet::JetDefinition const &jetDefinition)
+        : clusters_(clusters), indexRecorder_(parentIndexRecorder), jetDefinition_(jetDefinition) {}
+
+    void start_subcluster(DecayChain::edge_descriptor e, const DecayChain &g, std::size_t currentSubClusterIndex) {
+      auto edge_property = get(edge_weight, g, e);
+      SimTrack const &simtrack = *edge_property.simTrack;
+
+      /* Build the particle 4-vector such that the energy is the energy of SimTrack at boundary,
+    the momentum 3-vector points to the boundary position, and the mass is zero */
+      auto energyAtBoundary = simtrack.getMomentumAtBoundary().E();
+      auto momentum3D = energyAtBoundary * simtrack.getPositionAtBoundary().Vect().Unit();
+      auto &jet = fjInputs_.emplace_back(momentum3D.X(), momentum3D.Y(), momentum3D.Z(), energyAtBoundary);
+      jet.set_user_index(currentSubClusterIndex);  // Store the index in SimCLuster collection for later
+    }
+
+    void end_parentCluster(std::span<SimCluster> subClustersBuilt, std::size_t currentCaloParticleIndex) {
+      // Clustering
+      fastjet::ClusterSequence sequence(fjInputs_, jetDefinition_);
+      auto jets = sequence.inclusive_jets();
+
+      // Merging
+      for (fastjet::PseudoJet const &jet : jets) {
+        auto constituents = fastjet::sorted_by_E(jet.constituents());
+        assert(!constituents.empty());
+        assert(constituents[0].user_index() < static_cast<int>(subClustersBuilt.size()));
+        clusters_.emplace_back(SimCluster::mergeHitsFromCollection(
+            constituents | std::views::transform([&](fastjet::PseudoJet const &pseudoJet) {
+              return subClustersBuilt[static_cast<std::size_t>(pseudoJet.user_index())];
+            })));
+
+        indexRecorder_.recordParentClusterIndex(currentCaloParticleIndex);
+      }
+
+      fjInputs_.clear();
+    }
+
+  private:
+    SimClusterCollection &clusters_;  /// output merged clusters
+
+    std::vector<fastjet::PseudoJet> fjInputs_;
+    ClusterParentIndexRecorderT indexRecorder_;
+    fastjet::JetDefinition const &jetDefinition_;
+  };
+
+  class SimClusterMergerByFastJetConfig : public SimClusterConfig {
+  public:
+    SimClusterMergerByFastJetConfig(edm::ProducesCollector &c, std::string tag, const edm::ParameterSet &ps)
+        : SimClusterConfig(c, tag),
+          jetClusteringRadius_(ps.getParameter<double>("jetClusteringRadius")),
+          jetDefinition_(fastjet::antikt_algorithm, jetClusteringRadius_) {}
+
+    void fillPSetDescription(edm::ParameterSetDescription &desc) {
+      desc.add<double>("jetClusteringRadius", 0.05)->setComment("Distance parameter for clustering algorithm");
+    }
+
+    template <typename ClusterParentIndexRecorderT>
+    auto getMerger(ClusterParentIndexRecorderT parentIndexRecorder) {
+      return SimClusterMergerByFastJet(outputClusters, parentIndexRecorder, jetDefinition_);
+    }
+
+  private:
+    double jetClusteringRadius_;
+    fastjet::JetDefinition jetDefinition_;
+  };
 }  // namespace
 
 class CaloTruthAccumulator : public DigiAccumulatorMixMod {
@@ -76,24 +176,18 @@ private:
                        const edm::Handle<edm::HepMCProduct> &hepMCproduct);
 
   /**
- * @brief Fills the supplied vector with pointers to the SimHits, checking or bad modules if required.
- * Iterate over all SimHits collections (vectors of PCaloHit) and build maps DetId->Hit
- * 
- * @param[out] returnValue : return parameter holding vector of (DetId, PCaloHit*) pairs
- * @param[out] simTrackDetIdEnergyMap : return parameter, nested map G4 Track ID -> DetId -> accumulated SimHit energy (over same track, in case of loops)
- * 
- * Also this->m_detIdToTotalSimEnergy is filled (map DetId-> accumulated sim energy), for normalization into fractions in finalizeEvent
+ * @brief Iterate over all SimHits collections (vectors of PCaloHit) and build maps between tracks, DetId and simEnergies
+ * @return nested map G4 Track ID -> DetId -> accumulated SimHit energy (over same track, in case of loops)
+ * Side-effect : Also this->m_detIdToTotalSimEnergy is filled (map DetId-> accumulated sim energy), for normalization into fractions in finalizeEvent
  */
   template <class T>
-  void fillSimHits(std::vector<std::pair<DetId, const PCaloHit *>> &returnValue,
-                   std::unordered_map<int, std::map<int, float>> &simTrackDetIdEnergyMap,
-                   const T &event,
-                   const edm::EventSetup &setup);
+  std::unordered_map<int, std::map<int, float>> fillSimTrackDetIdEnergyMap(const T &event,
+                                                                           const edm::EventSetup &setup);
 
   const std::string messageCategory_;
 
-  std::unordered_map<Index_t, float> m_detIdToTotalSimEnergy;  // keep track of cell normalizations
-  std::unordered_multimap<Barcode_t, Index_t> m_simHitBarcodeToIndex;
+  std::unordered_map<Index_t, float>
+      m_detIdToTotalSimEnergy;  ///< Map DetId-> accumulated sim energy, to keep track of cell normalizations
 
   /** The maximum bunch crossing BEFORE the signal crossing to create
       TrackinParticles for. Use positive values. If set to zero no
@@ -111,29 +205,36 @@ private:
   const edm::InputTag simTrackLabel_;
   const edm::InputTag simVertexLabel_;
 
-  std::vector<edm::InputTag> collectionTags_;
+  std::vector<edm::InputTag> collectionTags_;  ///< SimHits collections
   edm::InputTag genParticleLabel_;
   /// Needed to add HepMC::GenVertex to SimVertex
   edm::InputTag hepMCproductLabel_;
   const edm::ESGetToken<CaloGeometry, CaloGeometryRecord> geomToken_;
   edm::ESWatcher<CaloGeometryRecord> geomWatcher_;
 
-  const double minEnergy_, maxPseudoRapidity_;
+  const double minEnergy_, maxPseudoRapidity_;  ///< CaloParticle creation criteria
   const bool premixStage1_;
-  
+
   CaloParticleCollection outputCaloParticles_;
   edm::EDPutTokenT<CaloParticleCollection> outputCaloParticles_token_;
 
-  SimClusterConfig legacySimClusters_config_;   ///< Legacy SimCluster from every SimTrack with simhits
-  SimClusterConfig boundarySimClusters_config_; ///< SimClusters from each SimTrack crossing boundary
-  SimClusterConfig caloParticleSimClusters_config_; ///< SimCluster that are identical to CaloParticle (to make it easier on downstream code, only one dataformat for everything)
+  SimClusterConfig legacySimClusters_config_;    ///< Legacy SimCluster from every SimTrack with simhits
+  SimClusterConfig boundarySimClusters_config_;  ///< SimClusters from each SimTrack crossing boundary
+  SimClusterConfig
+      caloParticleSimClusters_config_;  ///< SimCluster that are identical to CaloParticle (to make it easier on downstream code, only one dataformat for everything)
   SimClusterMergerByFastJetConfig simClusterMergerFastJet_config_;
-  template<typename T>
+  /// apply a function to all SimCluster config
+  template <typename T>
   void applyToSimClusterConfig(T f) {
-    std::apply([f](auto&&... args) {(f(args), ...);}, std::tie(legacySimClusters_config_, boundarySimClusters_config_, caloParticleSimClusters_config_, simClusterMergerFastJet_config_));
+    std::apply([f](auto &&...args) { (f(args), ...); },
+               std::tie(legacySimClusters_config_,
+                        boundarySimClusters_config_,
+                        caloParticleSimClusters_config_,
+                        simClusterMergerFastJet_config_));
   }
 
-  edm::RefProd<SimClusterCollection> caloParticles_refProd_;  // To build the RefVector from SimCluster to "CaloParticle" SimCluster collection
+  edm::RefProd<SimClusterCollection>
+      caloParticles_refProd_;  ///< To build the RefVector from SimCluster to "CaloParticle" SimCluster collection
 
   const HGCalTopology *hgtopo_[3] = {nullptr, nullptr, nullptr};
   const HGCalDDDConstants *hgddd_[3] = {nullptr, nullptr, nullptr};
@@ -146,16 +247,15 @@ private:
 /* Graph utility functions */
 
 namespace {
+  ///
   class VisitorHelper {
   public:
-    VisitorHelper(std::unordered_multimap<Barcode_t, Index_t> const &simHitBarcodeToIndex,
-                  std::unordered_map<int, std::map<int, float>> const &simTrackDetIdEnergyMap,
+    VisitorHelper(std::unordered_map<int, std::map<int, float>> const &simTrackDetIdEnergyMap,
                   std::unordered_map<uint32_t, float> const &vertex_time_map)
-        : simHitBarcodeToIndex_(simHitBarcodeToIndex),
-          simTrackDetIdEnergyMap_(simTrackDetIdEnergyMap),
-          vertex_time_map_(vertex_time_map) {}
+        : simTrackDetIdEnergyMap_(simTrackDetIdEnergyMap), vertex_time_map_(vertex_time_map) {}
 
-    // bool simTrackHasSimHits(unsigned int trackIdx) const { return simHitBarcodeToIndex_.count(trackIdx); } // Not needed as already saved in EdgeProperty
+    // to check if SimTrack has simHits : use DecayGraph EdgeProperty
+
     /** Given a track G4 ID, give map DetId->accumulated SimHit energy  */
     std::map<int, float> const &hits_and_energies(unsigned int trackIdx) const {
       return simTrackDetIdEnergyMap_.at(trackIdx);
@@ -164,11 +264,9 @@ namespace {
     float getVertexTime(uint32_t simVertexId) { return vertex_time_map_.at(simVertexId); }
 
   private:
-    std::unordered_multimap<Barcode_t, Index_t> const &
-        simHitBarcodeToIndex_;  // Map G4 track ID -> index in simHitPointers collection holding (DetId, PCaloHit*) pair. Used to quickly determine if a track has simhits
     std::unordered_map<int, std::map<int, float>> const &
-        simTrackDetIdEnergyMap_;  // nested map G4 Track ID -> DetId -> accumulated SimHit energy (over same track, in case of loops)
-    std::unordered_map<uint32_t, float> const &vertex_time_map_;  // Map SimVertex index to sim time
+        simTrackDetIdEnergyMap_;  ///< nested map G4 Track ID -> DetId -> accumulated SimHit energy (over same track, in case of loops)
+    std::unordered_map<uint32_t, float> const &vertex_time_map_;  ///< Map SimVertex index to sim vertex time
   };
 
   /** 
@@ -185,7 +283,7 @@ namespace {
       auto edge_property = get(edge_weight, g, e);
       const SimTrack *edge_simTrack = edge_property.simTrack;
 
-      if (!edge_simTrack)
+      if (!edge_simTrack) [[unlikely]]
         return;  // Should not happen
       auto trackIdx = edge_simTrack->trackId();
       if (edge_property.simHits != 0) {
@@ -205,8 +303,7 @@ namespace {
 
   private:
     VisitorHelper const &helper_;
-    std::unordered_map<uint32_t, float>
-        acc_energy;  // Map DetId->simHit energies for the current cluster (only vaild if insideCluster_)
+    std::unordered_map<uint32_t, float> acc_energy;  ///< Map DetId->simHit energies for the current cluster
   };
 
   /**
@@ -223,8 +320,9 @@ namespace {
   class PrimaryVisitor : public boost::default_dfs_visitor {
   public:
     /**
-   * Use like PrimaryVisitor(helper, caloParticles, [](auto edgeProperty){return ...;}, 
-   *  std::make_tuple(SubClusterVisitor<SimCluster>(legacySimClusters, ....), (SubClusterVisitor<SimCluster> boundarySimClusters, ....)
+   * @param caloParticles output collection
+   * @param caloParticleSelector functor EdgeProperty -> bool to determine if a SimTrack should be promoted to CaloParticle
+   * @param subClusterVisitors tuple of visitors for callbacks (use as std::make_tuple(SubClusterVisitor<SimCluster>( ...), SubClusterVisitor<...>(...), ....) )
    */
     PrimaryVisitor(VisitorHelper &helper,
                    std::vector<CaloParticle> &caloParticles,
@@ -245,27 +343,25 @@ namespace {
         caloParticles_.emplace_back(*edge_property.simTrack);
         caloParticles_.back().setSimTime(helper_.getVertexTime(
             edge_property.simTrack->vertIndex()));  // For a CaloParticle the simTime is set at the vertex !
+        // This loops over all elements of subClusterVisitors_ tuple and calls begin_parentCluster on them (compile-time loop expansion)
         std::apply([&](auto &...x) { (..., x.begin_parentCluster(e, g)); }, subClusterVisitors_);
       }
 
       if (insideCluster_) {
-        caloParticleAccumulator_.accumulate_edge_in_cluster(e, g); // accumulate simhits energies
+        caloParticleAccumulator_.accumulate_edge_in_cluster(e, g);  // accumulate simhits energies
 
-        // This loops over all elements of subClusterVisitors_ tuple and calls examine_edge on them
-        // Another approach could be (compile-time) recursion with nested std::pair
         std::apply([&](auto &...x) { (..., x.examine_edge(e, g, caloParticles_.size() - 1)); }, subClusterVisitors_);
       }
     }
 
     void finish_edge(DecayChain::edge_descriptor e, const DecayChain &g) {
       if (insideCluster_) {
-        // This loops over all elements of subClusterVisitors_ tuple and calls finish_edge on them
         std::apply([&](auto &...x) { (..., x.finish_edge(e, g)); }, subClusterVisitors_);
       }
       if (insideCluster_ && e == caloParticleEdge_) {
         insideCluster_ = false;
         caloParticleAccumulator_.doEndCluster(caloParticles_.back());
-        std::apply([&](auto &...x) { (..., x.end_parentCluster(caloParticles_.size()-1)); }, subClusterVisitors_);
+        std::apply([&](auto &...x) { (..., x.end_parentCluster(caloParticles_.size() - 1)); }, subClusterVisitors_);
       }
     }
 
@@ -274,12 +370,13 @@ namespace {
 
     Selector_t caloParticleSelector_;
     ClusterEnergyAccumulator<CaloParticle> caloParticleAccumulator_;
-    std::vector<CaloParticle> &caloParticles_; // Output collection
+    std::vector<CaloParticle> &caloParticles_;  ///< Output collection
 
-    SubClusterVisitorTuple subClusterVisitors_;  // std::tuple of SubClusterVisitor
+    SubClusterVisitorTuple subClusterVisitors_;  ///< std::tuple of SubClusterVisitor
 
-    bool insideCluster_{false};
-    DecayChain::edge_descriptor caloParticleEdge_; // Keep track of CaloParticle root edge to finish cluster creation
+    bool insideCluster_{false};  ///< are we inside a CaloParticle (during DFS algorithm)
+    DecayChain::edge_descriptor
+        caloParticleEdge_;  ///< Keep track of CaloParticle root edge to flag end of cluster in DFS
   };
 
   /** 
@@ -299,29 +396,21 @@ namespace {
     }
 
   private:
-    edm::RefVector<ParentClusterCollectionT> &refVector_;
+    edm::RefVector<ParentClusterCollectionT> &refVector_;  ///< output RefVector
     edm::RefProd<ParentClusterCollectionT> const
-        &refProd_;  // Need the RefProd to build the edm::Ref to insert into RefVector
+        &refProd_;  ///< Need the RefProd to build the edm::Ref to insert into RefVector
   };
 
-  /** Does nothing */
-  class ClusterParentIndexRecorderVoid {
-    public:
-      void recordParentClusterIndex(std::size_t parentClusterIndex) {}
-  };
-
-
-
+  /** Base class for a graph visitor building SubCluster (ie SimCluster that are created inside a CaloParticle) */
   class SubClusterVisitorBase {
   public:
+    /// Called during DFS at each edge(=SimTrack) inside a CaloParticle
     void examine_edge(DecayChain::edge_descriptor e, const DecayChain &g, std::size_t currentCaloParticleIndex) {}
     void finish_edge(DecayChain::edge_descriptor e, const DecayChain &g) {}
 
     void begin_parentCluster(DecayChain::edge_descriptor e, const DecayChain &g) {}
     void end_parentCluster(std::size_t currentCaloParticleIndex) {}
   };
-
-
 
   /** 
    * Visitor that creates cluster with reference to another "parent" cluster collection, like SimCluster inside CaloParticle
@@ -330,14 +419,22 @@ namespace {
    * @tparam ClusterParentIndexRecorderT type of the object in charge of building the RefVector to parent (@see ClusterParentIndexRecorder)
    * @tparam Selector_t lambda for criteria for creating a subcluster
    */
-  template <typename SubClusterT, typename ClusterParentIndexRecorderT, typename Selector_t, typename SubClusterMergerTupleT=std::tuple<>>
+  template <typename SubClusterT,
+            typename ClusterParentIndexRecorderT,
+            typename Selector_t,
+            typename SubClusterMergerTupleT = std::tuple<>>
   class SubClusterVisitor : public SubClusterVisitorBase {
   public:
     SubClusterVisitor(std::vector<SubClusterT> &clusters,
                       ClusterParentIndexRecorderT parentIndexRecorder,
                       VisitorHelper const &helper,
-                      Selector_t selector, SubClusterMergerTupleT subClusterMergers=SubClusterMergerTupleT())
-        : clusters_(clusters), accumulator(helper), indexRecorder(parentIndexRecorder), selector_(selector), subClusterMergers_(subClusterMergers) {}
+                      Selector_t selector,
+                      SubClusterMergerTupleT subClusterMergers = SubClusterMergerTupleT())
+        : clusters_(clusters),
+          accumulator(helper),
+          indexRecorder(parentIndexRecorder),
+          selector_(selector),
+          subClusterMergers_(subClusterMergers) {}
 
     void examine_edge(DecayChain::edge_descriptor e, const DecayChain &g, std::size_t currentCaloParticleIndex) {
       if (!insideCluster_ && selector_(get(edge_weight, g, e))) {
@@ -349,7 +446,7 @@ namespace {
         clusters_.emplace_back(*edge_property.simTrack);
         indexRecorder.recordParentClusterIndex(currentCaloParticleIndex);
 
-        std::apply([&](auto &...x) { (..., x.start_subcluster(e, g, clusters_.size()-1)); }, subClusterMergers_);
+        std::apply([&](auto &...x) { (..., x.start_subcluster(e, g, clusters_.size() - 1)); }, subClusterMergers_);
       }
 
       if (insideCluster_) {
@@ -365,7 +462,8 @@ namespace {
     }
 
     void end_parentCluster(std::size_t currentCaloParticleIndex) {
-      std::apply([&](auto &...x) { (..., x.end_parentCluster(clusters_, currentCaloParticleIndex)); }, subClusterMergers_);
+      std::apply([&](auto &...x) { (..., x.end_parentCluster(clusters_, currentCaloParticleIndex)); },
+                 subClusterMergers_);
     }
 
   private:
@@ -379,15 +477,13 @@ namespace {
     SubClusterMergerTupleT subClusterMergers_;
   };
 
-  /**
-   * Creates SimCluster for every SimTrack with simHits. One SimCluster only includes the simHits from the SimTrack it was made of (depends on SimTrack saving criteria)
-   */
+  /**Creates SimCluster for every SimTrack with simHits. One SimCluster only includes the simHits from the SimTrack it was made of (depends on SimTrack saving criteria) */
   template <typename SubClusterT, typename ClusterParentIndexRecorderT>
   class LegacySimClusterVisitor : public SubClusterVisitorBase {
   public:
     LegacySimClusterVisitor(std::vector<SubClusterT> &clusters,
-                      ClusterParentIndexRecorderT parentIndexRecorder,
-                      VisitorHelper const &helper)
+                            ClusterParentIndexRecorderT parentIndexRecorder,
+                            VisitorHelper const &helper)
         : clusters_(clusters), accumulator(helper), indexRecorder(parentIndexRecorder) {}
 
     void examine_edge(DecayChain::edge_descriptor e, const DecayChain &g, std::size_t currentCaloParticleIndex) {
@@ -429,7 +525,9 @@ CaloTruthAccumulator::CaloTruthAccumulator(const edm::ParameterSet &config,
       legacySimClusters_config_(producesCollector, "MergedCaloTruth"),
       boundarySimClusters_config_(producesCollector, "MergedCaloTruthBoundaryTrackSimCluster"),
       caloParticleSimClusters_config_(producesCollector, "MergedCaloTruthCaloParticle"),
-      simClusterMergerFastJet_config_(producesCollector, "MergedCaloTruthMergedSimCluster", config.getParameter<edm::ParameterSet>("simClusterMergerConfig")),
+      simClusterMergerFastJet_config_(producesCollector,
+                                      "MergedCaloTruthMergedSimCluster",
+                                      config.getParameter<edm::ParameterSet>("simClusterMergerConfig")),
       geometryType_(-1),
       doHGCAL(config.getParameter<bool>("doHGCAL")) {
   if (premixStage1_) {
@@ -458,7 +556,7 @@ CaloTruthAccumulator::CaloTruthAccumulator(const edm::ParameterSet &config,
 
 void CaloTruthAccumulator::initializeEvent(edm::Event const &event, edm::EventSetup const &setup) {
   outputCaloParticles_.clear();
-  applyToSimClusterConfig([](auto& config) { config.clear();});
+  applyToSimClusterConfig([](auto &config) { config.clear(); });
 
   m_detIdToTotalSimEnergy.clear();
 
@@ -500,8 +598,8 @@ void CaloTruthAccumulator::initializeEvent(edm::Event const &event, edm::EventSe
     }
   }
   // Seems const_cast is necessary here
-  caloParticles_refProd_ =
-      const_cast<edm::Event &>(event).getRefBeforePut<SimClusterCollection>(caloParticleSimClusters_config_.outputClusters_token);
+  caloParticles_refProd_ = const_cast<edm::Event &>(event).getRefBeforePut<SimClusterCollection>(
+      caloParticleSimClusters_config_.outputClusters_token);
 }
 
 /** Create handle to edm::HepMCProduct here because event.getByLabel with
@@ -535,32 +633,33 @@ void CaloTruthAccumulator::accumulate(PileUpEventPrincipal const &event,
 }
 
 namespace {
-/** Normalize the energies in the SimCluster/CaloParticle collection, from absolute SimHit energies to fraction of total simHits energies */
-template <typename SimCaloCollection>
-void normalizeCollection(SimCaloCollection &simClusters,
-                         std::unordered_map<Index_t, float> const &detIdToTotalSimEnergy) {
-  for (auto &sc : simClusters) {
-    auto hitsAndEnergies = sc.hits_and_fractions();
-    sc.clearHitsAndFractions();
-    // sc.clearHitsEnergy();
-    for (auto &hAndE : hitsAndEnergies) {
-      const float totalenergy = detIdToTotalSimEnergy.at(hAndE.first);
-      float fraction = 0.;
-      if (totalenergy > 0)
-        fraction = hAndE.second / totalenergy;
-      else
-        edm::LogWarning("CaloTruthAccumulator")
-            << "TotalSimEnergy for hit " << hAndE.first << " is 0! The fraction for this hit cannot be computed.";
-      sc.addRecHitAndFraction(hAndE.first, fraction);
-      // sc.addHitEnergy(hAndE.second); // addHitEnergy is actually never used
+  /** Normalize the energies in the SimCluster/CaloParticle collection, from absolute SimHit energies to fraction of total simHits energies */
+  template <typename SimCaloCollection>
+  void normalizeCollection(SimCaloCollection &simClusters,
+                           std::unordered_map<Index_t, float> const &detIdToTotalSimEnergy) {
+    for (auto &sc : simClusters) {
+      auto hitsAndEnergies = sc.hits_and_fractions();
+      sc.clearHitsAndFractions();
+      // sc.clearHitsEnergy();
+      for (auto &hAndE : hitsAndEnergies) {
+        const float totalenergy = detIdToTotalSimEnergy.at(hAndE.first);
+        float fraction = 0.;
+        if (totalenergy > 0)
+          fraction = hAndE.second / totalenergy;
+        else
+          edm::LogWarning("CaloTruthAccumulator")
+              << "TotalSimEnergy for hit " << hAndE.first << " is 0! The fraction for this hit cannot be computed.";
+        sc.addRecHitAndFraction(hAndE.first, fraction);
+        // sc.addHitEnergy(hAndE.second); // addHitEnergy is actually never used
+      }
     }
   }
-}
-};
+};  // namespace
 
 void CaloTruthAccumulator::finalizeEvent(edm::Event &event, edm::EventSetup const &setup) {
-  edm::LogInfo(messageCategory_) << "Adding " << legacySimClusters_config_.outputClusters.size() << " legacy SimClusters and "
-                                 << outputCaloParticles_.size() << " CaloParticles to the event.";
+  edm::LogInfo(messageCategory_) << "Adding " << legacySimClusters_config_.outputClusters.size()
+                                 << " legacy SimClusters and " << outputCaloParticles_.size()
+                                 << " CaloParticles to the event.";
 
   // We need to normalize the hits and energies into hits and fractions (since
   // we have looped over all pileup events)
@@ -574,25 +673,26 @@ void CaloTruthAccumulator::finalizeEvent(edm::Event &event, edm::EventSetup cons
     std::sort(totalEnergies->begin(), totalEnergies->end());
     event.put(std::move(totalEnergies), "MergedCaloTruth");
   } else {
-    applyToSimClusterConfig([this](auto& config) { normalizeCollection(config.outputClusters, m_detIdToTotalSimEnergy); });
+    applyToSimClusterConfig(
+        [this](auto &config) { normalizeCollection(config.outputClusters, m_detIdToTotalSimEnergy); });
   }
 
   // fill the calo particles with their ref to SimCluster
   auto legacySimClustersRefProd = event.getRefBeforePut(legacySimClusters_config_.outputClusters_token);
   for (unsigned i = 0; i < legacySimClusters_config_.outputClusters.size(); ++i) {
-    auto& cp = outputCaloParticles_[legacySimClusters_config_.clustersToCaloParticleMap[i].key()]; // get the key of the edm::Ref<CaloParticle>
+    // get the key of the edm::Ref<CaloParticle>
+    auto &cp = outputCaloParticles_[legacySimClusters_config_.clustersToCaloParticleMap[i].key()];
     cp.addSimCluster(edm::Ref<SimClusterCollection>(legacySimClustersRefProd, i));
   }
 
   event.emplace(outputCaloParticles_token_, std::move(outputCaloParticles_));
 
-  applyToSimClusterConfig([&event](auto& config){
+  applyToSimClusterConfig([&event](auto &config) {
     event.emplace(config.outputClusters_token, std::move(config.outputClusters));
     event.emplace(config.clustersToCaloParticleMap_token, std::move(config.clustersToCaloParticleMap));
   });
-  
+
   m_detIdToTotalSimEnergy.clear();
-  m_simHitBarcodeToIndex.clear();
 }
 
 template <class T>
@@ -603,22 +703,14 @@ void CaloTruthAccumulator::accumulateEvent(const T &event,
   edm::Handle<std::vector<int>> hGenParticleIndices;
   edm::Handle<std::vector<SimTrack>> hSimTracks;
   edm::Handle<std::vector<SimVertex>> hSimVertices;
-  // We must always use getByLabel (event can be PileupEventPrincipal whihc does not have the get, getByToken, etc functions)
+  // We must always use getByLabel (event can be PileupEventPrincipal which does not have the get, getByToken, etc functions)
   event.getByLabel(simTrackLabel_, hSimTracks);
   event.getByLabel(simVertexLabel_, hSimVertices);
 
   event.getByLabel(genParticleLabel_, hGenParticles);
   event.getByLabel(genParticleLabel_, hGenParticleIndices);
 
-  std::vector<std::pair<DetId, const PCaloHit *>> simHitPointers;
-  std::unordered_map<int, std::map<int, float>> simTrackDetIdEnergyMap;
-  fillSimHits(simHitPointers, simTrackDetIdEnergyMap, event, setup);
-
-  // Clear maps from previous event fill them for this one
-  m_simHitBarcodeToIndex.clear();
-  for (unsigned int i = 0; i < simHitPointers.size(); ++i) {
-    m_simHitBarcodeToIndex.emplace(simHitPointers[i].second->geantTrackId(), i);
-  }
+  std::unordered_map<int, std::map<int, float>> simTrackDetIdEnergyMap = fillSimTrackDetIdEnergyMap(event, setup);
 
   auto const &tracks = *hSimTracks;
   auto const &vertices = *hSimVertices;
@@ -722,7 +814,7 @@ void CaloTruthAccumulator::accumulateEvent(const T &event,
   SimHitsAccumulator_dfs_visitor vis;
   depth_first_search(decay, visitor(vis));
 
-  VisitorHelper visitorHelper(m_simHitBarcodeToIndex, simTrackDetIdEnergyMap, vertex_time_map);
+  VisitorHelper visitorHelper(simTrackDetIdEnergyMap, vertex_time_map);
 
   auto passGenPartSelections_lambda = [&](EdgeProperty const &edge_property) {
     return (edge_property.cumulative_simHits != 0 and !edge_property.simTrack->noGenpart() and
@@ -736,21 +828,19 @@ void CaloTruthAccumulator::accumulateEvent(const T &event,
       outputCaloParticles_,
       passGenPartSelections_lambda,
       std::make_tuple(
-          // std::vector<SubClusterT>& clusters, ClusterParentIndexRecorder<ParentClusterCollectionT> parentIndexRecorder, VisitorHelper const& helper, Selector_t selector
           SubClusterVisitor(
-            caloParticleSimClusters_config_.outputClusters,
-            ClusterParentIndexRecorder(caloParticleSimClusters_config_.clustersToCaloParticleMap, caloParticles_refProd_), // Trivial 1-1 mapping, kept for convenience
-            //ClusterParentIndexRecorderVoid(), // We don't need to make references to self
-            visitorHelper,
-            [&](EdgeProperty const &edge_property) -> bool {
-              // Create a SimCluster for every CaloParticle (duplicates the CaloParticle for convenience of use, to have one single dataformat)
-              return true;
-            }),
+              caloParticleSimClusters_config_.outputClusters,
+              ClusterParentIndexRecorder(caloParticleSimClusters_config_.clustersToCaloParticleMap,
+                                         caloParticles_refProd_),  // Trivial 1-1 mapping, kept for convenience
+              visitorHelper,
+              [&](EdgeProperty const &edge_property) -> bool {
+                // Create a SimCluster for every CaloParticle (duplicates the CaloParticle for convenience of use, to have one single dataformat)
+                return true;
+              }),
           LegacySimClusterVisitor(
               legacySimClusters_config_.outputClusters,
               ClusterParentIndexRecorder(legacySimClusters_config_.clustersToCaloParticleMap, caloParticles_refProd_),
-              visitorHelper
-          ),
+              visitorHelper),
           SubClusterVisitor(
               boundarySimClusters_config_.outputClusters,
               ClusterParentIndexRecorder(boundarySimClusters_config_.clustersToCaloParticleMap, caloParticles_refProd_),
@@ -759,12 +849,8 @@ void CaloTruthAccumulator::accumulateEvent(const T &event,
                 // Create SimCluster from every SimTrack crossing boundary (and which has simhits either itself as in its descendants), and that is inside a CaloParticle
                 return edge_property.cumulative_simHits != 0 && edge_property.simTrack->crossedBoundary();
               },
-              std::make_tuple(
-                simClusterMergerFastJet_config_.getMerger(ClusterParentIndexRecorder(simClusterMergerFastJet_config_.clustersToCaloParticleMap, caloParticles_refProd_))
-              )
-            )
-      )
-  );
+              std::make_tuple(simClusterMergerFastJet_config_.getMerger(ClusterParentIndexRecorder(
+                  simClusterMergerFastJet_config_.clustersToCaloParticleMap, caloParticles_refProd_))))));
   depth_first_search(decay, visitor(primaryVisitor));  //  "visitor()" is a Boost BGL named parameter
 
 #if DEBUG
@@ -776,10 +862,9 @@ void CaloTruthAccumulator::accumulateEvent(const T &event,
 }
 
 template <class T>
-void CaloTruthAccumulator::fillSimHits(std::vector<std::pair<DetId, const PCaloHit *>> &returnValue,
-                                       std::unordered_map<int, std::map<int, float>> &simTrackDetIdEnergyMap,
-                                       const T &event,
-                                       const edm::EventSetup &setup) {
+std::unordered_map<int, std::map<int, float>> CaloTruthAccumulator::fillSimTrackDetIdEnergyMap(
+    const T &event, const edm::EventSetup &setup) {
+  std::unordered_map<int, std::map<int, float>> simTrackDetIdEnergyMap;
   for (auto const &collectionTag : collectionTags_) {
     edm::Handle<std::vector<PCaloHit>> hSimHits;
     const bool isHcal = (collectionTag.instance().find("HcalHits") != std::string::npos);
@@ -827,11 +912,11 @@ void CaloTruthAccumulator::fillSimHits(std::vector<std::pair<DetId, const PCaloH
         continue;
       }
 
-      returnValue.emplace_back(id, &simHit);
       simTrackDetIdEnergyMap[simHit.geantTrackId()][id.rawId()] += simHit.energy();
       m_detIdToTotalSimEnergy[id.rawId()] += simHit.energy();
     }
   }  // end of loop over InputTags
+  return simTrackDetIdEnergyMap;
 }
 
 // Register with the framework

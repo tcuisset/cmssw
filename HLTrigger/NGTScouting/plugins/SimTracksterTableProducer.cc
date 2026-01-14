@@ -1,4 +1,7 @@
-#include <algorithm>
+#include <vector>
+#include <limits>
+#include <string>
+#include <memory>
 #include "DataFormats/NanoAOD/interface/FlatTable.h"
 #include "DataFormats/HGCalReco/interface/Trackster.h"
 #include "SimDataFormats/CaloAnalysis/interface/CaloParticle.h"
@@ -17,8 +20,10 @@ public:
       : tableName_(cfg.getParameter<std::string>("tableName")),
         skipNonExistingSrc_(cfg.getParameter<bool>("skipNonExistingSrc")),
         simTrackstersToken_(mayConsume<std::vector<ticl::Trackster>>(cfg.getParameter<edm::InputTag>("simTracksters"))),
-        simTracksterToSimClusterMap_token_(mayConsume<SimClusterRefVector>(cfg.getParameter<edm::InputTag>("simTracksterToSimClusterMap"))),
-        simTracksterToCaloParticleMap_token_(mayConsume<CaloParticleRefVector>(cfg.getParameter<edm::InputTag>("simTracksterToCaloParticleMap"))),
+        simTracksterToSimClusterMap_token_(
+            mayConsume<SimClusterRefVector>(cfg.getParameter<edm::InputTag>("simTracksterToSimClusterMap"))),
+        simTracksterToCaloParticleMap_token_(
+            mayConsume<CaloParticleRefVector>(cfg.getParameter<edm::InputTag>("simTracksterToCaloParticleMap"))),
         precision_(cfg.getParameter<int>("precision")) {
     mayConsume<std::vector<SimCluster>>(cfg.getParameter<edm::InputTag>("simClusters"));
     mayConsume<std::vector<CaloParticle>>(cfg.getParameter<edm::InputTag>("caloParticles"));
@@ -32,10 +37,14 @@ public:
     desc.add<bool>("skipNonExistingSrc", false)
         ->setComment("whether or not to skip producing the table on absent input product");
     desc.add<edm::InputTag>("simTracksters", edm::InputTag("hltTiclSimTracksters"));
-    desc.add<edm::InputTag>("simClusters", edm::InputTag("mix", "MergedCaloTruth"))->setComment("SimCluster collection used to build simTracksters");
-    desc.add<edm::InputTag>("caloParticles", edm::InputTag("mix", "MergedCaloTruth"))->setComment("CaloParticle collection (pointed to by caloParticleToSimClustersMap)");
-    desc.add<edm::InputTag>("simTracksterToSimClusterMap", edm::InputTag("hltTiclSimTracksters"))->setComment("DMap SimTrackster -> SimCluster it was made from (map produced by SimTrackstersProducer)");
-    desc.add<edm::InputTag>("simTracksterToCaloParticleMap", edm::InputTag("hltTiclSimTracksters"))->setComment("Direct map SimTrackster -> CaloParticle (map produced by SimTrackstersProducer)");
+    desc.add<edm::InputTag>("simClusters", edm::InputTag("mix", "MergedCaloTruth"))
+        ->setComment("SimCluster collection used to build simTracksters");
+    desc.add<edm::InputTag>("caloParticles", edm::InputTag("mix", "MergedCaloTruth"))
+        ->setComment("CaloParticle collection (pointed to by caloParticleToSimClustersMap)");
+    desc.add<edm::InputTag>("simTracksterToSimClusterMap", edm::InputTag("hltTiclSimTracksters"))
+        ->setComment("DMap SimTrackster -> SimCluster it was made from (map produced by SimTrackstersProducer)");
+    desc.add<edm::InputTag>("simTracksterToCaloParticleMap", edm::InputTag("hltTiclSimTracksters"))
+        ->setComment("Direct map SimTrackster -> CaloParticle (map produced by SimTrackstersProducer)");
     desc.add<int>("precision", 7);
     descriptions.addWithDefaultLabel(desc);
   }
@@ -127,9 +136,11 @@ private:
   const bool skipNonExistingSrc_;
   const edm::EDGetTokenT<std::vector<ticl::Trackster>> simTrackstersToken_;
 
-  const edm::EDGetTokenT<edm::RefVector<std::vector<SimCluster>>> simTracksterToSimClusterMap_token_; // Map from SimTrackster to SimCluster used to make it
-  const edm::EDGetTokenT<CaloParticleRefVector> simTracksterToCaloParticleMap_token_; // Direct map SimTrackster -> CaloParticle (works also for SimTs from SimCluster)
-  
+  const edm::EDGetTokenT<edm::RefVector<std::vector<SimCluster>>>
+      simTracksterToSimClusterMap_token_;  // Map from SimTrackster to SimCluster used to make it
+  const edm::EDGetTokenT<CaloParticleRefVector>
+      simTracksterToCaloParticleMap_token_;  // Direct map SimTrackster -> CaloParticle (works also for SimTs from SimCluster)
+
   const unsigned int precision_;
 };
 
