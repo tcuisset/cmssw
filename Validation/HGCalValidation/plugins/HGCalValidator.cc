@@ -161,8 +161,9 @@ HGCalValidator::HGCalValidator(const edm::ParameterSet& pset)
   simTracksters_ = consumes<ticl::TracksterCollection>(label_simTS);
   simTracksters_fromCPs_ = consumes<ticl::TracksterCollection>(label_simTSFromCP);
 
-  associatorMapRtS = consumes<ticl::RecoToSimCollectionT<reco::CaloClusterCollection>>(associator_);
-  associatorMapStR = consumes<ticl::SimToRecoCollectionT<reco::CaloClusterCollection>>(associator_);
+  // Associatirs
+  associatorMapRtS = consumes<ticl::RecoToSimCollectionWithSimClustersT<reco::CaloClusterCollection>>(associator_);
+  associatorMapStR = consumes<ticl::SimToRecoCollectionWithSimClustersT<reco::CaloClusterCollection>>(associator_);
 
   cpSelector = CaloParticleSelector(pset.getParameter<double>("ptMinCP"),
                                     pset.getParameter<double>("ptMaxCP"),
@@ -407,12 +408,10 @@ void HGCalValidator::dqmAnalyze(const edm::Event& event,
   tools_->setGeometry(*geom);
   histoProducerAlgo_->setRecHitTools(tools_);
 
-  edm::Handle<ticl::SimToRecoCollectionT<reco::CaloClusterCollection>> simtorecoCollectionH;
-  event.getByToken(associatorMapStR, simtorecoCollectionH);
-  const auto& simRecColl = *simtorecoCollectionH;
-  edm::Handle<ticl::RecoToSimCollectionT<reco::CaloClusterCollection>> recotosimCollectionH;
-  event.getByToken(associatorMapRtS, recotosimCollectionH);
-  const auto& recSimColl = *recotosimCollectionH;
+  const ticl::SimToRecoCollectionWithSimClustersT<reco::CaloClusterCollection>& simRecColl_CP =
+      event.get(associatorMapStR);
+  const ticl::RecoToSimCollectionWithSimClustersT<reco::CaloClusterCollection>& recSimColl_CP =
+      event.get(associatorMapRtS);
 
   edm::Handle<std::unordered_map<DetId, const unsigned int>> hitMapHandle;
   event.getByToken(hitMap_, hitMapHandle);
@@ -564,8 +563,8 @@ void HGCalValidator::dqmAnalyze(const edm::Event& event,
                                                     cumulative_material_budget,
                                                     totallayers_to_monitor_,
                                                     thicknesses_to_monitor_,
-                                                    recSimColl,
-                                                    simRecColl,
+                                                    recSimColl_CP,
+                                                    simRecColl_CP,
                                                     rechitSpan);
 
     for (unsigned int layerclusterIndex = 0; layerclusterIndex < clusters.size(); layerclusterIndex++) {
@@ -800,8 +799,10 @@ void HGCalValidator::fillDescriptions(edm::ConfigurationDescriptions& descriptio
                                        });
   desc.add<edm::InputTag>("label_simTS", edm::InputTag("ticlSimTracksters", "fromBoundarySimCluster"));
   desc.add<edm::InputTag>("label_simTSFromCP", edm::InputTag("ticlSimTracksters", "fromCaloParticle"));
-  desc.addUntracked<edm::InputTag>("associator", edm::InputTag("layerClusterCaloParticleAssociationProducer"));
-  desc.addUntracked<edm::InputTag>("associatorSim", edm::InputTag("layerClusterSimClusterAssociationProducer"));
+  desc.addUntracked<edm::InputTag>("associator",
+                                   edm::InputTag("layerClusterCaloParticleSimClusterAssociationProducer"));
+  desc.addUntracked<edm::InputTag>("associatorSim",
+                                   edm::InputTag("layerClusterBoundaryTrackSimClusterAssociationProducer"));
   desc.addUntracked<bool>("SaveGeneralInfo", true);
   desc.addUntracked<bool>("doCaloParticlePlots", true);
   desc.addUntracked<bool>("doCaloParticleSelection", true);

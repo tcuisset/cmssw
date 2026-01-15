@@ -1760,8 +1760,8 @@ void HGVHistoProducerAlgo::layerClusters_to_CaloParticles(
     std::vector<size_t> const& cPSelectedIndices,
     std::unordered_map<DetId, const unsigned int> const& hitMap,
     unsigned int layers,
-    const ticl::RecoToSimCollectionT<reco::CaloClusterCollection>& cpsInLayerClusterMap,
-    const ticl::SimToRecoCollectionT<reco::CaloClusterCollection>& cPOnLayerMap,
+    const ticl::RecoToSimCollectionWithSimClustersT<reco::CaloClusterCollection>& cpsInLayerClusterMap,
+    const ticl::SimToRecoCollectionWithSimClustersT<reco::CaloClusterCollection>& cPOnLayerMap,
     edm::MultiSpan<HGCRecHit> const& hits) const {
   const auto nLayerClusters = clusters.size();
 
@@ -1939,8 +1939,8 @@ void HGVHistoProducerAlgo::layerClusters_to_CaloParticles(
   // gen-level, namely efficiency and duplicate. In this loop should restrict
   // only to the selected caloParaticles.
   for (const auto& cpId : cPSelectedIndices) {
-    const edm::Ref<CaloParticleCollection> cpRef(caloParticleHandle, cpId);
-    const auto& lcsIt = cPOnLayerMap.find(cpRef);
+    // We assume cPOnLayerMap refers to a SimCluster collection in 1-1 mapping with caloParticles
+    const auto& lcsIt = cPOnLayerMap.find(edm::Ref<SimClusterCollection>(cPOnLayerMap.refProd().key, cpId));
 
     std::map<unsigned int, float> cPEnergyOnLayer;
     for (unsigned int layerId = 0; layerId < layers * 2; ++layerId)
@@ -2221,8 +2221,8 @@ void HGVHistoProducerAlgo::fill_generic_cluster_histos(
     std::map<double, double> cummatbudg,
     unsigned int layers,
     std::vector<int> thicknesses,
-    const ticl::RecoToSimCollectionT<reco::CaloClusterCollection>& cpsInLayerClusterMap,
-    const ticl::SimToRecoCollectionT<reco::CaloClusterCollection>& cPOnLayerMap,
+    const ticl::RecoToSimCollectionWithSimClustersT<reco::CaloClusterCollection>& cpsInLayerClusterMap,
+    const ticl::SimToRecoCollectionWithSimClustersT<reco::CaloClusterCollection>& cPOnLayerMap,
     edm::MultiSpan<HGCRecHit> const& hits) const {
   //Each event to be treated as two events: an event in +ve endcap,
   //plus another event in -ve endcap. In this spirit there will be
