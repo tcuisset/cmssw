@@ -85,12 +85,12 @@ void LCToSimTSAssociatorEDProducer::produce(edm::StreamID, edm::Event &iEvent, c
 
   // associate LC and SimTS
   LogTrace("AssociatorValidator") << "Calling associateRecoToSim method\n";
-  ticl::RecoToSimTracksterCollection recSimColl = theAssociator->associateRecoToSim(
-      LCCollection, SimTSCollection, SCCollection, LCToSCsColl);
+  ticl::RecoToSimTracksterCollection recSimColl =
+      theAssociator->associateRecoToSim(LCCollection, SimTSCollection, SCCollection, LCToSCsColl);
 
   LogTrace("AssociatorValidator") << "Calling associateSimToReco method\n";
-  ticl::SimTracksterToRecoCollection simRecColl = theAssociator->associateSimToReco(
-      LCCollection, SimTSCollection, SCCollection, SCToLCsColl);
+  ticl::SimTracksterToRecoCollection simRecColl =
+      theAssociator->associateSimToReco(LCCollection, SimTSCollection, SCCollection, SCToLCsColl);
 
   auto rts = std::make_unique<ticl::RecoToSimTracksterCollection>(recSimColl);
   auto str = std::make_unique<ticl::SimTracksterToRecoCollection>(simRecColl);

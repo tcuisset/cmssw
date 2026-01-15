@@ -21,33 +21,33 @@ ticl::RecoToSimTracksterCollection LCToSimTSAssociatorByEnergyScoreImpl::associa
   for (size_t lcId = 0; lcId < cCCH.product()->size(); ++lcId) {
     const edm::Ref<reco::CaloClusterCollection> lcRef(cCCH, lcId);
     for (size_t tsId = 0; tsId < simTracksters.size(); ++tsId) {
-        assert(simTracksters[tsId].seedID() == sCCH.id());
-        const auto& scIt = lCToSCs.find(lcRef);
-        if (scIt == lCToSCs.end()) {
-          LogDebug("LCToSimTSAssociatorByEnergyScoreImpl")
-              << "LayerCluster Id " << lcId << " not found in SimCluster association map\n";
-          continue;
-        }
+      assert(simTracksters[tsId].seedID() == sCCH.id());
+      const auto& scIt = lCToSCs.find(lcRef);
+      if (scIt == lCToSCs.end()) {
+        LogDebug("LCToSimTSAssociatorByEnergyScoreImpl")
+            << "LayerCluster Id " << lcId << " not found in SimCluster association map\n";
+        continue;
+      }
 
-        const edm::Ref<SimClusterCollection> scRef(sCCH, simTracksters[tsId].seedIndex());
-        const auto& scs = scIt->val;
-        const auto scPair = std::find_if(
-            std::begin(scs), std::end(scs), [&scRef](const std::pair<edm::Ref<SimClusterCollection>, float>& p) {
-              return p.first == scRef;
-            });
-        if (scPair == scs.end()) {
-          LogDebug("LCToSimTSAssociatorByEnergyScoreImpl")
-              << "SimCluster Id " << simTracksters[tsId].seedIndex() << " not found in LayerCluster association map\n";
-          continue;
-        } else {
-          LogDebug("LCToSimTSAssociatorByEnergyScoreImpl")
-              << "LayerCluster Id: \t" << lcId << "\t SimCluster Id: \t" << scPair->first.index() << "\t score \t"
-              << scPair->second << "\n";
-          // Fill AssociationMap
-          returnValue.insert(lcRef,                                                           // Ref to LC
-                              std::make_pair(edm::Ref<ticl::TracksterCollection>(sTCH, tsId),  // Pair <Ref to TS, score>
-                                            scPair->second));
-        }
+      const edm::Ref<SimClusterCollection> scRef(sCCH, simTracksters[tsId].seedIndex());
+      const auto& scs = scIt->val;
+      const auto scPair = std::find_if(
+          std::begin(scs), std::end(scs), [&scRef](const std::pair<edm::Ref<SimClusterCollection>, float>& p) {
+            return p.first == scRef;
+          });
+      if (scPair == scs.end()) {
+        LogDebug("LCToSimTSAssociatorByEnergyScoreImpl")
+            << "SimCluster Id " << simTracksters[tsId].seedIndex() << " not found in LayerCluster association map\n";
+        continue;
+      } else {
+        LogDebug("LCToSimTSAssociatorByEnergyScoreImpl")
+            << "LayerCluster Id: \t" << lcId << "\t SimCluster Id: \t" << scPair->first.index() << "\t score \t"
+            << scPair->second << "\n";
+        // Fill AssociationMap
+        returnValue.insert(lcRef,                                                           // Ref to LC
+                           std::make_pair(edm::Ref<ticl::TracksterCollection>(sTCH, tsId),  // Pair <Ref to TS, score>
+                                          scPair->second));
+      }
     }  // end loop over simTracksters
   }  // end loop over layerClusters
 
@@ -78,10 +78,10 @@ ticl::SimTracksterToRecoCollection LCToSimTSAssociatorByEnergyScoreImpl::associa
       const edm::Ref<reco::CaloClusterCollection> lcRef(cCCH, lcId);
       const auto lcPair =
           std::find_if(std::begin(lcs),
-                        std::end(lcs),
-                        [&lcRef](const std::pair<edm::Ref<reco::CaloClusterCollection>, std::pair<float, float>>& p) {
-                          return p.first == lcRef;
-                        });
+                       std::end(lcs),
+                       [&lcRef](const std::pair<edm::Ref<reco::CaloClusterCollection>, std::pair<float, float>>& p) {
+                         return p.first == lcRef;
+                       });
       if (lcPair == lcs.end()) {
         LogDebug("LCToSimTSAssociatorByEnergyScoreImpl")
             << "LayerCluster Id " << lcId << " not found in SimCluster association map\n";
@@ -94,7 +94,7 @@ ticl::SimTracksterToRecoCollection LCToSimTSAssociatorByEnergyScoreImpl::associa
         returnValue.insert(
             edm::Ref<ticl::TracksterCollection>(sTCH, tsId),                             // Ref to TS
             std::make_pair(lcRef,                                                        // Pair <Ref to LC,
-                            std::make_pair(lcPair->second.first, lcPair->second.second))  // pair <energy, score> >
+                           std::make_pair(lcPair->second.first, lcPair->second.second))  // pair <energy, score> >
         );
       }
     }
