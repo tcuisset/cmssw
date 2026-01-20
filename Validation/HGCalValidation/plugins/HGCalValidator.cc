@@ -822,7 +822,7 @@ void HGCalValidator::fillDescriptions(edm::ConfigurationDescriptions& descriptio
       "simClustersToCaloParticlesMap",
       edm::InputTag(
           "mix",
-          "MergedCaloTruth"));  // CaloTruthAccumulator produces a RefVector SimCluster -> CaloParticle (here we take the legacy SimCluster)
+          "MergedCaloTruthBoundaryTrackSimCluster"));  // CaloTruthAccumulator produces a RefVector SimCluster -> CaloParticle (here we take the legacy SimCluster)
   desc.add<std::vector<edm::InputTag>>(
       "allTracksterTracksterAssociatorsLabels",
       {
@@ -893,7 +893,7 @@ void HGCalValidator::fillDescriptions(edm::ConfigurationDescriptions& descriptio
   desc.add<edm::FileInPath>("cummatbudinxo", edm::FileInPath("Validation/HGCalValidation/data/D41.cumulative.xo"));
   desc.add<edm::InputTag>("label_cp_effic", edm::InputTag("mix", "MergedCaloTruth"));
   desc.add<edm::InputTag>("label_cp_fake", edm::InputTag("mix", "MergedCaloTruth"));
-  desc.add<edm::InputTag>("label_scl", edm::InputTag("mix", "MergedCaloTruth"));
+  desc.add<edm::InputTag>("label_scl", edm::InputTag("mix", "MergedCaloTruthBoundaryTrackSimCluster"));
   desc.add<edm::InputTag>("simVertices", edm::InputTag("g4SimHits"));
   desc.add<edm::InputTag>("simTrackstersMap", edm::InputTag("ticlSimTracksters"));
   desc.add<edm::InputTag>("hitMap", edm::InputTag("recHitMapProducer", "hgcalRecHitMap"));

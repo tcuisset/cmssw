@@ -1,10 +1,7 @@
 import FWCore.ParameterSet.Config as cms
 
-from SimCalorimetry.HGCalSimProducers.hgcHitAssociation_cfi import lcAssocByEnergyScoreProducer, scAssocByEnergyScoreProducer
-from SimCalorimetry.HGCalAssociatorProducers.LCToCPAssociation_cfi import layerClusterCaloParticleAssociation as layerClusterCaloParticleAssociationProducer
-from SimCalorimetry.HGCalAssociatorProducers.LCToSCAssociation_cff import layerClusterSimClusterAssociationProducer, layerClusterBoundaryTrackSimClusterAssociationProducer, layerClusterMergedSimClusterAssociationProducer, layerClusterCaloParticleSimClusterAssociationProducer
-from SimCalorimetry.HGCalAssociatorProducers.LCToCPAssociation_cfi import layerClusterCaloParticleAssociationHFNose as layerClusterCaloParticleAssociationProducerHFNose
-from SimCalorimetry.HGCalAssociatorProducers.LCToSCAssociation_cff import layerClusterSimClusterAssociationProducerHFNose 
+from SimCalorimetry.HGCalAssociatorProducers.LCToSCAssociation_cff import scAssocByEnergyScoreProducer, layerClusterSimClusterAssociationProducer, layerClusterBoundaryTrackSimClusterAssociationProducer, layerClusterMergedSimClusterAssociationProducer, layerClusterCaloParticleSimClusterAssociationProducer
+from SimCalorimetry.HGCalAssociatorProducers.LCToSCAssociation_cff import layerClusterSimClusterAssociationProducerHFNose, layerClusterCaloParticleSimClusterAssociationProducerHFNose
 # from SimCalorimetry.HGCalAssociatorProducers.TSToSimTSAssociation_cfi import tracksterSimTracksterAssociationLinkingSuperclustering, tracksterSimTracksterAssociationPRSuperclustering #, tracksterSimTracksterAssociationLinkingbyCLUE3DEM, tracksterSimTracksterAssociationLinkingbyCLUE3DHAD, tracksterSimTracksterAssociationPRbyCLUE3DEM, tracksterSimTracksterAssociationPRbyCLUE3DHAD
 from RecoHGCal.TICL.mergedTrackstersProducer_cfi import mergedTrackstersProducer as _mergedTrackstersProducer
 from SimCalorimetry.HGCalAssociatorProducers.SimTauProducer_cfi import *
@@ -40,8 +37,8 @@ hgcalPFJetValidation = _hgcalPFJetValidation.clone(BenchmarkLabel = 'PFJetValida
     VariablePtBins=[10., 30., 80., 120., 250., 600.],
     DeltaPtOvPtHistoParameter = dict(EROn=True,EREtaMax=3.0, EREtaMin=1.6, slicingOn=True))
 
-hgcalAssociators = cms.Task(lcAssocByEnergyScoreProducer, layerClusterCaloParticleAssociationProducer,
-                            scAssocByEnergyScoreProducer, layerClusterSimClusterAssociationProducer, layerClusterBoundaryTrackSimClusterAssociationProducer, layerClusterMergedSimClusterAssociationProducer, layerClusterCaloParticleSimClusterAssociationProducer,
+hgcalAssociators = cms.Task(scAssocByEnergyScoreProducer,
+                            layerClusterSimClusterAssociationProducer, layerClusterBoundaryTrackSimClusterAssociationProducer, layerClusterMergedSimClusterAssociationProducer, layerClusterCaloParticleSimClusterAssociationProducer,
                             SimTauProducer,
                             # FP 07/2024 new associators:
                             # layerClusterToCLUE3DTracksterAssociation, layerClusterToTracksterMergeAssociation,
@@ -74,4 +71,4 @@ hgcalValidation = cms.Sequence(hgcalSimHitValidationEE
                                + hgcalPFJetValidation)
 
 _hfnose_hgcalAssociatorsTask = hgcalAssociators.copy()
-_hfnose_hgcalAssociatorsTask.add(layerClusterCaloParticleAssociationProducerHFNose, layerClusterSimClusterAssociationProducerHFNose)
+_hfnose_hgcalAssociatorsTask.add(layerClusterCaloParticleSimClusterAssociationProducerHFNose, layerClusterSimClusterAssociationProducerHFNose)
