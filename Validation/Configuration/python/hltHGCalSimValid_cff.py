@@ -1,9 +1,6 @@
 import FWCore.ParameterSet.Config as cms
 
-from SimCalorimetry.HGCalSimProducers.hgcHitAssociation_cfi import lcAssocByEnergyScoreProducer as _lcAssocByEnergyScoreProducer
-from SimCalorimetry.HGCalSimProducers.hgcHitAssociation_cfi import scAssocByEnergyScoreProducer as _scAssocByEnergyScoreProducer
-from SimCalorimetry.HGCalAssociatorProducers.LCToSCAssociation_cfi import layerClusterSimClusterAssociation as _layerClusterSimClusterAssociationProducer
-from SimCalorimetry.HGCalAssociatorProducers.LCToCPAssociation_cfi import layerClusterCaloParticleAssociation as _layerClusterCaloParticleAssociationProducer
+from SimCalorimetry.HGCalAssociatorProducers.LCToSCAssociation_cff import scAssocByEnergyScoreProducer as _scAssocByEnergyScoreProducer, layerClusterSimClusterAssociationProducer as _layerClusterSimClusterAssociationProducer, layerClusterBoundaryTrackSimClusterAssociationProducer as _layerClusterBoundaryTrackSimClusterAssociationProducer, layerClusterCaloParticleSimClusterAssociationProducer as _layerClusterCaloParticleSimClusterAssociationProducer
 
 from SimCalorimetry.HGCalAssociatorProducers.SimClusterToCaloParticleAssociation_cfi import SimClusterToCaloParticleAssociation
 from SimCalorimetry.HGCalAssociatorProducers.TSToSimTSAssociation_cfi import  allTrackstersToSimTrackstersAssociationsByLCs as _allTrackstersToSimTrackstersAssociationsByLCs
@@ -18,33 +15,25 @@ hltRecHitMapProducer = _recHitMapProducer.clone(
     hgcalOnly = True,
 )
 
-hltLcAssocByEnergyScoreProducer = _lcAssocByEnergyScoreProducer.clone(
-    hits = cms.InputTag("hltRecHitMapProducer", "RefProdVectorHGCRecHitCollection"),
-    hitMapTag = cms.InputTag("hltRecHitMapProducer","hgcalRecHitMap"),
-)
-
 hltScAssocByEnergyScoreProducer = _scAssocByEnergyScoreProducer.clone(
     hits = cms.InputTag("hltRecHitMapProducer", "RefProdVectorHGCRecHitCollection"),
     hitMapTag = cms.InputTag("hltRecHitMapProducer","hgcalRecHitMap"),
 )
 
 # Layer Cluster <-> SimCluster/CaloParticle associations
-hltLayerClusterCaloParticleAssociationProducer = _layerClusterCaloParticleAssociationProducer.clone( # needed for HGCalValidator
-    associator = cms.InputTag("hltLcAssocByEnergyScoreProducer"),
-    label_lc = cms.InputTag("hltMergeLayerClusters")
-)
 hltLayerClusterSimClusterAssociationProducer = _layerClusterSimClusterAssociationProducer.clone(
     associator = cms.InputTag("hltScAssocByEnergyScoreProducer"),
     label_lcl = cms.InputTag("hltMergeLayerClusters")
 )
-hltLayerClusterBoundaryTrackSimClusterAssociationProducer = hltLayerClusterSimClusterAssociationProducer.clone(
-    label_scl=cms.InputTag("mix", "MergedCaloTruthBoundaryTrackSimCluster")
+hltLayerClusterBoundaryTrackSimClusterAssociationProducer = _layerClusterBoundaryTrackSimClusterAssociationProducer.clone(
+    associator = cms.InputTag("hltScAssocByEnergyScoreProducer"),
+    label_lcl = cms.InputTag("hltMergeLayerClusters")
 )
 # the next associator is an associator of LCs->SimCluster dataformat but using SimCluster collection that is a 1-1 mapping to CaloParticle. 
 # this way downstream code only has one dataformat (SimCluster) instead of 2 (CaloParticle & SimCluster)
-# at some point hltLayerClusterCaloParticleAssociationProducer will be removed, keeping only hltLayerClusterCaloParticleSimClusterAssociationProducer (once HGCalValidator is updated)
-hltLayerClusterCaloParticleSimClusterAssociationProducer = hltLayerClusterSimClusterAssociationProducer.clone(
-    label_scl=cms.InputTag("mix", "MergedCaloTruthCaloParticle")
+hltLayerClusterCaloParticleSimClusterAssociationProducer = _layerClusterCaloParticleSimClusterAssociationProducer.clone(
+    associator = cms.InputTag("hltScAssocByEnergyScoreProducer"),
+    label_lcl = cms.InputTag("hltMergeLayerClusters")
 )
 
 from SimCalorimetry.HGCalAssociatorProducers.AllLayerClusterToTracksterAssociatorsProducer_cfi import AllLayerClusterToTracksterAssociatorsProducer as _AllLayerClusterToTracksterAssociatorsProducer
@@ -129,11 +118,9 @@ hltAllTrackstersToSimTrackstersAssociationsByHits = _AllTracksterToSimTracksterA
 )
 
 hltHgcalAssociatorsTask = cms.Task(hltRecHitMapProducer,
-                                   hltLcAssocByEnergyScoreProducer,
                                    hltScAssocByEnergyScoreProducer,
                                    SimClusterToCaloParticleAssociation,
-                                   hltLayerClusterCaloParticleAssociationProducer, hltLayerClusterCaloParticleSimClusterAssociationProducer,
-                                   hltLayerClusterSimClusterAssociationProducer, hltLayerClusterBoundaryTrackSimClusterAssociationProducer,
+                                   hltLayerClusterSimClusterAssociationProducer, hltLayerClusterBoundaryTrackSimClusterAssociationProducer, hltLayerClusterCaloParticleSimClusterAssociationProducer,
                                    hltAllLayerClusterToTracksterAssociations,
                                    hltAllTrackstersToSimTrackstersAssociationsByLCs,
                                    hltAllHitToTracksterAssociations,
