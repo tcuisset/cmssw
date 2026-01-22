@@ -7,15 +7,23 @@ allTrackstersToSimTrackstersAssociationsByHits = AllTracksterToSimTracksterAssoc
     tracksterCollections = cms.VInputTag(
         *[cms.InputTag(label) for label in ticlIterLabels]
     ),
-    simTracksterCollections = cms.VInputTag(
-      'ticlSimTracksters',
-      'ticlSimTracksters:fromCPs'
-    ),
+    simTracksters = cms.VPSet(
+        cms.PSet(
+            simTracksterCollection=cms.InputTag("ticlSimTracksters", "fromLegacySimCluster"),
+            hitToSimClusterMap=cms.InputTag("hitToLegacySimClusterAssociator")
+        ),
+        cms.PSet(
+            simTracksterCollection=cms.InputTag("ticlSimTracksters", "fromBoundarySimCluster"),
+            hitToSimClusterMap=cms.InputTag("hitToBoundarySimClusterAssociator")
+        ),
+        cms.PSet(
+            simTracksterCollection=cms.InputTag("ticlSimTracksters", "fromMergedSimCluster"),
+            hitToSimClusterMap=cms.InputTag("hitToMergedSimClusterAssociator")
+        ),
+        cms.PSet(
+            simTracksterCollection=cms.InputTag("ticlSimTracksters", "fromCaloParticle"),
+            hitToSimClusterMap=cms.InputTag("hitToCPSimClusterAssociator")
+        ),
+    )
 )
 
-
-from Configuration.ProcessModifiers.premix_stage2_cff import premix_stage2
-
-premix_stage2.toModify(allTrackstersToSimTrackstersAssociationsByHits,
-    caloParticles = "mixData:MergedCaloTruth",
-)

@@ -54,7 +54,7 @@ hltTiclCandidateTable = cms.EDProducer(
 hltSimTiclCandidateTable = cms.EDProducer(
     "TICLCandidateTableProducer",
     skipNonExistingSrc=cms.bool(True),
-    src=cms.InputTag("hltTiclSimTracksters"),
+    src=cms.InputTag("hltTiclSimTICLCandidatesFromBoundary"),
     cut=cms.string(""),
     name=cms.string("hltSimTICLCandidates"),
     doc=cms.string("SimTICLCandidates"),
@@ -113,7 +113,7 @@ hltTiclCandidateExtraTable = cms.EDProducer(
 
 hltSimTiclCandidateExtraTable = cms.EDProducer(
     "TICLCandidateExtraTableProducer",
-    src = cms.InputTag("hltTiclSimTracksters"),
+    src = cms.InputTag("hltTiclSimTICLCandidatesFromBoundary"),
     name = cms.string("SimCandidate2Tracksters"),
     doc = cms.string("TICLCandidates extra table with linked Tracksters"),
     collectionVariables = cms.PSet(

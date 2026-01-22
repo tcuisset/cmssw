@@ -1,7 +1,11 @@
-#include <algorithm>
+#include <vector>
+#include <limits>
+#include <string>
+#include <memory>
 #include "DataFormats/NanoAOD/interface/FlatTable.h"
 #include "DataFormats/HGCalReco/interface/Trackster.h"
 #include "SimDataFormats/CaloAnalysis/interface/CaloParticle.h"
+#include "SimDataFormats/CaloAnalysis/interface/CaloParticleFwd.h"
 #include "SimDataFormats/CaloAnalysis/interface/SimCluster.h"
 #include "FWCore/ParameterSet/interface/ConfigurationDescriptions.h"
 #include "FWCore/Framework/interface/Event.h"
@@ -16,11 +20,13 @@ public:
       : tableName_(cfg.getParameter<std::string>("tableName")),
         skipNonExistingSrc_(cfg.getParameter<bool>("skipNonExistingSrc")),
         simTrackstersToken_(mayConsume<std::vector<ticl::Trackster>>(cfg.getParameter<edm::InputTag>("simTracksters"))),
-        caloParticlesToken_(mayConsume<std::vector<CaloParticle>>(cfg.getParameter<edm::InputTag>("caloParticles"))),
-        simClustersToken_(mayConsume<std::vector<SimCluster>>(cfg.getParameter<edm::InputTag>("simClusters"))),
-        caloParticleToSimClustersMap_token_(mayConsume<std::map<uint, std::vector<uint>>>(
-            cfg.getParameter<edm::InputTag>("caloParticleToSimClustersMap"))),
+        simTracksterToSimClusterMap_token_(
+            mayConsume<SimClusterRefVector>(cfg.getParameter<edm::InputTag>("simTracksterToSimClusterMap"))),
+        simTracksterToCaloParticleMap_token_(
+            mayConsume<CaloParticleRefVector>(cfg.getParameter<edm::InputTag>("simTracksterToCaloParticleMap"))),
         precision_(cfg.getParameter<int>("precision")) {
+    mayConsume<std::vector<SimCluster>>(cfg.getParameter<edm::InputTag>("simClusters"));
+    mayConsume<std::vector<CaloParticle>>(cfg.getParameter<edm::InputTag>("caloParticles"));
     produces<nanoaod::FlatTable>(tableName_);
   }
 
@@ -31,9 +37,14 @@ public:
     desc.add<bool>("skipNonExistingSrc", false)
         ->setComment("whether or not to skip producing the table on absent input product");
     desc.add<edm::InputTag>("simTracksters", edm::InputTag("hltTiclSimTracksters"));
-    desc.add<edm::InputTag>("caloParticles", edm::InputTag("mix", "MergedCaloTruth"));
-    desc.add<edm::InputTag>("simClusters", edm::InputTag("mix", "MergedCaloTruth"));
-    desc.add<edm::InputTag>("caloParticleToSimClustersMap", edm::InputTag("hltTiclSimTracksters"));
+    desc.add<edm::InputTag>("simClusters", edm::InputTag("mix", "MergedCaloTruth"))
+        ->setComment("SimCluster collection used to build simTracksters");
+    desc.add<edm::InputTag>("caloParticles", edm::InputTag("mix", "MergedCaloTruth"))
+        ->setComment("CaloParticle collection (pointed to by caloParticleToSimClustersMap)");
+    desc.add<edm::InputTag>("simTracksterToSimClusterMap", edm::InputTag("hltTiclSimTracksters"))
+        ->setComment("DMap SimTrackster -> SimCluster it was made from (map produced by SimTrackstersProducer)");
+    desc.add<edm::InputTag>("simTracksterToCaloParticleMap", edm::InputTag("hltTiclSimTracksters"))
+        ->setComment("Direct map SimTrackster -> CaloParticle (map produced by SimTrackstersProducer)");
     desc.add<int>("precision", 7);
     descriptions.addWithDefaultLabel(desc);
   }
@@ -42,11 +53,8 @@ private:
   void produce(edm::StreamID id, edm::Event& event, const edm::EventSetup& setup) const override {
     const auto simTrackstersHandle = event.getHandle(simTrackstersToken_);
     const auto& simTracksters = *simTrackstersHandle;
-    const auto caloParticlesHandle = event.getHandle(caloParticlesToken_);
-    const auto& caloParticles = *caloParticlesHandle;
-    const auto simClustersHandle = event.getHandle(simClustersToken_);
-    const auto& simClusters = *simClustersHandle;
-    const auto cpToSCMap = event.get(caloParticleToSimClustersMap_token_);
+    SimClusterRefVector const& simTracksterToSimCluster_map = event.get(simTracksterToSimClusterMap_token_);
+    CaloParticleRefVector const& simTracksterToCaloParticle_map = event.get(simTracksterToCaloParticleMap_token_);
     const size_t nSimTracksters = simTrackstersHandle.isValid() ? simTrackstersHandle->size() : 0;
 
     static constexpr float default_value = std::numeric_limits<float>::quiet_NaN();
@@ -89,23 +97,13 @@ private:
     if (simTrackstersHandle.isValid() || !(this->skipNonExistingSrc_)) {
       for (size_t iSim = 0; iSim < simTracksters.size(); ++iSim) {
         const auto& simT = simTracksters[iSim];
-        float time = default_value;
 
-        if (simT.seedID() == caloParticlesHandle.id()) {
-          const auto& cp = caloParticles[simT.seedIndex()];
-          time = cp.simTime();
-          fillVectors(cp, iSim, time);
-        } else {
-          const auto& sc = simClusters[simT.seedIndex()];
-          //SCtoCP map not availalbe, use CPtoSC map instead
-          for (const auto& [cpIdx, scVec] : cpToSCMap) {
-            if (std::ranges::find(scVec, simT.seedIndex()) != scVec.end()) {
-              time = caloParticles[cpIdx].simTime();
-              break;  //dont need to check further
-            }
-          }
-          fillVectors(sc, iSim, time);
-        }
+        assert(simT.seedID() == simTracksterToSimCluster_map.id());
+
+        SimCluster const& simCluster = *simTracksterToSimCluster_map[iSim];
+        CaloParticle const& caloParticle = *simTracksterToCaloParticle_map[iSim];
+
+        fillVectors(simCluster, iSim, caloParticle.simTime());
       }
     }
     auto simTrackstersTable =
@@ -137,9 +135,12 @@ private:
   const std::string tableName_;
   const bool skipNonExistingSrc_;
   const edm::EDGetTokenT<std::vector<ticl::Trackster>> simTrackstersToken_;
-  const edm::EDGetTokenT<std::vector<CaloParticle>> caloParticlesToken_;
-  const edm::EDGetTokenT<std::vector<SimCluster>> simClustersToken_;
-  const edm::EDGetTokenT<std::map<uint, std::vector<uint>>> caloParticleToSimClustersMap_token_;
+
+  const edm::EDGetTokenT<edm::RefVector<std::vector<SimCluster>>>
+      simTracksterToSimClusterMap_token_;  // Map from SimTrackster to SimCluster used to make it
+  const edm::EDGetTokenT<CaloParticleRefVector>
+      simTracksterToCaloParticleMap_token_;  // Direct map SimTrackster -> CaloParticle (works also for SimTs from SimCluster)
+
   const unsigned int precision_;
 };
 

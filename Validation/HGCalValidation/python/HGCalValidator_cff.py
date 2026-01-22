@@ -6,7 +6,7 @@ from RecoHGCal.TICL.iterativeTICL_cff import ticlIterLabels, associatorsInstance
 
 
 hgcalValidator = _hgcalValidator.clone(
-    label_tst = cms.VInputTag(*[cms.InputTag(label) for label in ticlIterLabels] + [cms.InputTag("ticlSimTracksters", "fromCPs"), cms.InputTag("ticlSimTracksters")]),
+    label_tst = cms.VInputTag(*[cms.InputTag(label) for label in ticlIterLabels] + [cms.InputTag('ticlSimTracksters', 'fromCaloParticle'), cms.InputTag("ticlSimTracksters", "fromLegacySimCluster"), cms.InputTag("ticlSimTracksters", "fromBoundarySimCluster"), cms.InputTag("ticlSimTracksters", "fromMergedSimCluster")]),
     allTracksterTracksterAssociatorsLabels = cms.VInputTag( *[cms.InputTag('allTrackstersToSimTrackstersAssociationsByLCs:'+associator) for associator in associatorsInstances] ),
     allTracksterTracksterByHitsAssociatorsLabels = cms.VInputTag( *[cms.InputTag('allTrackstersToSimTrackstersAssociationsByHits:'+associator) for associator in associatorsInstances] )
 )
@@ -16,6 +16,7 @@ premix_stage2.toModify(hgcalValidator,
     label_cp_fake = "mixData:MergedCaloTruth",
     label_cp_effic = "mixData:MergedCaloTruth",
     label_scl = "mixData:MergedCaloTruth",
+    simClustersToCaloParticlesMap = cms.InputTag("mixData", hgcalValidator.simClustersToCaloParticlesMap.productInstanceLabel)
 )
 
 from Configuration.Eras.Modifier_phase2_hgcalV10_cff import phase2_hgcalV10
@@ -27,12 +28,12 @@ phase2_hgcalV16.toModify(hgcalValidator, totallayers_to_monitor = cms.int32(47))
 from Configuration.ProcessModifiers.ticl_v5_cff import ticl_v5
 
 lcInputMask_v5  = ["ticlTrackstersCLUE3DHigh"]
-lcInputMask_v5.extend([cms.InputTag("ticlSimTracksters", "fromCPs"), cms.InputTag("ticlSimTracksters")])
+lcInputMask_v5.extend([cms.InputTag("ticlSimTracksters", "fromCaloParticle"), cms.InputTag("ticlSimTracksters", "fromBoundarySimCluster")])
 
 ticl_v5.toModify(hgcalValidator,
     LayerClustersInputMask = cms.VInputTag(lcInputMask_v5),
     ticlTrackstersMerge = cms.InputTag("ticlCandidate"),
     isticlv5 = cms.untracked.bool(True),
-    mergeSimToRecoAssociator = cms.InputTag("allTrackstersToSimTrackstersAssociationsByLCs:ticlSimTrackstersfromCPsToticlCandidate"),
-    mergeRecoToSimAssociator = cms.InputTag("allTrackstersToSimTrackstersAssociationsByLCs:ticlCandidateToticlSimTrackstersfromCPs"),
+    mergeSimToRecoAssociator = cms.InputTag("allTrackstersToSimTrackstersAssociationsByLCs:ticlSimTrackstersfromCaloParticleToticlCandidate"),
+    mergeRecoToSimAssociator = cms.InputTag("allTrackstersToSimTrackstersAssociationsByLCs:ticlCandidateToticlSimTrackstersfromCaloParticle"),
 )
