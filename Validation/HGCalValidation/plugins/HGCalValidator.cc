@@ -395,15 +395,6 @@ void HGCalValidator::dqmAnalyze(const edm::Event& event,
   }
   ticl::TracksterCollection const& simTrackstersFromCPs = *simTracksterFromCPHandle;
 
-  /*
-  The new version of SimTrackstersProducer does not produce the same map as before. But actually HGVHistoProducerAlgo does not use that map
-  So just fill an empty map for now. TODO more permanent solution
-  edm::Handle<std::map<uint, std::vector<uint>>> simTrackstersMapHandle;
-  event.getByToken(simTrackstersMap_, simTrackstersMapHandle);
-  const std::map<uint, std::vector<uint>>& cpToSc_SimTrackstersMap = *simTrackstersMapHandle;
-  */
-  const std::map<uint, std::vector<uint>> cpToSc_SimTrackstersMap;
-
   edm::ESHandle<CaloGeometry> geom = setup.getHandle(caloGeomToken_);
   tools_->setGeometry(*geom);
   histoProducerAlgo_->setRecHitTools(tools_);
@@ -619,7 +610,6 @@ void HGCalValidator::dqmAnalyze(const edm::Event& event,
                                                 clusters,
                                                 simTracksters,
                                                 simTrackstersFromCPs,
-                                                cpToSc_SimTrackstersMap,
                                                 simClusters,
                                                 caloParticleHandle.id(),
                                                 caloParticles,
