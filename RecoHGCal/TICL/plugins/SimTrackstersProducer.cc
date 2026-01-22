@@ -44,6 +44,7 @@
 
 #include "TrackstersPCA.h"
 
+#include <numeric>
 #include <vector>
 #include <algorithm>
 
@@ -359,6 +360,22 @@ void SimTrackstersProducer::produceOne(edm::Event& evt,
     if (simTrackster.vertices().empty())
       continue;  // The sim->reco associators expect non-empty tracksters
 
+    if (simCluster.genParticles().empty()) {
+      // Generic SimCluster case : encode SimTrack composition in id_probabilities of the SimTrackster (energy-weighted)
+      std::array<float, Trackster::kParticleTypeLength> id_probs{};
+      for (SimTrack const& simTrack : simCluster.g4Tracks())
+        id_probs[static_cast<std::size_t>(tracksterParticleTypeFromPdgId(simTrack.type(), simTrack.charge()))] +=
+            simTrack.momentum().E();
+      float norm = 1. / std::accumulate(id_probs.begin(), id_probs.end(), 0.f);
+      for (std::size_t i = 0; i < id_probs.size(); i++)
+        id_probs[i] *= norm;
+      simTrackster.setProbabilities(id_probs.data());
+    } else {
+      // In case SimCluster is linked to a genParticle (ie CaloParticle case): take info from there
+      simTrackster.setIdProbability(
+          tracksterParticleTypeFromPdgId(simCluster.genParticles()[0]->pdgId(), simCluster.genParticles()[0]->charge()),
+          1.f);
+    }
     simTrackster.setIdProbability(tracksterParticleTypeFromPdgId(simCluster.pdgId(), simCluster.charge()), 1.f);
     if (simCluster.g4Tracks().at(0).crossedBoundary())
       simTrackster.setRegressedEnergy(simCluster.g4Tracks()[0].getMomentumAtBoundary().energy());
