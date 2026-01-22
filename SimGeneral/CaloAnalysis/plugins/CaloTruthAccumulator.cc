@@ -54,6 +54,7 @@
 
 #include <CLHEP/Units/SystemOfUnits.h>
 #include <fastjet/ClusterSequence.hh>
+#include <boost/container/flat_map.hpp>
 
 namespace {
   using Index_t = unsigned;
@@ -101,9 +102,13 @@ namespace {
   class SimClusterMergerByFastJet : public SubClusterMergerBase {
   public:
     SimClusterMergerByFastJet(SimClusterCollection &clusters,
-                              ClusterParentIndexRecorderT parentIndexRecorder,
+                              ClusterParentIndexRecorderT caloParticleParentIndexRecorder,
+                              ClusterParentIndexRecorderT subClusterToMergedClusterParentIndexRecorder,
                               fastjet::JetDefinition const &jetDefinition)
-        : clusters_(clusters), indexRecorder_(parentIndexRecorder), jetDefinition_(jetDefinition) {}
+        : clusters_(clusters),
+          caloParticleParentIndexRecorder_(caloParticleParentIndexRecorder),
+          subClusterToMergedClusterParentIndexRecorder_(subClusterToMergedClusterParentIndexRecorder),
+          jetDefinition_(jetDefinition) {}
 
     void start_subcluster(DecayChain::edge_descriptor e, const DecayChain &g, std::size_t currentSubClusterIndex) {
       auto edge_property = get(edge_weight, g, e);
@@ -122,17 +127,32 @@ namespace {
       fastjet::ClusterSequence sequence(fjInputs_, jetDefinition_);
       auto jets = sequence.inclusive_jets();
 
+      /// Map from index of subcluster to index of merged cluster
+      boost::container::flat_map<std::size_t, std::size_t> mapToSub;
+      mapToSub.reserve(fjInputs_.size());
+
       // Merging
       for (fastjet::PseudoJet const &jet : jets) {
         auto constituents = fastjet::sorted_by_E(jet.constituents());
         assert(!constituents.empty());
         assert(constituents[0].user_index() < static_cast<int>(subClustersBuilt.size()));
+        for (fastjet::PseudoJet const &pseudoJet : constituents) {
+          // Index of merged cluster is clusters_.size() since we will emplace it just below
+          mapToSub[pseudoJet.user_index()] = clusters_.size();
+        }
+
         clusters_.emplace_back(SimCluster::mergeHitsFromCollection(
             constituents | std::views::transform([&](fastjet::PseudoJet const &pseudoJet) {
               return subClustersBuilt[static_cast<std::size_t>(pseudoJet.user_index())];
             })));
 
-        indexRecorder_.recordParentClusterIndex(currentCaloParticleIndex);
+        // Record CaloParticle index for the merged SimCluster
+        caloParticleParentIndexRecorder_.recordParentClusterIndex(currentCaloParticleIndex);
+      }
+
+      for (fastjet::PseudoJet const &subCluster : fjInputs_) {
+        // Important to keep fjInputs_ in sync with subcluster indices
+        subClusterToMergedClusterParentIndexRecorder_.recordParentClusterIndex(mapToSub[subCluster.user_index()]);
       }
 
       fjInputs_.clear();
@@ -141,8 +161,10 @@ namespace {
   private:
     SimClusterCollection &clusters_;  ///< output merged clusters
 
-    std::vector<fastjet::PseudoJet> fjInputs_;
-    ClusterParentIndexRecorderT indexRecorder_;
+    std::vector<fastjet::PseudoJet> fjInputs_;  ///< SubClusters to be merged when end_parentCluster is called
+    ClusterParentIndexRecorderT caloParticleParentIndexRecorder_;  ///< build RefVector to CaloParticle
+    /// build RefVector from "sub" cluster to "this" cluster collection
+    ClusterParentIndexRecorderT subClusterToMergedClusterParentIndexRecorder_;
     fastjet::JetDefinition const &jetDefinition_;
   };
 
@@ -150,6 +172,7 @@ namespace {
   public:
     SimClusterMergerByFastJetConfig(edm::ProducesCollector &c, std::string tag, const edm::ParameterSet &ps)
         : SimClusterConfig(c, tag),
+          subClustersToMergedClusterMap_token(c.produces<SimClusterRefVector>(tag + "MapFromSubCluster")),
           jetClusteringRadius_(ps.getParameter<double>("jetClusteringRadius")),
           jetDefinition_(fastjet::antikt_algorithm, jetClusteringRadius_) {}
 
@@ -158,13 +181,26 @@ namespace {
     }
 
     template <typename ClusterParentIndexRecorderT>
-    auto getMerger(ClusterParentIndexRecorderT parentIndexRecorder) {
-      return SimClusterMergerByFastJet(outputClusters, parentIndexRecorder, jetDefinition_);
+    auto getMerger(ClusterParentIndexRecorderT caloParticleParentIndexRecorder,
+                   ClusterParentIndexRecorderT subClusterToMergedClusterParentIndexRecorder) {
+      return SimClusterMergerByFastJet(outputClusters,
+                                       caloParticleParentIndexRecorder,
+                                       subClusterToMergedClusterParentIndexRecorder,
+                                       jetDefinition_);
     }
+
+    void clear() /* override */ {
+      SimClusterConfig::clear();
+      subClustersToMergedClusterMap.clear();
+    }
+
+    /// For the map from subCluster to merged SimCluster
+    SimClusterRefVector subClustersToMergedClusterMap;
+    edm::EDPutTokenT<SimClusterRefVector> subClustersToMergedClusterMap_token;
 
   private:
     double jetClusteringRadius_;
-    fastjet::JetDefinition jetDefinition_;
+    const fastjet::JetDefinition jetDefinition_;
   };
 }  // namespace
 
@@ -243,8 +279,10 @@ private:
                         simClusterMergerFastJet_config_));
   }
 
-  edm::RefProd<SimClusterCollection>
-      caloParticles_refProd_;  ///< To build the RefVector from SimCluster to "CaloParticle" SimCluster collection
+  /// To build the RefVector from SimCluster to "CaloParticle" SimCluster collection
+  edm::RefProd<SimClusterCollection> caloParticles_refProd_;
+  /// To build the RefVector from "merged" SimCluster to "boundary" SimCluster collection
+  edm::RefProd<SimClusterCollection> boundarySimCluster_refProd_;
 
   const HGCalTopology *hgtopo_[3] = {nullptr, nullptr, nullptr};
   const HGCalDDDConstants *hgddd_[3] = {nullptr, nullptr, nullptr};
@@ -385,8 +423,8 @@ namespace {
     SubClusterVisitorTuple subClusterVisitors_;  ///< std::tuple of SubClusterVisitor
 
     bool insideCluster_{false};  ///< are we inside a CaloParticle (during DFS algorithm)
-    DecayChain::edge_descriptor
-        caloParticleEdge_;  ///< Keep track of CaloParticle root edge to flag end of cluster in DFS
+    /// Keep track of CaloParticle root edge to flag end of cluster in DFS
+    DecayChain::edge_descriptor caloParticleEdge_;
   };
 
   /** 
@@ -613,6 +651,8 @@ void CaloTruthAccumulator::initializeEvent(edm::Event const &event, edm::EventSe
   // Seems const_cast is necessary here
   caloParticles_refProd_ = const_cast<edm::Event &>(event).getRefBeforePut<SimClusterCollection>(
       caloParticleSimClusters_config_.outputClusters_token);
+  boundarySimCluster_refProd_ = const_cast<edm::Event &>(event).getRefBeforePut<SimClusterCollection>(
+      boundarySimClusters_config_.outputClusters_token);
 }
 
 /** Create handle to edm::HepMCProduct here because event.getByLabel with
@@ -704,6 +744,8 @@ void CaloTruthAccumulator::finalizeEvent(edm::Event &event, edm::EventSetup cons
     event.emplace(config.outputClusters_token, std::move(config.outputClusters));
     event.emplace(config.clustersToCaloParticleMap_token, std::move(config.clustersToCaloParticleMap));
   });
+  event.emplace(simClusterMergerFastJet_config_.subClustersToMergedClusterMap_token,
+                std::move(simClusterMergerFastJet_config_.subClustersToMergedClusterMap));
 
   m_detIdToTotalSimEnergy.clear();
 }
@@ -841,20 +883,23 @@ void CaloTruthAccumulator::accumulateEvent(const T &event,
       outputCaloParticles_,
       passGenPartSelections_lambda,
       std::make_tuple(
-          SubClusterVisitor(
+          SubClusterVisitor(  // "CaloParticle" SimCluster
               caloParticleSimClusters_config_.outputClusters,
+              // Trivial 1-1 mapping, kept for convenience
               ClusterParentIndexRecorder(caloParticleSimClusters_config_.clustersToCaloParticleMap,
-                                         caloParticles_refProd_),  // Trivial 1-1 mapping, kept for convenience
+                                         caloParticles_refProd_),
               visitorHelper,
               [&](EdgeProperty const &edge_property) -> bool {
                 // Create a SimCluster for every CaloParticle (duplicates the CaloParticle for convenience of use, to have one single dataformat)
                 return true;
               }),
-          LegacySimClusterVisitor(
+
+          LegacySimClusterVisitor(  // "legacy" SimCluster (from every SimTrack with simhits)
               legacySimClusters_config_.outputClusters,
               ClusterParentIndexRecorder(legacySimClusters_config_.clustersToCaloParticleMap, caloParticles_refProd_),
               visitorHelper),
-          SubClusterVisitor(
+
+          SubClusterVisitor(  // "boundary" SimCluster (from every SimTrack crossing boundary)
               boundarySimClusters_config_.outputClusters,
               ClusterParentIndexRecorder(boundarySimClusters_config_.clustersToCaloParticleMap, caloParticles_refProd_),
               visitorHelper,
@@ -862,8 +907,13 @@ void CaloTruthAccumulator::accumulateEvent(const T &event,
                 // Create SimCluster from every SimTrack crossing boundary (and which has simhits either itself as in its descendants), and that is inside a CaloParticle
                 return edge_property.cumulative_simHits != 0 && edge_property.simTrack->crossedBoundary();
               },
-              std::make_tuple(simClusterMergerFastJet_config_.getMerger(ClusterParentIndexRecorder(
-                  simClusterMergerFastJet_config_.clustersToCaloParticleMap, caloParticles_refProd_))))));
+              // "merging" subcluster configuration
+              std::make_tuple(simClusterMergerFastJet_config_.getMerger(
+                  ClusterParentIndexRecorder(simClusterMergerFastJet_config_.clustersToCaloParticleMap,
+                                             caloParticles_refProd_),
+                  ClusterParentIndexRecorder(simClusterMergerFastJet_config_.subClustersToMergedClusterMap,
+                                             boundarySimCluster_refProd_))))));
+
   depth_first_search(decay, visitor(primaryVisitor));  //  "visitor()" is a Boost BGL named parameter
 
 #if DEBUG
