@@ -2707,7 +2707,6 @@ void HGVHistoProducerAlgo::fill_trackster_histos(
     const reco::CaloClusterCollection& layerClusters,
     const ticl::TracksterCollection& simTSs,
     const ticl::TracksterCollection& simTSs_fromCP,
-    const std::map<unsigned int, std::vector<unsigned int>>& cpToSc_SimTrackstersMap,
     std::vector<SimCluster> const& sC,
     const edm::ProductID& cPHandle_id,
     std::vector<CaloParticle> const& cP,
