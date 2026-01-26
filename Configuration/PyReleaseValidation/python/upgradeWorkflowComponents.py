@@ -2147,7 +2147,7 @@ upgradeWFs['NGTScoutingAll'].step2 = {
     '--eventcontent':'FEVTDEBUGHLT,DQMIO'
 }
 upgradeWFs['NGTScoutingAll'].step3 = {
-    '--procModifiers': 'ngtScouting,alpaka,ticl_v5,ticl_barrel',
+    '--procModifiers': 'ngtScouting,alpaka,ticl_barrel',
    '-s':'HARVESTING:@hltValidation'
 }
 
