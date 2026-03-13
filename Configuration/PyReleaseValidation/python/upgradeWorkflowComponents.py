@@ -854,7 +854,7 @@ upgradeWFs['enableTICLdumper'] = UpgradeWorkflow_TICLdumper(
     suffix = '_enableTICLdumper',
     offset = 0.206,
 )
-upgradeWFs['enableTICLdumper'].step3 = {'--customise': 'RecoHGCal/TICL/customiseTICLFromReco.customiseTICLForDumper'}
+upgradeWFs['enableTICLdumper'].step3 = {'--customise': 'RecoHGCal/TICL/customiseTICLForDumper.customiseTICLForDumper'}
 
 class UpgradeWorkflow_simTrackstersFromPU(UpgradeWorkflow):
     def setup_(self, step, stepName, stepDict, k, properties):
