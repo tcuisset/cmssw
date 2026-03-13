@@ -27,7 +27,7 @@ ticlTrackstersCLUE3DHigh = _trackstersProducer.clone(
         doPidCut = True,
         cutHadProb = 999
     ),
-    inferenceAlgo = cms.string('TracksterInferenceByPFN'),
+    inferenceAlgo = cms.string('TracksterInferenceByTransformer'),
     pluginInferenceAlgoTracksterInferenceByDNN = cms.PSet(
         algo_verbosity = cms.int32(0),
         onnxPIDModelPath = cms.string('RecoHGCal/TICL/data/ticlv5/onnx_models/DNN/patternrecognition/id_v0.onnx'),
@@ -56,9 +56,22 @@ ticlTrackstersCLUE3DHigh = _trackstersProducer.clone(
         doPID = cms.int32(1),
         doRegression = cms.int32(0),
         type = cms.string('TracksterInferenceByPFN')
+    ),
+
+    pluginInferenceAlgoTracksterInferenceByTransformer = cms.PSet(
+        algo_verbosity = cms.int32(0),
+        onnxPIDModelPath = cms.string('RecoHGCal/TICL/data/PID-transformer.onnx'),
+        onnxEnergyModelPath = cms.string(''),
+        # inputNames  = cms.vstring("layerCluster_features", "layerCluster_mask", "trackster_features"),
+        # output_en   = cms.vstring('enreg_output'),
+        # output_id   = cms.vstring('pid_output'),
+        eid_min_cluster_energy = cms.double(1),
+        # eid_n_layers = cms.int32(50),
+        # eid_n_clusters = cms.int32(150),
+        doPID = cms.int32(1),
+        # doRegression = cms.int32(0),
+        type = cms.string('TracksterInferenceByTransformer')
     )
-
-
 )
 
 ticlCLUE3DHighStepTask = cms.Task(ticlSeedingGlobal
