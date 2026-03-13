@@ -57,8 +57,8 @@ numWFIB.extend([prefixDet+234.711])  #LST tracking on CPU (initialStep+HighPtTri
 numWFIB.extend([prefixDet+34.7501])# HLTTrackingOnly75e33
 numWFIB.extend([prefixDet+34.7502])# HLTTrackingNtuple75e33
 numWFIB.extend([prefixDet+34.751]) # HLTTiming75e33, alpaka
-numWFIB.extend([prefixDet+34.7511])# HLTTiming75e33, phase2CAExtension
-numWFIB.extend([prefixDet+34.752]) # HLTTiming75e33,
+# numWFIB.extend([prefixDet+34.7511])# HLTTiming75e33, phase2CAExtension
+# numWFIB.extend([prefixDet+34.752]) # HLTTiming75e33,
 numWFIB.extend([prefixDet+34.7521])# HLTTiming75e33, ticlv5TrackLinkingGNN
 numWFIB.extend([prefixDet+34.753]) # HLTTiming75e33, legacy tracking
 numWFIB.extend([prefixDet+34.754]) # HLTTiming75e33, legacy tracking with Patatrack quads
