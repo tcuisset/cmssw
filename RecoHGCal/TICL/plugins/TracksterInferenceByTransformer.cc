@@ -100,7 +100,7 @@ namespace ticl {
       const size_t nFloats = static_cast<size_t>(nTrackstersInBatch) * eidNClusters_ * eidNFeatures_;
       layerClusterFeatures.assign(nFloats, 0.f);  // sparse fill -> must zero
 
-      layerClusterMask.assign(static_cast<size_t>(nTrackstersInBatch)*eidNClusters_, 0);
+      layerClusterMask.assign(static_cast<size_t>(nTrackstersInBatch)*eidNClusters_, 1);
       tracksterFeatures.assign(static_cast<size_t>(nTrackstersInBatch)*5, 0.f);
 
       // ---- build sparse tensor for this minibatch
@@ -113,14 +113,14 @@ namespace ticl {
         std::iota(clusterIndices.begin(), clusterIndices.end(), 0);
 
         // the layer cluster mask is 0 for LCs in use and padded with ones
-        std::fill(layerClusterMask.begin()+vtxCount,layerClusterMask.end(), 1); 
+        std::fill_n(layerClusterMask.begin()+tracksterIdxInBatch*eidNClusters_, std::min(vtxCount, eidNClusters_), 0); 
 
         // std::sort(clusterIndices.begin(), clusterIndices.end(), [&layerClusters, &ts](int a, int b) {
         //   return layerClusters[ts.vertices(a)].energy() > layerClusters[ts.vertices(b)].energy();
         // });
 
-        int minLayer = -100;
-        int maxLayer = 100;
+        int minLayer = 100;
+        int maxLayer = -100;
 
         int layerClusterCount = 0;
         for (int k : clusterIndices) {
@@ -172,8 +172,11 @@ namespace ticl {
       if (!ortScratch_.outputs.empty() && !output_id_.empty()) {
         for (int bi = 0; bi < nTrackstersInBatch; ++bi) {
           auto& ts = tracksters[indices[start + bi]];
-          ts.setIdProbability(Trackster::ParticleType::charged_hadron, ortScratch_.outputs[0][bi*2+0]);
-          ts.setIdProbability(Trackster::ParticleType::photon, ortScratch_.outputs[0][bi*2+1]);
+          float output_proba_had = ortScratch_.outputs[0][bi];
+          ts.setIdProbability(Trackster::ParticleType::charged_hadron, output_proba_had*0.5f);
+          ts.setIdProbability(Trackster::ParticleType::neutral_hadron, output_proba_had*0.5f);
+          ts.setIdProbability(Trackster::ParticleType::photon, (1.f-output_proba_had)*0.5f);
+          ts.setIdProbability(Trackster::ParticleType::electron, (1.f-output_proba_had)*0.5f);
         }
       }
     }
