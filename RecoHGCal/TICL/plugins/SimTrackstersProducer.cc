@@ -106,19 +106,18 @@ namespace {
 
     const edm::EDGetTokenT<SimCaloObjectCollection_t> simclusters_token;
     // const std::string simClusterType;
-    const edm::EDGetTokenT<SimToRecoLCAssociation<SimCaloObject_t>>
-        associatorMapSimClusterToReco_token;  //EDGetTokenT<SimToRecoLCAssociation<SimCaloObject_t>>
-    const edm::EDGetTokenT<SimClusterRefVector>
-        simClusterToCaloParticleSC_map_token;  ///< Map from simclusters_token collection to CaloParticle collection (here as SimCluster dataformat but 1-1 mapping to CaloParticle)
+    const edm::EDGetTokenT<SimToRecoLCAssociation<SimCaloObject_t>> associatorMapSimClusterToReco_token;
+    /// Map from simclusters_token collection to CaloParticle collection (here as SimCluster dataformat but 1-1 mapping to CaloParticle)
+    const edm::EDGetTokenT<SimClusterRefVector> simClusterToCaloParticleSC_map_token;
 
     const edm::EDPutTokenT<TracksterCollection> simTrackster_token;  ///< output collection
-    const edm::EDPutTokenT<std::vector<float>>
-        outputMask_token;  ///< output layer cluster mask after masking LCs from SimCluster
-    const edm::EDPutTokenT<edm::RefVector<std::vector<SimCaloObject_t>>>
-        simTracksterToSimCluster_map_token;  ///< output map from SimTrackster to SimCluster it was made from (1-1 mapping except when empty simts are removed)
-    const edm::EDPutTokenT<CaloParticleRefVector>
-        simTracksterToCaloParticle_map_token;  ///< output Map from SimTrackster to CaloParticle (for convenience, can be recomputed by chaining maps SimTs->SimCluster->CaloParticle)
-    // T<edm::RefVector<std::vector<SimCluster>>>
+    /// output layer cluster mask after masking LCs from SimCluster
+    const edm::EDPutTokenT<std::vector<float>> outputMask_token;
+    // output map from SimTrackster to SimCluster it was made from (1-1 mapping except when empty simts are removed)
+    const edm::EDPutTokenT<edm::RefVector<std::vector<SimCaloObject_t>>> simTracksterToSimCluster_map_token;
+    /// output Map from SimTrackster to CaloParticle (for convenience, can be recomputed by chaining maps SimTs->SimCluster->CaloParticle)
+    const edm::EDPutTokenT<CaloParticleRefVector> simTracksterToCaloParticle_map_token;
+
     const BoundaryTimeMode simTracksterBoundaryTime;                ///< configuration for setting boundary time
     const ticl::Trackster::IterationIndex tracksterIterationIndex;  ///< to be set in each output trackster
   };

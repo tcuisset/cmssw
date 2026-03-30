@@ -114,12 +114,12 @@ void SimTICLCandidateProducerT<BaseSimObject_t, SubSimObject_t>::fillDescription
       ->setComment("Map 'baseSimTracksters' collection -> 'baseCaloSimObjects' collection ");
   desc.add<edm::InputTag>("baseSimTracksterToCaloParticle_map")
       ->setComment(
-          "Map 'baseSimTracksters' collection -> CaloParticle (used only to get the vertex time of CaloParticle) ");
+          "Map 'baseSimTracksters' collection -> CaloParticle (used only to get the vertex time of CaloParticle)");
 
   desc.add<edm::InputTag>("subSimTracksters")
       ->setComment(
           "'Sub' trackster collection : tracksters whose references are added to TICLCandidate object (usually "
-          "SimTrackster from boundary SimCluster)");  // SimTrackster from Legacy SimCluster
+          "SimTrackster from boundary SimCluster)");
   desc.add<edm::InputTag>("subSimTracksterToSubSimObject_map");
 
   desc.add<edm::InputTag>("MtdSimTracksters", edm::InputTag("mix", "MergedMtdTruthST"));
@@ -133,8 +133,8 @@ void SimTICLCandidateProducerT<BaseSimObject_t, SubSimObject_t>::produce(edm::St
                                                                          edm::Event& evt,
                                                                          const edm::EventSetup& es) const {
   edm::Handle<std::vector<BaseSimObject_t>> baseCaloSimObjects_h = evt.getHandle(baseCaloSimObjects_token_);
-  edm::Handle<std::vector<SubSimObject_t>> subCaloSimObjects_h =
-      evt.getHandle(subCaloSimObjects_token_);  // not needed currently but kept in case of future need
+  // not needed currently but kept in case of future need
+  edm::Handle<std::vector<SubSimObject_t>> subCaloSimObjects_h = evt.getHandle(subCaloSimObjects_token_);
 
   edm::RefVector<std::vector<BaseSimObject_t>> const& subToBaseSimObject_map = evt.get(subToBaseSimObject_map_token_);
   edm::RefVector<std::vector<BaseSimObject_t>> const& baseSimTracksterToBaseSimObject_map =
@@ -150,8 +150,8 @@ void SimTICLCandidateProducerT<BaseSimObject_t, SubSimObject_t>::produce(edm::St
   }
 
   TracksterCollection const& baseSimTracksters = evt.get(baseSimTracksters_token_);
-  edm::Handle<TracksterCollection> subSimTracksters_h =
-      evt.getHandle(subSimTracksters_token_);  // Need handle for TICLCandidate::addTrackster
+  // Need handle for TICLCandidate::addTrackster
+  edm::Handle<TracksterCollection> subSimTracksters_h = evt.getHandle(subSimTracksters_token_);
   TracksterCollection const& subSimTracksters = *subSimTracksters_h;
 
   assert(subToBaseSimObject_map.id() == baseCaloSimObjects_h.id());
@@ -257,8 +257,8 @@ void SimTICLCandidateProducerT<BaseSimObject_t, SubSimObject_t>::produce(edm::St
       cand.setMTDTime(MTDst->time(), 0);
     }
 
-    cand.setTime(baseSimTracksterToCaloParticle_map[mapTICLCandidateToBaseSimTsIndex(i)]->simTime(),
-                 0);  // Time of SimVertex of genParticle
+    // Time of SimVertex of genParticle
+    cand.setTime(baseSimTracksterToCaloParticle_map[mapTICLCandidateToBaseSimTsIndex(i)]->simTime(), 0);
 
     for (const auto& trackster : cand.tracksters()) {
       rawEnergy += trackster->raw_energy();
