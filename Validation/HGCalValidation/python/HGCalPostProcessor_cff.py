@@ -4,7 +4,7 @@ from Validation.HGCalValidation.HGCalSimHitsClient_cff import *
 from Validation.HGCalValidation.HGCalDigiClient_cff    import *
 from Validation.HGCalValidation.HGCalRecHitsClient_cff import *
 from Validation.HGCalValidation.PostProcessorHGCAL_cfi import postProcessorHGCALlayerclusters,postProcessorHGCALsimclusters,postProcessorHGCALTracksters,postProcessorHGCALCandidates
-from Validation.HGCalValidation.ticlSuperclusterValidation_cff import postProcessorTICLPIDValid
+from Validation.HGCalValidation.ticlSuperclusterValidation_cff import *
 
 hgcalPostProcessor = cms.Sequence(hgcalSimHitClientEE
     + hgcalSimHitClientHEF
@@ -21,5 +21,5 @@ hgcalValidatorPostProcessor = cms.Sequence(
     postProcessorHGCALsimclusters+
     postProcessorHGCALTracksters+
     postProcessorHGCALCandidates+
-    postProcessorTICLPIDValid)
+    postProcessorTiclSupercluster)
 
