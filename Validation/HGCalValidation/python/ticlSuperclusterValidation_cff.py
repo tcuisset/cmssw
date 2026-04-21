@@ -10,8 +10,8 @@ from Validation.HGCalValidation.tracksterSuperclusteringValidCandidateMaskProduc
 sourceTracksterIteration = "ticlTrackstersCLUE3DHigh" # trackster collection used as input to superclustering (CLUE3D tracksters)
 superclusterTracksterIteration = "ticlTracksterLinksSuperclusteringDNN" # trackster collection output by superclustering (superclusters in trackster dataformat)
 simTrackstersCollection = "ticlSimTrackstersfromCPs" # simtrackster collection used for genmatching (CaloParticle)
-sim2recoscore = 0.3 # cut on sim2reco score to consider a supercluster genmatched
-
+sim2recoscore_forEfficiency = 0.3 # cut on sim2reco score to consider a supercluster genmatched for efficiency plots
+sim2recoscore_forResolution = 0.99 # cut for resolution plots (looser as otherwise the scale is biased to always have Ereco>=Etrue)
 
 ################ Validation of PID cut for superclustering
 
@@ -92,10 +92,72 @@ postProcessorTICLPIDValid = DQMEDHarvester('DQMGenericClient',
     verbose = cms.untracked.uint32(4))
 
 
+################ Validation of superclusters (in trackster dataformat)
+from Validation.HGCalValidation.hgcalSuperClusterValidator_cfi import hgcalSuperClusterValidator as _hgcalSuperClusterValidator
+hgcalSuperClusterValidator = _hgcalSuperClusterValidator.clone(
+    sc_tracksters = cms.InputTag(superclusterTracksterIteration),
+    sc_tracksters_before_linking = cms.InputTag(sourceTracksterIteration),
+    linkedTracksterIdToInputTracksterId = cms.InputTag(superclusterTracksterIteration, "linkedTracksterIdToInputTracksterId"),
+    associatorsimToReco = cms.InputTag(f"allTrackstersToSimTrackstersAssociationsByLCs:{simTrackstersCollection}To{superclusterTracksterIteration}"),
+    simToRecoScoreThreshold_forEfficiency = sim2recoscore_forEfficiency,
+    simToRecoScoreThreshold_forResolution = sim2recoscore_forResolution
+)
+
+from Configuration.ProcessModifiers.ticl_superclustering_mustache_ticl_cff import ticl_superclustering_mustache_ticl
+ticl_superclustering_mustache_ticl.toModify(hgcalSuperClusterValidator,
+    sc_tracksters = cms.InputTag("ticlTracksterLinksSuperclusteringMustache"),
+    linkedTracksterIdToInputTracksterId = cms.InputTag("ticlTracksterLinksSuperclusteringMustache", "linkedTracksterIdToInputTracksterId"))
+
+
+## post-processing 
+from DQMServices.Core.DQMEDHarvester import DQMEDHarvester
+postProcessorHGCalSuperClusterValidator = DQMEDHarvester('DQMGenericClient',
+    subDirs = cms.untracked.vstring("HGCAL/SuperClusters"),
+    efficiencySets = cms.untracked.VPSet(
+        cms.untracked.PSet(
+            name=cms.untracked.string("sc_ET_eff"),
+            title=cms.untracked.string(f"Efficiency of SuperCluster reconstruction (denom=e/g CaloParticle, num=denom+supercluster with sim2reco score<{sim2recoscore_forEfficiency})"),
+            numerator=cms.untracked.string("sim_ET_vs_Eta_num"),
+            denominator=cms.untracked.string("sim_ET_vs_Eta_denom")
+        ),
+    ),
+    resolutionProfileSets = cms.untracked.VPSet( # resolutionProfileSets
+        cms.untracked.PSet(
+            namePrefix=cms.untracked.string("sc_resolution_vs_pt"),
+            titlePrefix=cms.untracked.string("HGCAL SuperCluster energy resolution (Esc / Etrue) vs ET (RMS, Etrue=simTrackster->regressed_energy)"),
+            srcName=cms.untracked.string("sc_EoverEtruth_vs_ET"),
+            typeName=cms.untracked.string("rms"),
+        ),
+
+        cms.untracked.PSet(
+            namePrefix=cms.untracked.string("sc_resolution_vs_pt_lowEta"),
+            titlePrefix=cms.untracked.string("HGCAL SuperCluster energy resolution (Esc / Etrue) vs ET (abs(eta)<2.1 region) (RMS, Etrue=simTrackster->regressed_energy)"),
+            srcName=cms.untracked.string("sc_EoverEtruth_vs_ET_lowEta"),
+            typeName=cms.untracked.string("rms"),
+        ),
+        cms.untracked.PSet(
+            namePrefix=cms.untracked.string("sc_resolution_vs_pt_midEta"),
+            titlePrefix=cms.untracked.string("HGCAL SuperCluster energy resolution (Esc / Etrue) vs ET (2.1<abs(eta)<2.6 region) (RMS, Etrue=simTrackster->regressed_energy)"),
+            srcName=cms.untracked.string("sc_EoverEtruth_vs_ET_midEta"),
+            typeName=cms.untracked.string("rms"),
+        ),
+        cms.untracked.PSet(
+            namePrefix=cms.untracked.string("sc_resolution_vs_pt_highEta"),
+            titlePrefix=cms.untracked.string("HGCAL SuperCluster energy resolution (Esc / Etrue) vs ET (abs(eta)>2.6 region) (RMS, Etrue=simTrackster->regressed_energy)"),
+            srcName=cms.untracked.string("sc_EoverEtruth_vs_ET_highEta"),
+            typeName=cms.untracked.string("rms"),
+        ),
+
+    ),
+    efficiency = cms.vstring(),
+    resolution = cms.vstring(),
+    verbose = cms.untracked.uint32(4))
+
+
 ########################### Sequences
 ticlSuperclusterValidation = cms.Sequence(
-    ticlSuperclusterPIDValidation
+    ticlSuperclusterPIDValidation + hgcalSuperClusterValidator
 )
 postProcessorTiclSupercluster = cms.Sequence(
-    postProcessorTICLPIDValid
+    postProcessorTICLPIDValid + postProcessorHGCalSuperClusterValidator
 )
