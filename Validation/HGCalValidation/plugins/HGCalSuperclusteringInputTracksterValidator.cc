@@ -22,6 +22,7 @@
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
 #include "FWCore/ParameterSet/interface/ParameterSetDescription.h"
 #include "FWCore/Utilities/interface/Exception.h"
+#include "TH3F.h"
 
 using namespace ticl;
 
@@ -67,6 +68,10 @@ struct HistogramsSuperclusteringInputTracksters {
   MonitorElement* deltaEta_deltaPhi_toSeed_realBrem_afterCandidatePID_;
   MonitorElement* deltaEta_deltaPhi_toSeed_fake_afterCandidatePID_;
 
+  MonitorElement* deltaEta_deltaPhi_candidatePID_toSeed_;
+  MonitorElement* deltaEta_deltaPhi_candidatePID_toSeed_realBrem_;
+  MonitorElement* deltaEta_deltaPhi_candidatePID_toSeed_fake_;
+
   std::vector<MonitorElement*> deltaEta_deltaPhi_toSeed_byAbsEta_;
   std::vector<MonitorElement*> deltaEta_deltaPhi_toSeed_realBrem_byAbsEta_;
   std::vector<MonitorElement*> deltaEta_deltaPhi_toSeed_fake_byAbsEta_;
@@ -90,21 +95,18 @@ private:
                   edm::EventSetup const&,
                   HistogramsSuperclusteringInputTracksters const&) const override;
 
-  edm::EDGetTokenT<std::vector<int>> consumesOptionalMask(edm::ParameterSet const& config,
-                                                          std::string const& preferredName,
-                                                          std::string const& legacyName);
-
   const std::string folder_;
   const edm::EDGetTokenT<ticl::TracksterCollection> tracksters_token_;
-  edm::EDGetTokenT<std::vector<int>> seedTracksterMask_token_;
-  edm::EDGetTokenT<std::vector<int>> candidateTracksterMask_token_;
-  edm::EDGetTokenT<std::vector<int>> fakeTracksterMask_token_;
+  const edm::EDGetTokenT<std::vector<int>> seedTracksterMask_token_;
+  const edm::EDGetTokenT<std::vector<int>> candidateTracksterMask_token_;
+  const edm::EDGetTokenT<std::vector<int>> fakeTracksterMask_token_;
 
   const double pidCut_;
   const std::vector<ticl::Trackster::ParticleType> pidsToConsider_;
 
   const double deltaEtaWindow_;
   const double deltaPhiWindow_;
+  const unsigned int pidBins_;
   const unsigned int deltaEtaBins_;
   const unsigned int deltaPhiBins_;
   const std::vector<double> absEtaBins_;
@@ -114,10 +116,15 @@ HGCalSuperclusteringInputTracksterValidator::HGCalSuperclusteringInputTracksterV
     const edm::ParameterSet& iConfig)
     : folder_(iConfig.getParameter<std::string>("folder")),
       tracksters_token_(consumes<ticl::TracksterCollection>(iConfig.getParameter<edm::InputTag>("tracksters"))),
+      seedTracksterMask_token_(consumes<std::vector<int>>(iConfig.getParameter<edm::InputTag>("seedTracksterMask"))),
+      candidateTracksterMask_token_(
+          consumes<std::vector<int>>(iConfig.getParameter<edm::InputTag>("candidateTracksterMask"))),
+      fakeTracksterMask_token_(consumes<std::vector<int>>(iConfig.getParameter<edm::InputTag>("fakeTracksterMask"))),
       pidCut_(iConfig.getParameter<double>("pidCut")),
       pidsToConsider_({ticl::Trackster::ParticleType::electron, ticl::Trackster::ParticleType::photon}),
       deltaEtaWindow_(iConfig.getParameter<double>("deltaEtaWindow")),
       deltaPhiWindow_(iConfig.getParameter<double>("deltaPhiWindow")),
+      pidBins_(iConfig.getParameter<unsigned int>("pidBins")),
       deltaEtaBins_(iConfig.getParameter<unsigned int>("deltaEtaBins")),
       deltaPhiBins_(iConfig.getParameter<unsigned int>("deltaPhiBins")),
       absEtaBins_(iConfig.getParameter<std::vector<double>>("absEtaBins")) {
@@ -130,34 +137,9 @@ HGCalSuperclusteringInputTracksterValidator::HGCalSuperclusteringInputTracksterV
   if (absEtaBins_.size() < 2 || !std::ranges::is_sorted(absEtaBins_)) {
     throw cms::Exception("Configuration") << "absEtaBins must contain at least two sorted bin edges.";
   }
-
-  seedTracksterMask_token_ = consumesOptionalMask(iConfig, "seedTracksterMask", "tracksterMask");
-  candidateTracksterMask_token_ = consumesOptionalMask(iConfig, "candidateTracksterMask", "");
-  fakeTracksterMask_token_ = consumesOptionalMask(iConfig, "fakeTracksterMask", "tracksterMaskFakes");
-
-  if (seedTracksterMask_token_.isUninitialized()) {
-    edm::LogInfo("HGCalSuperclusteringInputTracksterValidator") << "Not using any seed trackster mask.";
+  if (pidBins_ == 0) {
+    throw cms::Exception("Configuration") << "pidBins must be non-zero.";
   }
-  if (candidateTracksterMask_token_.isUninitialized()) {
-    edm::LogInfo("HGCalSuperclusteringInputTracksterValidator")
-        << "Not using any candidate trackster mask. Real-brem histograms will not be filled.";
-  }
-  if (fakeTracksterMask_token_.isUninitialized()) {
-    edm::LogInfo("HGCalSuperclusteringInputTracksterValidator")
-        << "Not using any fake trackster mask. Fake histograms will be filled from candidates not passing the "
-           "candidate mask when available.";
-  }
-}
-
-edm::EDGetTokenT<std::vector<int>> HGCalSuperclusteringInputTracksterValidator::consumesOptionalMask(
-    edm::ParameterSet const& config, std::string const& preferredName, std::string const& legacyName) {
-  if (!preferredName.empty() && config.exists(preferredName)) {
-    return consumes<std::vector<int>>(config.getParameter<edm::InputTag>(preferredName));
-  }
-  if (!legacyName.empty() && config.exists(legacyName)) {
-    return consumes<std::vector<int>>(config.getParameter<edm::InputTag>(legacyName));
-  }
-  return edm::EDGetTokenT<std::vector<int>>();
 }
 
 void HGCalSuperclusteringInputTracksterValidator::dqmAnalyze(
@@ -165,23 +147,12 @@ void HGCalSuperclusteringInputTracksterValidator::dqmAnalyze(
     edm::EventSetup const& iSetup,
     HistogramsSuperclusteringInputTracksters const& histos) const {
   ticl::TracksterCollection const& tracksters = iEvent.get(tracksters_token_);
-
-  std::vector<int> const noSeedMask(tracksters.size(), 0);
-  std::vector<int> const& seedTracksterMask =
-      seedTracksterMask_token_.isUninitialized() ? noSeedMask : iEvent.get(seedTracksterMask_token_);
+  std::vector<int> const& seedTracksterMask = iEvent.get(seedTracksterMask_token_);
+  std::vector<int> const& candidateTracksterMask = iEvent.get(candidateTracksterMask_token_);
+  std::vector<int> const& fakeTracksterMask = iEvent.get(fakeTracksterMask_token_);
   assert(seedTracksterMask.size() == tracksters.size());
-
-  std::vector<int> const* candidateTracksterMask = nullptr;
-  if (!candidateTracksterMask_token_.isUninitialized()) {
-    candidateTracksterMask = &iEvent.get(candidateTracksterMask_token_);
-    assert(candidateTracksterMask->size() == tracksters.size());
-  }
-
-  std::vector<int> const* fakeTracksterMask = nullptr;
-  if (!fakeTracksterMask_token_.isUninitialized()) {
-    fakeTracksterMask = &iEvent.get(fakeTracksterMask_token_);
-    assert(fakeTracksterMask->size() == tracksters.size());
-  }
+  assert(candidateTracksterMask.size() == tracksters.size());
+  assert(fakeTracksterMask.size() == tracksters.size());
 
   std::array<TICLLayerTile, 2> tracksterTilesBothEndcaps;
   for (unsigned int i = 0; i < tracksters.size(); ++i) {
@@ -218,12 +189,13 @@ void HGCalSuperclusteringInputTracksterValidator::dqmAnalyze(
           }
 
           const std::size_t absEtaBin = etaBinIndex(absEtaBins_, std::abs(ts_seed.barycenter().eta()));
-          const bool candidatePassesPid = pidScore(ts_cand, pidsToConsider_) > pidCut_;
-          const bool isRealBrem = candidateTracksterMask != nullptr && (*candidateTracksterMask)[cand_i] == 0;
-          const bool isFake = fakeTracksterMask != nullptr ? (*fakeTracksterMask)[cand_i] == 0
-                                                           : (candidateTracksterMask != nullptr && !isRealBrem);
+          const double candidatePid = pidScore(ts_cand, pidsToConsider_);
+          const bool candidatePassesPid = candidatePid > pidCut_;
+          const bool isRealBrem = candidateTracksterMask[cand_i] == 0;
+          const bool isFake = fakeTracksterMask[cand_i] == 0;
 
           fillPair(histos.deltaEta_deltaPhi_toSeed_, deltaEta, deltaPhiValue);
+          histos.deltaEta_deltaPhi_candidatePID_toSeed_->Fill(deltaEta, deltaPhiValue, candidatePid);
           fillPair(histos.deltaEta_deltaPhi_toSeed_byAbsEta_, absEtaBin, deltaEta, deltaPhiValue);
 
           if (candidatePassesPid) {
@@ -232,6 +204,7 @@ void HGCalSuperclusteringInputTracksterValidator::dqmAnalyze(
 
           if (isRealBrem) {
             fillPair(histos.deltaEta_deltaPhi_toSeed_realBrem_, deltaEta, deltaPhiValue);
+            histos.deltaEta_deltaPhi_candidatePID_toSeed_realBrem_->Fill(deltaEta, deltaPhiValue, candidatePid);
             fillPair(histos.deltaEta_deltaPhi_toSeed_realBrem_byAbsEta_, absEtaBin, deltaEta, deltaPhiValue);
             if (candidatePassesPid) {
               fillPair(histos.deltaEta_deltaPhi_toSeed_realBrem_afterCandidatePID_, deltaEta, deltaPhiValue);
@@ -240,6 +213,7 @@ void HGCalSuperclusteringInputTracksterValidator::dqmAnalyze(
 
           if (isFake) {
             fillPair(histos.deltaEta_deltaPhi_toSeed_fake_, deltaEta, deltaPhiValue);
+            histos.deltaEta_deltaPhi_candidatePID_toSeed_fake_->Fill(deltaEta, deltaPhiValue, candidatePid);
             fillPair(histos.deltaEta_deltaPhi_toSeed_fake_byAbsEta_, absEtaBin, deltaEta, deltaPhiValue);
             if (candidatePassesPid) {
               fillPair(histos.deltaEta_deltaPhi_toSeed_fake_afterCandidatePID_, deltaEta, deltaPhiValue);
@@ -287,6 +261,36 @@ void HGCalSuperclusteringInputTracksterValidator::bookHistograms(
                            "Fake candidate trackster position relative to seed after candidate PID "
                            "cut;#Delta#eta(candidate, seed);#Delta#phi(candidate, seed)");
 
+  auto makeDeltaEtaDeltaPhiPid = [&](char const* name, char const* title) -> TH3F* {
+    return new TH3F(name,
+                    title,
+                    deltaEtaBins_,
+                    -deltaEtaWindow_,
+                    deltaEtaWindow_,
+                    deltaPhiBins_,
+                    -deltaPhiWindow_,
+                    deltaPhiWindow_,
+                    pidBins_,
+                    0.,
+                    1.);
+  };
+  histos.deltaEta_deltaPhi_candidatePID_toSeed_ = ibook.book3D(
+      "deltaEta_deltaPhi_candidatePID_toSeed",
+      makeDeltaEtaDeltaPhiPid("deltaEta_deltaPhi_candidatePID_toSeed",
+                              "Candidate trackster position and PID relative to seed;#Delta#eta(candidate, "
+                              "seed);#Delta#phi(candidate, seed);candidate e/#gamma PID score"));
+  histos.deltaEta_deltaPhi_candidatePID_toSeed_realBrem_ =
+      ibook.book3D("deltaEta_deltaPhi_candidatePID_toSeed_realBrem",
+                   makeDeltaEtaDeltaPhiPid("deltaEta_deltaPhi_candidatePID_toSeed_realBrem",
+                                           "Real-brem candidate trackster position and PID relative to "
+                                           "seed;#Delta#eta(candidate, seed);#Delta#phi(candidate, seed);candidate "
+                                           "e/#gamma PID score"));
+  histos.deltaEta_deltaPhi_candidatePID_toSeed_fake_ = ibook.book3D(
+      "deltaEta_deltaPhi_candidatePID_toSeed_fake",
+      makeDeltaEtaDeltaPhiPid("deltaEta_deltaPhi_candidatePID_toSeed_fake",
+                              "Fake candidate trackster position and PID relative to seed;#Delta#eta(candidate, "
+                              "seed);#Delta#phi(candidate, seed);candidate e/#gamma PID score"));
+
   const auto nEtaBins = absEtaBins_.size() - 1;
   histos.deltaEta_deltaPhi_toSeed_byAbsEta_.reserve(nEtaBins);
   histos.deltaEta_deltaPhi_toSeed_realBrem_byAbsEta_.reserve(nEtaBins);
@@ -315,20 +319,20 @@ void HGCalSuperclusteringInputTracksterValidator::fillDescriptions(edm::Configur
       ->setComment("DQM folder. Please keep the trailing '/'.");
   desc.add<edm::InputTag>("tracksters", edm::InputTag("ticlTrackstersCLUE3DHigh"))
       ->setComment("Input trackster collection used as input to superclustering.");
-  desc.addOptional<edm::InputTag>("seedTracksterMask")
+  desc.add<edm::InputTag>("seedTracksterMask", edm::InputTag("ticlValidSuperclusteringSeedMask"))
       ->setComment("Mask selecting valid seed tracksters. A value of 0 means selected.");
-  desc.addOptional<edm::InputTag>("candidateTracksterMask")
+  desc.add<edm::InputTag>("candidateTracksterMask", edm::InputTag("tracksterSuperclusteringValidCandidateMaskProducer"))
       ->setComment("Mask selecting real-brem candidate tracksters. A value of 0 means selected.");
-  desc.addOptional<edm::InputTag>("fakeTracksterMask")
+  desc.add<edm::InputTag>("fakeTracksterMask", edm::InputTag("ticlValidSuperclusteringSeedMask", "fakes"))
       ->setComment("Mask selecting fake candidate tracksters. A value of 0 means selected.");
-  desc.addOptional<edm::InputTag>("tracksterMask")->setComment("Legacy alias for seedTracksterMask.");
-  desc.addOptional<edm::InputTag>("tracksterMaskFakes")->setComment("Legacy alias for fakeTracksterMask.");
 
   desc.add<double>("pidCut", 0.2)->setComment("Cut on the candidate trackster electron+photon PID score.");
   desc.add<double>("deltaEtaWindow", 0.2)->setComment("Size of delta eta window used to select seed-candidate pairs.");
   desc.add<double>("deltaPhiWindow", 0.7)->setComment("Size of delta phi window used to select seed-candidate pairs.");
   desc.add<unsigned int>("deltaEtaBins", 80)->setComment("Number of histogram bins in delta eta.");
   desc.add<unsigned int>("deltaPhiBins", 80)->setComment("Number of histogram bins in delta phi.");
+  desc.add<unsigned int>("pidBins", 50)
+      ->setComment("Number of bins for the candidate trackster electron+photon PID score.");
   desc.add<std::vector<double>>("absEtaBins", {1.6, 1.8, 2.1, 2.3, 2.5, 2.7, 2.8, 2.9, 3.0})
       ->setComment("Abs(eta) bin edges for seed-eta-sliced deltaEta-deltaPhi histograms.");
 

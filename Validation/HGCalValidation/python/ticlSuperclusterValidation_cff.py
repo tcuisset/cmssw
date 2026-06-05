@@ -53,9 +53,22 @@ ticlValidSuperclusteringCandidatePID = _ticlTracksterPIDValidation.clone(
     pidCut = cms.double(0.2),
 )
 
+
+
+
+
+################ Plots of deltaEta-deltaPhi to supercluster seed
+from Validation.HGCalValidation.hgcalSuperclusteringInputTracksterValidator_cfi import hgcalSuperclusteringInputTracksterValidator #as _hgcalSuperclusteringInputTracksterValidator
+# hgcalSuperclusteringInputTracksterValidator = _hgcalSuperclusteringInputTracksterValidator.clone(
+    
+# )
+
+
+
 ticlSuperclusterPIDValidation = cms.Sequence(
     ticlValidSuperclusteringSeedMask + tracksterSuperclusteringValidCandidateMaskProducer +
-    ticlValidSuperclusteringSeedPID + ticlValidSuperclusteringCandidatePID
+    ticlValidSuperclusteringSeedPID + ticlValidSuperclusteringCandidatePID +
+    hgcalSuperclusteringInputTracksterValidator
 )
 
 
