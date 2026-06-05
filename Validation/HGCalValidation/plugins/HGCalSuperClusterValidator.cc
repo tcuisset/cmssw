@@ -112,7 +112,7 @@ void HGCalSuperClusterValidator::bookHistograms(DQMStore::IBooker& ibook,
                                                 edm::Run const& run,
                                                 edm::EventSetup const& iSetup,
                                                 SuperClusterHistos& histos) const {
-  ibook.setCurrentFolder("HGCal/SuperClusters/");
+  ibook.setCurrentFolder("HGCAL/SuperClusters/");
   // clang-format off
   const std::vector<float> sc_count_bins = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 22, 24, 26, 28, 30, 35, 40, 50, 100, 500};
   const std::vector<float> ptBins = {0, 1, 2, 3, 4, 5, 7, 10, 15, 20, 30, 40, 50, 70, 100, 200, 300, 500};
@@ -208,7 +208,7 @@ void HGCalSuperClusterValidator::bookHistograms(DQMStore::IBooker& ibook,
                                               etaBins.data(),
                                               EoverEtruthBins.size() - 1,
                                               EoverEtruthBins.data());
-  histos.sc_EoverEtruth_vs_eta->setXTitle(
+  histos.sc_EoverEtruth_vs_eta->setYTitle(
       "Reconstructed raw energy of supercluster / energy from CaloParticle (Ereco/Etrue)");
 }
 
