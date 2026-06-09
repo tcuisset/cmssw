@@ -136,13 +136,11 @@ private:
     edm::ValueMap<std::pair<float, float>> const& layerClustersTimes;
     std::vector<float> const& filtered_layerclusters_mask;
 
-    std::vector<TrackingParticle> const& trackingParticle;
-
-    std::vector<reco::Track> const& recoTracks;
+    std::vector<reco::Track> const* recoTracks;
 
     // Maps between reco tracks, SimTrack (=Geant4 track) and TrackingParticle (=tracking truth object for tracks)
-    reco::SimToRecoCollection const& TPtoRecoTrackMap;
-    SimTrackToTPMap const& simTrackToTPMap;
+    reco::SimToRecoCollection const* TPtoRecoTrackMap;
+    SimTrackToTPMap const* simTrackToTPMap;
 
     edm::Handle<CaloParticleCollection> caloParticles_h;
   };
@@ -157,6 +155,7 @@ private:
   const bool doNose_ = false;
   const bool doBarrel_ = false;
   const bool computeLocalTime_;
+  const bool associateWithTracks_;
   const edm::EDGetTokenT<std::vector<reco::CaloCluster>> clusters_token_;
   const edm::EDGetTokenT<edm::ValueMap<std::pair<float, float>>> clustersTime_token_;
   const edm::EDGetTokenT<std::vector<float>> filtered_layerclusters_mask_token_;
@@ -165,7 +164,6 @@ private:
   hgcal::RecHitTools rhtools_;
   const float fractionCut_;
   const float qualityCutTrack_;
-  const edm::EDGetTokenT<std::vector<TrackingParticle>> trackingParticleToken_;
 
   const edm::EDGetTokenT<std::vector<reco::Track>> recoTracksToken_;
   const StringCutObjectSelector<reco::Track> cutTk_;
@@ -186,18 +184,24 @@ SimTrackstersProducer::SimTrackstersProducer(const edm::ParameterSet& ps)
       doNose_(detector_ == "HFNose"),
       doBarrel_(detector_ == "Barrel"),
       computeLocalTime_(ps.getParameter<bool>("computeLocalTime")),
+      associateWithTracks_(ps.getParameter<bool>("associateWithTracks")),
       clusters_token_(consumes(ps.getParameter<edm::InputTag>("layer_clusters"))),
       clustersTime_token_(consumes(ps.getParameter<edm::InputTag>("time_layerclusters"))),
       filtered_layerclusters_mask_token_(consumes(ps.getParameter<edm::InputTag>("filtered_mask"))),
       geom_token_(esConsumes()),
       fractionCut_(ps.getParameter<double>("fractionCut")),
       qualityCutTrack_(ps.getParameter<double>("qualityCutTrack")),
-      trackingParticleToken_(
-          consumes<std::vector<TrackingParticle>>(ps.getParameter<edm::InputTag>("trackingParticles"))),
-      recoTracksToken_(consumes<std::vector<reco::Track>>(ps.getParameter<edm::InputTag>("recoTracks"))),
+      recoTracksToken_(associateWithTracks_ ? consumes<std::vector<reco::Track>>(
+                                                  ps.getParameter<edm::InputTag>("recoTracks"))
+                                            : edm::EDGetTokenT<std::vector<reco::Track>>()),
       cutTk_(ps.getParameter<std::string>("cutTk")),
-      associatormapStRsToken_(consumes(ps.getParameter<edm::InputTag>("tpToTrack"))),
-      associationSimTrackToTPToken_(consumes(ps.getParameter<edm::InputTag>("simTrackToTPMap"))),
+      associatormapStRsToken_(associateWithTracks_
+                                  ? consumes<reco::SimToRecoCollection>(ps.getParameter<edm::InputTag>("tpToTrack"))
+                                  : edm::EDGetTokenT<reco::SimToRecoCollection>()),
+      associationSimTrackToTPToken_(associateWithTracks_
+                                        ? consumes<SimTrackToTPMap>(
+                                              ps.getParameter<edm::InputTag>("simTrackToTPMap"))
+                                        : edm::EDGetTokenT<SimTrackToTPMap>()),
       caloParticles_token_(consumes<CaloParticleCollection>(ps.getParameter<edm::InputTag>("caloParticles"))) {
   auto const& configsParameterSets = ps.getParameter<std::vector<edm::ParameterSet>>("simClusterCollections");
   if (configsParameterSets.empty())
@@ -212,6 +216,8 @@ void SimTrackstersProducer::fillDescriptions(edm::ConfigurationDescriptions& des
   edm::ParameterSetDescription desc;
   desc.add<std::string>("detector", "HGCAL");
   desc.add<bool>("computeLocalTime", "true");
+  desc.add<bool>("associateWithTracks", true)
+      ->setComment("Associate SimTracksters to reco tracks. If false, track-related event products are not consumed.");
   desc.add<edm::InputTag>("layer_clusters", edm::InputTag("hgcalMergeLayerClusters"));
   desc.add<edm::InputTag>("time_layerclusters", edm::InputTag("hgcalMergeLayerClusters", "timeLayerCluster"));
   desc.add<edm::InputTag>("filtered_mask", edm::InputTag("filteredLayerClustersSimTracksters", "ticlSimTracksters"));
@@ -295,17 +301,21 @@ void SimTrackstersProducer::produce(edm::Event& evt, const edm::EventSetup& es) 
     return;
   }
 
-  edm::Handle<std::vector<TrackingParticle>> trackingParticles_h;
-  evt.getByToken(trackingParticleToken_, trackingParticles_h);
   edm::Handle<std::vector<reco::Track>> recoTracks_h;
-  evt.getByToken(recoTracksToken_, recoTracks_h);
+  edm::Handle<reco::SimToRecoCollection> TPtoRecoTrackMapHandle;
+  edm::Handle<SimTrackToTPMap> simTrackToTPMapHandle;
 
-  //TrackingParticle to reco track map
-  const auto TPtoRecoTrackMapHandle = evt.getHandle(associatormapStRsToken_);
+  if (associateWithTracks_) {
+    evt.getByToken(recoTracksToken_, recoTracks_h);
 
-  if (!TPtoRecoTrackMapHandle.isValid()) {
-    returnEmptyCollections(evt, layerClustersHandle->size());
-    return;
+    // TrackingParticle to reco track map
+    TPtoRecoTrackMapHandle = evt.getHandle(associatormapStRsToken_);
+    simTrackToTPMapHandle = evt.getHandle(associationSimTrackToTPToken_);
+
+    if (!recoTracks_h.isValid() || !TPtoRecoTrackMapHandle.isValid() || !simTrackToTPMapHandle.isValid()) {
+      returnEmptyCollections(evt, layerClustersHandle->size());
+      return;
+    }
   }
 
   const auto& geom = es.getData(geom_token_);
@@ -314,10 +324,9 @@ void SimTrackstersProducer::produce(edm::Event& evt, const edm::EventSetup& es) 
   InputHolder inps = InputHolder{*layerClustersHandle,
                                  *layerClustersTimesHandle,
                                  *inputClusterMaskHandle,
-                                 *trackingParticles_h,
-                                 *recoTracks_h,
-                                 evt.get(associatormapStRsToken_),
-                                 evt.get(associationSimTrackToTPToken_),
+                                 recoTracks_h.isValid() ? recoTracks_h.product() : nullptr,
+                                 TPtoRecoTrackMapHandle.isValid() ? TPtoRecoTrackMapHandle.product() : nullptr,
+                                 simTrackToTPMapHandle.isValid() ? simTrackToTPMapHandle.product() : nullptr,
                                  evt.getHandle(caloParticles_token_)};
   for (SimTsConfig const& conf : simTsConfigs_) {
     produceOne<SimCluster>(evt, es, inps, conf);
@@ -414,15 +423,15 @@ void SimTrackstersProducer::produceOne(edm::Event& evt,
 
   auto simTrackToRecoTrack = [&](UniqueSimTrackId simTkId) -> std::vector<int> {
     std::vector<int> trackIdx;
-    auto ipos = holder.simTrackToTPMap.mapping.find(simTkId);
-    if (ipos != holder.simTrackToTPMap.mapping.end()) {
-      auto jpos = holder.TPtoRecoTrackMap.find((ipos->second));
-      if (jpos != holder.TPtoRecoTrackMap.end()) {
+    auto ipos = holder.simTrackToTPMap->mapping.find(simTkId);
+    if (ipos != holder.simTrackToTPMap->mapping.end()) {
+      auto jpos = holder.TPtoRecoTrackMap->find((ipos->second));
+      if (jpos != holder.TPtoRecoTrackMap->end()) {
         auto& associatedRecoTracks = jpos->val;
         if (!associatedRecoTracks.empty()) {
           // associated reco tracks are sorted by decreasing quality
           if (associatedRecoTracks[0].second > qualityCutTrack_) {
-            trackIdx.push_back(&(*associatedRecoTracks[0].first) - &holder.recoTracks[0]);
+            trackIdx.push_back(&(*associatedRecoTracks[0].first) - &(*holder.recoTracks)[0]);
           }
         }
       }
@@ -430,13 +439,13 @@ void SimTrackstersProducer::produceOne(edm::Event& evt,
       if (!tp.decayVertices().empty()) {
         const auto& iTV = tp.decayVertices()[0];
         for (auto iTP = iTV->daughterTracks_begin(); iTP != iTV->daughterTracks_end(); ++iTP) {
-          auto kpos = holder.TPtoRecoTrackMap.find((*iTP));
-          if (kpos != holder.TPtoRecoTrackMap.end()) {
+          auto kpos = holder.TPtoRecoTrackMap->find((*iTP));
+          if (kpos != holder.TPtoRecoTrackMap->end()) {
             auto& associatedRecoTracks = kpos->val;
             if (!associatedRecoTracks.empty()) {
               // associated reco tracks are sorted by decreasing quality
               if (associatedRecoTracks[0].second > qualityCutTrack_) {
-                trackIdx.push_back(&(*associatedRecoTracks[0].first) - &holder.recoTracks[0]);
+                trackIdx.push_back(&(*associatedRecoTracks[0].first) - &(*holder.recoTracks)[0]);
               }
             }
           }
@@ -446,17 +455,19 @@ void SimTrackstersProducer::produceOne(edm::Event& evt,
     return trackIdx;
   };
 
-  // Set the reco track id to SimTrackster
-  for (unsigned int simTs_i = 0; simTs_i < simTracksters.size(); ++simTs_i) {
-    Trackster& simTrackster = simTracksters[simTs_i];
-    if (simTrackster.vertices().empty())
-      continue;
-    const auto& simTrack = simTracksterToSimObject_map[simTs_i]->g4Tracks()[0];
-    UniqueSimTrackId simTkIds(simTrack.trackId(), simTrack.eventId());
-    auto bestAssociatedRecoTracks = simTrackToRecoTrack(simTkIds);
-    if (not bestAssociatedRecoTracks.empty()) {
-      for (auto const trackIndex : bestAssociatedRecoTracks)
-        simTrackster.addTrackIdx(trackIndex);
+  if (associateWithTracks_) {
+    // Set the reco track id to SimTrackster
+    for (unsigned int simTs_i = 0; simTs_i < simTracksters.size(); ++simTs_i) {
+      Trackster& simTrackster = simTracksters[simTs_i];
+      if (simTrackster.vertices().empty())
+        continue;
+      const auto& simTrack = simTracksterToSimObject_map[simTs_i]->g4Tracks()[0];
+      UniqueSimTrackId simTkIds(simTrack.trackId(), simTrack.eventId());
+      auto bestAssociatedRecoTracks = simTrackToRecoTrack(simTkIds);
+      if (not bestAssociatedRecoTracks.empty()) {
+        for (auto const trackIndex : bestAssociatedRecoTracks)
+          simTrackster.addTrackIdx(trackIndex);
+      }
     }
   }
 
