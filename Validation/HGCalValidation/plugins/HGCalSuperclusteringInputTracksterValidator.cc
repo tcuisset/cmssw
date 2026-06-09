@@ -83,7 +83,8 @@ namespace {
 
   std::vector<double> makeDeltaEtaBinEdges() {
     std::vector<double> positiveEdges;
-    appendUniformEdges(positiveEdges, 0., 0.05, 0.001);
+    appendUniformEdges(positiveEdges, 0., 3e-3, 1e-4);
+    appendUniformEdges(positiveEdges, 3e-3, 0.05, 1e-3);
     appendUniformEdges(positiveEdges, 0.05, 0.1, 0.005);
     appendUniformEdges(positiveEdges, 0.1, 0.2, 0.01);
     return makeSymmetricEdges(positiveEdges);
@@ -91,7 +92,8 @@ namespace {
 
   std::vector<double> makeDeltaPhiBinEdges() {
     std::vector<double> positiveEdges;
-    appendUniformEdges(positiveEdges, 0., 0.1, 0.005);
+    appendUniformEdges(positiveEdges, 0., 0.06, 1e-3);
+    appendUniformEdges(positiveEdges, 0.06, 0.1, 0.005);
     appendUniformEdges(positiveEdges, 0.1, 0.2, 0.01);
     appendUniformEdges(positiveEdges, 0.2, 0.4, 0.02);
     appendUniformEdges(positiveEdges, 0.4, 0.7, 0.05);
