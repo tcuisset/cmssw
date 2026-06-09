@@ -22,6 +22,7 @@
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
 #include "FWCore/ParameterSet/interface/ParameterSetDescription.h"
 #include "FWCore/Utilities/interface/Exception.h"
+#include "TH2F.h"
 #include "TH3F.h"
 
 using namespace ticl;
@@ -54,6 +55,56 @@ namespace {
     if (etaBin < histograms.size()) {
       fillPair(histograms[etaBin], deltaEta, deltaPhi);
     }
+  }
+
+  void appendUniformEdges(std::vector<double>& edges, double lower, double upper, double step) {
+    constexpr double epsilon = 1.e-10;
+    if (edges.empty() || std::abs(edges.back() - lower) > epsilon) {
+      edges.push_back(lower);
+    }
+
+    const int nBins = std::lround((upper - lower) / step);
+    for (int i = 1; i <= nBins; ++i) {
+      edges.push_back(lower + i * step);
+    }
+  }
+
+  std::vector<double> makeSymmetricEdges(std::vector<double> const& positiveEdges) {
+    std::vector<double> edges;
+    edges.reserve(2 * positiveEdges.size() - 1);
+    for (auto it = positiveEdges.rbegin(); it != positiveEdges.rend(); ++it) {
+      if (*it != 0.) {
+        edges.push_back(-*it);
+      }
+    }
+    edges.insert(edges.end(), positiveEdges.begin(), positiveEdges.end());
+    return edges;
+  }
+
+  std::vector<double> makeDeltaEtaBinEdges() {
+    std::vector<double> positiveEdges;
+    appendUniformEdges(positiveEdges, 0., 0.05, 0.001);
+    appendUniformEdges(positiveEdges, 0.05, 0.1, 0.005);
+    appendUniformEdges(positiveEdges, 0.1, 0.2, 0.01);
+    return makeSymmetricEdges(positiveEdges);
+  }
+
+  std::vector<double> makeDeltaPhiBinEdges() {
+    std::vector<double> positiveEdges;
+    appendUniformEdges(positiveEdges, 0., 0.1, 0.005);
+    appendUniformEdges(positiveEdges, 0.1, 0.2, 0.01);
+    appendUniformEdges(positiveEdges, 0.2, 0.4, 0.02);
+    appendUniformEdges(positiveEdges, 0.4, 0.7, 0.05);
+    return makeSymmetricEdges(positiveEdges);
+  }
+
+  std::vector<double> makePidBinEdges(unsigned int nBins) {
+    std::vector<double> edges;
+    edges.reserve(nBins + 1);
+    for (unsigned int i = 0; i <= nBins; ++i) {
+      edges.push_back(static_cast<double>(i) / nBins);
+    }
+    return edges;
   }
 
   std::string etaBinSuffix(std::size_t index) { return "_absEtaBin" + std::to_string(index); }
@@ -107,8 +158,6 @@ private:
   const double deltaEtaWindow_;
   const double deltaPhiWindow_;
   const unsigned int pidBins_;
-  const unsigned int deltaEtaBins_;
-  const unsigned int deltaPhiBins_;
   const std::vector<double> absEtaBins_;
 };
 
@@ -125,14 +174,9 @@ HGCalSuperclusteringInputTracksterValidator::HGCalSuperclusteringInputTracksterV
       deltaEtaWindow_(iConfig.getParameter<double>("deltaEtaWindow")),
       deltaPhiWindow_(iConfig.getParameter<double>("deltaPhiWindow")),
       pidBins_(iConfig.getParameter<unsigned int>("pidBins")),
-      deltaEtaBins_(iConfig.getParameter<unsigned int>("deltaEtaBins")),
-      deltaPhiBins_(iConfig.getParameter<unsigned int>("deltaPhiBins")),
       absEtaBins_(iConfig.getParameter<std::vector<double>>("absEtaBins")) {
   if (deltaEtaWindow_ <= 0. || deltaPhiWindow_ <= 0.) {
     throw cms::Exception("Configuration") << "deltaEtaWindow and deltaPhiWindow must be positive.";
-  }
-  if (deltaEtaBins_ == 0 || deltaPhiBins_ == 0) {
-    throw cms::Exception("Configuration") << "deltaEtaBins and deltaPhiBins must be non-zero.";
   }
   if (absEtaBins_.size() < 2 || !std::ranges::is_sorted(absEtaBins_)) {
     throw cms::Exception("Configuration") << "absEtaBins must contain at least two sorted bin edges.";
@@ -232,9 +276,18 @@ void HGCalSuperclusteringInputTracksterValidator::bookHistograms(
     HistogramsSuperclusteringInputTracksters& histos) const {
   ibook.setCurrentFolder(folder_);
 
+  const std::vector<double> deltaEtaBinEdges = makeDeltaEtaBinEdges();
+  const std::vector<double> deltaPhiBinEdges = makeDeltaPhiBinEdges();
+  const std::vector<double> pidBinEdges = makePidBinEdges(pidBins_);
+
   auto bookDeltaEtaDeltaPhi = [&](std::string const& name, std::string const& title) {
-    return ibook.book2D(
-        name, title, deltaEtaBins_, -deltaEtaWindow_, deltaEtaWindow_, deltaPhiBins_, -deltaPhiWindow_, deltaPhiWindow_);
+    return ibook.book2D(name,
+                        new TH2F(name.c_str(),
+                                 title.c_str(),
+                                 deltaEtaBinEdges.size() - 1,
+                                 deltaEtaBinEdges.data(),
+                                 deltaPhiBinEdges.size() - 1,
+                                 deltaPhiBinEdges.data()));
   };
 
   histos.deltaEta_deltaPhi_toSeed_ = bookDeltaEtaDeltaPhi(
@@ -264,15 +317,12 @@ void HGCalSuperclusteringInputTracksterValidator::bookHistograms(
   auto makeDeltaEtaDeltaPhiPid = [&](char const* name, char const* title) -> TH3F* {
     return new TH3F(name,
                     title,
-                    deltaEtaBins_,
-                    -deltaEtaWindow_,
-                    deltaEtaWindow_,
-                    deltaPhiBins_,
-                    -deltaPhiWindow_,
-                    deltaPhiWindow_,
-                    pidBins_,
-                    0.,
-                    1.);
+                    deltaEtaBinEdges.size() - 1,
+                    deltaEtaBinEdges.data(),
+                    deltaPhiBinEdges.size() - 1,
+                    deltaPhiBinEdges.data(),
+                    pidBinEdges.size() - 1,
+                    pidBinEdges.data());
   };
   histos.deltaEta_deltaPhi_candidatePID_toSeed_ = ibook.book3D(
       "deltaEta_deltaPhi_candidatePID_toSeed",
@@ -329,8 +379,6 @@ void HGCalSuperclusteringInputTracksterValidator::fillDescriptions(edm::Configur
   desc.add<double>("pidCut", 0.2)->setComment("Cut on the candidate trackster electron+photon PID score.");
   desc.add<double>("deltaEtaWindow", 0.2)->setComment("Size of delta eta window used to select seed-candidate pairs.");
   desc.add<double>("deltaPhiWindow", 0.7)->setComment("Size of delta phi window used to select seed-candidate pairs.");
-  desc.add<unsigned int>("deltaEtaBins", 80)->setComment("Number of histogram bins in delta eta.");
-  desc.add<unsigned int>("deltaPhiBins", 80)->setComment("Number of histogram bins in delta phi.");
   desc.add<unsigned int>("pidBins", 50)
       ->setComment("Number of bins for the candidate trackster electron+photon PID score.");
   desc.add<std::vector<double>>("absEtaBins", {1.6, 1.8, 2.1, 2.3, 2.5, 2.7, 2.8, 2.9, 3.0})
