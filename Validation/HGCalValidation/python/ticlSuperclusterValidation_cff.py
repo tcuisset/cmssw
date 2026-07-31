@@ -53,17 +53,28 @@ ticlValidSuperclusteringCandidatePID = _ticlTracksterPIDValidation.clone(
     pidCut = cms.double(0.2),
 )
 
-ticlSuperclusterPIDValidation = cms.Sequence(
-    ticlValidSuperclusteringSeedMask + tracksterSuperclusteringValidCandidateMaskProducer +
-    ticlValidSuperclusteringSeedPID + ticlValidSuperclusteringCandidatePID
+ticlValidSuperclusteringSeedPID_PCACutBased = ticlValidSuperclusteringSeedPID.clone(
+    folder = cms.string("HGCAL/TICLTracksterPIDValidation/superclusteringSeedTrackster_PCACutBased/"),
+    useCutBased = cms.bool(True),
+    cut = cms.string("pow(eigenvalues()[0]/(eigenvalues()[0]+eigenvalues()[1]+eigenvalues()[2]), 6.5788)"),
+    pidCut = cms.double(0.5) # equivalent to 0.9
+)
+ticlValidSuperclusteringCandidatePID_PCACutBased = ticlValidSuperclusteringCandidatePID.clone(
+    folder = cms.string("HGCAL/TICLTracksterPIDValidation/superclusteringCandidateTrackster_PCACutBased/"),
+    useCutBased = cms.bool(True),
+    cut = ticlValidSuperclusteringSeedPID_PCACutBased.cut,
+    pidCut = cms.double(0.5)
 )
 
+ticlSuperclusterPID_prevalid = cms.Sequence(ticlValidSuperclusteringSeedMask + tracksterSuperclusteringValidCandidateMaskProducer)
+ticlSuperclusterPIDValidation_valid = cms.Sequence(ticlValidSuperclusteringSeedPID + ticlValidSuperclusteringCandidatePID)
+ticlSuperclusterPIDValidation_cutBased_valid = cms.Sequence(ticlValidSuperclusteringSeedPID_PCACutBased + ticlValidSuperclusteringCandidatePID_PCACutBased)
 
 
 #### post-processing : computing efficiencies of PID cut as ratios of histogram
 from DQMServices.Core.DQMEDHarvester import DQMEDHarvester
 postProcessorTICLPIDValid = DQMEDHarvester('DQMGenericClient',
-    subDirs = cms.untracked.vstring("HGCAL/TICLTracksterPIDValidation/superclusteringSeedTrackster", "HGCAL/TICLTracksterPIDValidation/superclusteringCandidateTrackster"),
+    subDirs = cms.untracked.vstring("HGCAL/TICLTracksterPIDValidation/superclusteringSeedTrackster", "HGCAL/TICLTracksterPIDValidation/superclusteringCandidateTrackster", "HGCAL/TICLTracksterPIDValidation/superclusteringSeedTrackster_PCACutBased/", "HGCAL/TICLTracksterPIDValidation/superclusteringCandidateTrackster_PCACutBased/"),
     efficiencySets = cms.untracked.VPSet(
         cms.untracked.PSet( # validating the efficiency of the gen-matching selections on electron caloparticles
             name=cms.untracked.string("pt_eta_reco2SimSelection_eff"),
@@ -84,8 +95,6 @@ postProcessorTICLPIDValid = DQMEDHarvester('DQMGenericClient',
             numerator=cms.untracked.string("pt_eta_fakes_pid_Num"),
             denominator=cms.untracked.string("pt_eta_fakes")
         ),
-
-        
     ),
     efficiency = cms.vstring(),
     resolution = cms.vstring(),
@@ -94,7 +103,7 @@ postProcessorTICLPIDValid = DQMEDHarvester('DQMGenericClient',
 
 ########################### Sequences
 ticlSuperclusterValidation = cms.Sequence(
-    ticlSuperclusterPIDValidation
+    ticlSuperclusterPID_prevalid + ticlSuperclusterPIDValidation_valid + ticlSuperclusterPIDValidation_cutBased_valid
 )
 postProcessorTiclSupercluster = cms.Sequence(
     postProcessorTICLPIDValid
