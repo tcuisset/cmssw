@@ -27,7 +27,7 @@ ticlTrackstersCLUE3DHigh = _trackstersProducer.clone(
         doPidCut = True,
         cutHadProb = 999
     ),
-    inferenceAlgo = cms.string('TracksterInferenceByTransformer'),
+    inferenceAlgo = cms.string('TracksterInferenceByCNN'),
     pluginInferenceAlgoTracksterInferenceByCNN = cms.PSet(
         algo_verbosity = cms.int32(0),
         type = cms.string("TracksterInferenceByCNN"),

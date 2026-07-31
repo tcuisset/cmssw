@@ -37,8 +37,6 @@ namespace ticl {
 
     enabled_ = ((doPID_ != 0 && onnxPIDSession_ != nullptr));
 
-    ortScratch_.inputs.resize(3);
-    ortScratch_.input_shapes.resize(3);
   }
 
   void TracksterInferenceByTransformer::runInference(const std::vector<reco::CaloCluster>& layerClusters,
@@ -77,8 +75,10 @@ namespace ticl {
 
     const int mb = std::max(1, miniBatchSize_);
 
-    // Reuse buffers across events
-    ortScratch_.clearPerEvent();
+    // Scratch buffers are local to this event.
+    OrtScratch ortScratch;
+    ortScratch.input_shapes.resize(3);
+    ortScratch.clearPerEvent();
 
     std::vector<int> clusterIndices;
 
@@ -91,11 +91,11 @@ namespace ticl {
       const int nTrackstersInBatch = std::min(mb, total - start);  ///< nTracksters in batch
 
       // shape: layer cluster features = [trackster, maxLayerClusterCount, nFeats]
-      ortScratch_.input_shapes[0] = {nTrackstersInBatch, eidNClusters_, eidNFeatures_};
+      ortScratch.input_shapes[0] = {nTrackstersInBatch, eidNClusters_, eidNFeatures_};
       // shape: layer cluster mask = [trackster, maxLayerClusterCount]
-      ortScratch_.input_shapes[1] = {nTrackstersInBatch, eidNClusters_};
+      ortScratch.input_shapes[1] = {nTrackstersInBatch, eidNClusters_};
       // shape: trackster features : [trackster, nTracksterFeatures]
-      ortScratch_.input_shapes[2] = {nTrackstersInBatch, eidNTracksterFeatures_};
+      ortScratch.input_shapes[2] = {nTrackstersInBatch, eidNTracksterFeatures_};
 
       const size_t nFloats = static_cast<size_t>(nTrackstersInBatch) * eidNClusters_ * eidNFeatures_;
       layerClusterFeatures.assign(nFloats, 0.f);  // sparse fill -> must zero
@@ -159,26 +159,26 @@ namespace ticl {
       }
 
       // ---- PID
-      ortScratch_.outputs.clear();
+      ortScratch.outputs.clear();
 
       onnxPIDSession_->runIntoTemplated(
           std::make_tuple(
               cms::Ort::ONNXRuntime::InputTensorConfig{
-                  inputNames_[0], layerClusterFeatures, ortScratch_.input_shapes[0]},
+                  inputNames_[0], layerClusterFeatures, ortScratch.input_shapes[0]},
               // important to use InputTensorConfigBool to avoid std::vector<bool> but to actually create an ONNX bool tensor
               cms::Ort::ONNXRuntime::InputTensorConfigBool{
-                  inputNames_[1], layerClusterMask, ortScratch_.input_shapes[1]},
-              cms::Ort::ONNXRuntime::InputTensorConfig{inputNames_[2], tracksterFeatures, ortScratch_.input_shapes[2]}),
+                  inputNames_[1], layerClusterMask, ortScratch.input_shapes[1]},
+              cms::Ort::ONNXRuntime::InputTensorConfig{inputNames_[2], tracksterFeatures, ortScratch.input_shapes[2]}),
           output_id_,
-          ortScratch_.outputs,
+          ortScratch.outputs,
           {},
           nTrackstersInBatch);
 
-      if (!ortScratch_.outputs.empty() && !output_id_.empty()) {
+      if (!ortScratch.outputs.empty() && !output_id_.empty()) {
         for (int bi = 0; bi < nTrackstersInBatch; ++bi) {
           auto& ts = tracksters[indices[start + bi]];
-          float output_proba_had = ortScratch_.outputs[0][bi * 2];
-          float output_proba_em = ortScratch_.outputs[0][bi * 2 + 1];
+          float output_proba_had = ortScratch.outputs[0][bi * 2];
+          float output_proba_em = ortScratch.outputs[0][bi * 2 + 1];
           ts.setIdProbability(Trackster::ParticleType::charged_hadron, output_proba_had * 0.5f);
           ts.setIdProbability(Trackster::ParticleType::neutral_hadron, output_proba_had * 0.5f);
           ts.setIdProbability(Trackster::ParticleType::photon, output_proba_em * 0.5f);
