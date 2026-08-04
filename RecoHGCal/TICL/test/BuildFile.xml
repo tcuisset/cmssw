@@ -1,8 +1,12 @@
 <use name="FWCore/Framework"/>
 <use name="FWCore/ParameterSet"/>
+<use name="FWCore/Utilities"/>
+<use name="CondFormats/DataRecord"/>
+<use name="CondFormats/EcalObjects"/>
 <use name="DataFormats/HGCalReco"/>
 <use name="DataFormats/TrackReco"/>
 <use name="DataFormats/Math"/>
+<use name="RecoEcal/EgammaCoreTools"/>
 <use name="SimDataFormats/CaloAnalysis"/>
 <use name="RecoLocalCalo/HGCalRecAlgos"/>
 <flags EDM_PLUGIN="1"/>

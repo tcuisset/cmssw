@@ -1,0 +1,65 @@
+Begin processing the 1st record. Run 1, Event 1, LumiSection 1 on stream 0 at 31-Jul-2026 18:03:50.474 CEST
+
+========== EcalMustacheSCParameters ==========
+Mustache SC parameters:
+ sqrtLogClustETuning: 1.1
+ Parabola parameters are binned in 1 (log10(E), |eta|) regions.
+ Parameters for log10(E_min)=-3 and |eta_min|=0:
+  pUp:
+   [0]: -0.107537
+   [1]: 0.590969
+   [2]: -0.076494
+  pLow:
+   [0]: -0.0268843
+   [1]: 0.147742
+   [2]: -0.0191235
+  w0Up:
+   [0]: -0.00681785
+   [1]: -0.00239516
+  w1Up:
+   [0]: 0.000699995
+   [1]: -0.00554331
+  w0Low:
+   [0]: -0.00681785
+   [1]: -0.00239516
+  w1Low:
+   [0]: 0.000699995
+   [1]: -0.00554331
+
+========== EcalSCDynamicDPhiParameters ==========
+SC dynamic dPhi parameters:
+ Parameters are binned in 4 (E, |eta|) regions.
+ Parameters for E_min=0 and |eta_min|=0:
+  yoffset:    0.0280506
+  scale:      0.946048
+  xoffset:    -0.101172
+  width:      0.432767
+  saturation: 0.14
+  cutoff:     0.6
+ Parameters for E_min=0 and |eta_min|=1.479:
+  yoffset:    0.0497038
+  scale:      0.975707
+  xoffset:    -0.18149
+  width:      0.431729
+  saturation: 0.14
+  cutoff:     0.55
+ Parameters for E_min=0 and |eta_min|=1.75:
+  yoffset:    0.05643
+  scale:      1.60429
+  xoffset:    -0.642352
+  width:      0.458106
+  saturation: 0.12
+  cutoff:     0.45
+ Parameters for E_min=0 and |eta_min|=2:
+  yoffset:    0.0928887
+  scale:      1.22321
+  xoffset:    -0.260256
+  width:      0.345852
+  saturation: 0.12
+  cutoff:     0.3
+
+Central lookup at candidate eta = seed eta = 2, candidate E = 37.622 GeV
+  Mustache bin: log10EMin=-3, etaMin=0
+  dynamic-dPhi bin: eMin=0, etaMin=1.75
+
+Wrote exact MustacheKernel scan to RecoHGCal/TICL/test/mustache_scan_example.csv
