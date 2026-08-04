@@ -66,9 +66,9 @@ ticlValidSuperclusteringCandidatePID_PCACutBased = ticlValidSuperclusteringCandi
     pidCut = cms.double(0.5)
 )
 
-ticlSuperclusterPID_prevalid = cms.Sequence(ticlValidSuperclusteringSeedMask + tracksterSuperclusteringValidCandidateMaskProducer)
-ticlSuperclusterPIDValidation_valid = cms.Sequence(ticlValidSuperclusteringSeedPID + ticlValidSuperclusteringCandidatePID)
-ticlSuperclusterPIDValidation_cutBased_valid = cms.Sequence(ticlValidSuperclusteringSeedPID_PCACutBased + ticlValidSuperclusteringCandidatePID_PCACutBased)
+ticlSuperclusterPID_prevalid = cms.Task(ticlValidSuperclusteringSeedMask, tracksterSuperclusteringValidCandidateMaskProducer)
+ticlSuperclusterPIDValidation_valid = cms.Task(ticlValidSuperclusteringSeedPID, ticlValidSuperclusteringCandidatePID)
+ticlSuperclusterPIDValidation_cutBased_valid = cms.Task(ticlValidSuperclusteringSeedPID_PCACutBased, ticlValidSuperclusteringCandidatePID_PCACutBased)
 
 
 #### post-processing : computing efficiencies of PID cut as ratios of histogram
@@ -102,9 +102,14 @@ postProcessorTICLPIDValid = DQMEDHarvester('DQMGenericClient',
 
 
 ################ Plots of deltaEta-deltaPhi to supercluster seed
-from Validation.HGCalValidation.hgcalSuperclusteringInputTracksterValidator_cfi import hgcalSuperclusteringInputTracksterValidator
+from Validation.HGCalValidation.hgcalSuperclusteringInputTracksterValidator_cfi import hgcalSuperclusteringInputTracksterValidator as _hgcalSuperclusteringInputTracksterValidator
 
-
+ticlValidSuperclusteringSeedMaskLoose = ticlValidSuperclusteringSeedMask.clone(recoToSimScoreCut=0.3)
+tracksterSuperclusteringValidCandidateMaskProducerLoose = tracksterSuperclusteringValidCandidateMaskProducer.clone(recoToSimScoreCut=0.5)
+hgcalSuperclusteringInputTracksterValidator = _hgcalSuperclusteringInputTracksterValidator.clone(
+    seedTracksterMask = cms.InputTag("ticlValidSuperclusteringSeedMaskLoose"),
+    candidateTracksterMask = cms.InputTag("tracksterSuperclusteringValidCandidateMaskProducerLoose")
+)
 
 ################ Validation of superclusters (in trackster dataformat)
 from Validation.HGCalValidation.hgcalSuperClusterValidator_cfi import hgcalSuperClusterValidator as _hgcalSuperClusterValidator
@@ -168,9 +173,12 @@ postProcessorHGCalSuperClusterValidator = DQMEDHarvester('DQMGenericClient',
     verbose = cms.untracked.uint32(4))
 
 ########################### Sequences
-ticlSuperclusterValidation = cms.Sequence(
-     ticlSuperclusterPID_prevalid + ticlSuperclusterPIDValidation_valid + ticlSuperclusterPIDValidation_cutBased_valid + hgcalSuperclusteringInputTracksterValidator + hgcalSuperClusterValidator
+ticlSuperclusterValidationTask = cms.Task(
+     ticlSuperclusterPID_prevalid, ticlSuperclusterPIDValidation_valid, ticlSuperclusterPIDValidation_cutBased_valid,
+     ticlValidSuperclusteringSeedMaskLoose, tracksterSuperclusteringValidCandidateMaskProducerLoose, hgcalSuperclusteringInputTracksterValidator,
+     hgcalSuperClusterValidator
 )
+ticlSuperclusterValidation = cms.Sequence(ticlSuperclusterValidationTask)
 postProcessorTiclSupercluster = cms.Sequence(
     postProcessorTICLPIDValid + postProcessorHGCalSuperClusterValidator
 )

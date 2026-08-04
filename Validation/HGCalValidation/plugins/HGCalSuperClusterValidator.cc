@@ -155,8 +155,8 @@ void HGCalSuperClusterValidator::bookHistograms(DQMStore::IBooker& ibook,
   histos.sc_EoverEtruth =
       ibook.book1D("sc_EoverEtruth", "SuperClusters in HGCAL E/Etruth (from CaloParticle)", 50, 0, 2);
 
-  auto constexpr EoverEtruthBins_range = std::views::iota(0, 50)  // evenly spaced values between 0 and 2
-                                         | std::views::transform([step = 2.0 / 49](int i) { return i * step; });
+  auto constexpr EoverEtruthBins_range = std::views::iota(0, 100)  // evenly spaced values between 0 and 4
+                                         | std::views::transform([step = 4.0 / (100-1)](int i) { return i * step; });
   std::vector<float> const EoverEtruthBins(EoverEtruthBins_range.begin(), EoverEtruthBins_range.end());
   histos.sc_EoverEtruth_vs_ET = ibook.book2D("sc_EoverEtruth_vs_ET",
                                              "SuperClusters in HGCAL E/Etruth (from CaloParticle)",
@@ -241,7 +241,7 @@ void HGCalSuperClusterValidator::dqmAnalyze(edm::Event const& iEvent,
       continue;  // Consider only gen photons/electrons
 
     const double simET = simts.regressed_energy() / std::cosh(simts.barycenter().eta());
-    ;
+    
     histos.sim_ET_vs_Eta_denom->Fill(simET, std::abs(simts.barycenter().eta()));
 
     // Find the supercluster with the highest shared energy with the SimTrackster

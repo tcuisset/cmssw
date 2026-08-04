@@ -83,20 +83,22 @@ namespace {
 
   std::vector<double> makeDeltaEtaBinEdges() {
     std::vector<double> positiveEdges;
-    appendUniformEdges(positiveEdges, 0., 3e-3, 1e-4);
-    appendUniformEdges(positiveEdges, 3e-3, 0.05, 1e-3);
-    appendUniformEdges(positiveEdges, 0.05, 0.1, 0.005);
-    appendUniformEdges(positiveEdges, 0.1, 0.2, 0.01);
+    appendUniformEdges(positiveEdges, 0, 0.1, 1e-3);
+    // appendUniformEdges(positiveEdges, 0., 3e-3, 1e-4);
+    // appendUniformEdges(positiveEdges, 3e-3, 0.05, 1e-3);
+    // appendUniformEdges(positiveEdges, 0.05, 0.1, 0.005);
+    // appendUniformEdges(positiveEdges, 0.1, 0.2, 0.01);
     return makeSymmetricEdges(positiveEdges);
   }
 
   std::vector<double> makeDeltaPhiBinEdges() {
     std::vector<double> positiveEdges;
-    appendUniformEdges(positiveEdges, 0., 0.06, 1e-3);
-    appendUniformEdges(positiveEdges, 0.06, 0.1, 0.005);
-    appendUniformEdges(positiveEdges, 0.1, 0.2, 0.01);
-    appendUniformEdges(positiveEdges, 0.2, 0.4, 0.02);
-    appendUniformEdges(positiveEdges, 0.4, 0.7, 0.05);
+    appendUniformEdges(positiveEdges, 0., 0.4, 0.005);
+    // appendUniformEdges(positiveEdges, 0., 0.06, 1e-3);
+    // appendUniformEdges(positiveEdges, 0.06, 0.1, 0.005);
+    // appendUniformEdges(positiveEdges, 0.1, 0.2, 0.01);
+    // appendUniformEdges(positiveEdges, 0.2, 0.4, 0.02);
+    // appendUniformEdges(positiveEdges, 0.4, 0.7, 0.05);
     return makeSymmetricEdges(positiveEdges);
   }
 
@@ -156,6 +158,7 @@ private:
 
   const double pidCut_;
   const std::vector<ticl::Trackster::ParticleType> pidsToConsider_;
+  const bool positiveEtaOnly_;
 
   const double deltaEtaWindow_;
   const double deltaPhiWindow_;
@@ -173,6 +176,7 @@ HGCalSuperclusteringInputTracksterValidator::HGCalSuperclusteringInputTracksterV
       fakeTracksterMask_token_(consumes<std::vector<int>>(iConfig.getParameter<edm::InputTag>("fakeTracksterMask"))),
       pidCut_(iConfig.getParameter<double>("pidCut")),
       pidsToConsider_({ticl::Trackster::ParticleType::electron, ticl::Trackster::ParticleType::photon}),
+      positiveEtaOnly_(iConfig.getParameter<bool>("positiveEtaOnly")),
       deltaEtaWindow_(iConfig.getParameter<double>("deltaEtaWindow")),
       deltaPhiWindow_(iConfig.getParameter<double>("deltaPhiWindow")),
       pidBins_(iConfig.getParameter<unsigned int>("pidBins")),
@@ -212,6 +216,8 @@ void HGCalSuperclusteringInputTracksterValidator::dqmAnalyze(
     }
 
     ticl::Trackster const& ts_seed = tracksters[seed_i];
+    if (positiveEtaOnly_ && ts_seed.barycenter().eta() < 0) continue;
+
     auto& tiles = tracksterTilesBothEndcaps[ts_seed.barycenter().eta() > 0.f];
     const auto search_box = tiles.searchBoxEtaPhi(ts_seed.barycenter().eta() - deltaEtaWindow_,
                                                   ts_seed.barycenter().eta() + deltaEtaWindow_,
@@ -385,6 +391,7 @@ void HGCalSuperclusteringInputTracksterValidator::fillDescriptions(edm::Configur
       ->setComment("Number of bins for the candidate trackster electron+photon PID score.");
   desc.add<std::vector<double>>("absEtaBins", {1.6, 1.8, 2.1, 2.3, 2.5, 2.7, 2.8, 2.9, 3.0})
       ->setComment("Abs(eta) bin edges for seed-eta-sliced deltaEta-deltaPhi histograms.");
+  desc.add<bool>("positiveEtaOnly", true)->setComment("Only consider positive eta superclusters for the deltaEta-deltaPhi histograms (otherwise one gets two mustaches mirrored in deltaEta)");
 
   descriptions.add("hgcalSuperclusteringInputTracksterValidator", desc);
 }
