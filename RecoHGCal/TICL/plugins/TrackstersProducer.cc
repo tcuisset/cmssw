@@ -246,6 +246,8 @@ void TrackstersProducer::fillDescriptions(edm::ConfigurationDescriptions& descri
   desc.add<edm::InputTag>("seeding_regions", edm::InputTag("ticlSeedingRegionProducer"));
   desc.add<std::string>("patternRecognitionBy", "CLUE3D");
   desc.add<std::string>("itername", "unknown");
+  desc.add<std::string>("profileOutputFile", "")
+      ->setComment("Optional ONNX Runtime profiling output prefix; empty disables profiling.");
 
   // Inference plugin name (can be left as default). If the corresponding plugin PSet
   // contains only empty model path strings, inference will be disabled at runtime.
@@ -283,6 +285,11 @@ void TrackstersProducer::fillDescriptions(edm::ConfigurationDescriptions& descri
   inferenceDescPFN.addNode(
       edm::PluginDescription<TracksterInferenceAlgoFactory>("type", "TracksterInferenceByPFN", true));
   desc.add<edm::ParameterSetDescription>("pluginInferenceAlgoTracksterInferenceByPFN", inferenceDescPFN);
+
+  edm::ParameterSetDescription inferenceDescBenchmark;
+  inferenceDescBenchmark.addNode(
+      edm::PluginDescription<TracksterInferenceAlgoFactory>("type", "TracksterInferenceByBenchmark", true));
+  desc.add<edm::ParameterSetDescription>("pluginInferenceAlgoTracksterInferenceByBenchmark", inferenceDescBenchmark);
 
   descriptions.add("trackstersProducer", desc);
 }
