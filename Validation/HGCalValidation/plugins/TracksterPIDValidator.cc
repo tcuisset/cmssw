@@ -8,6 +8,8 @@ Another mask is used to define a "fake" baseline region (populated by unmatched 
 Author: Théo Cuisset (LLR)
 */
 #include <string>
+#include <vector>
+#include <optional>
 
 // user include files
 #include "FWCore/Framework/interface/Frameworkfwd.h"
@@ -16,11 +18,13 @@ Author: Théo Cuisset (LLR)
 #include "FWCore/Framework/interface/Event.h"
 #include "FWCore/Framework/interface/MakerMacros.h"
 
+#include "CommonTools/Utils/interface/StringObjectFunction.h"
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
 
 #include "DataFormats/HGCalReco/interface/Trackster.h"
 
 using namespace ticl;
+using namespace std;
 
 struct Histograms_TracksterPIDValidation {
   dqm::reco::MonitorElement* pt_eta_pid_;  // 3D histo pt-abs(eta)-PID value
@@ -57,6 +61,7 @@ private:
   const bool doFakes_;
 
   const double pidCut_;
+  optional<StringObjectFunction<ticl::Trackster>> cutBasedPid_;
 
   const std::vector<ticl::Trackster::ParticleType> pidsToConsider_;
   const std::vector<double> pidBins_;
@@ -76,6 +81,9 @@ TICLTracksterPIDValidation::TICLTracksterPIDValidation(const edm::ParameterSet& 
         consumes<std::vector<int>>(iConfig.getParameter<edm::InputTag>("tracksterMaskFakes"));
   else
     edm::LogInfo("PIDValidation") << "Not using any mask for fakes, will not run validation for fakes";
+
+  if (iConfig.getParameter<bool>("useCutBased"))
+  cutBasedPid_.emplace(iConfig.getParameter<string>("cut"));
 }
 
 void TICLTracksterPIDValidation::dqmAnalyze(edm::Event const& iEvent,
@@ -107,7 +115,8 @@ void TICLTracksterPIDValidation::dqmAnalyze(edm::Event const& iEvent,
 
     doFill(histos.pt_eta_reco2SimSelected_, ts);
 
-    const double pidValue = std::transform_reduce(
+    const double pidValue = cutBasedPid_ ? (*cutBasedPid_)(ts) :
+       std::transform_reduce(
         pidsToConsider_.begin(), pidsToConsider_.end(), 0., std::plus<>{}, [&ts](Trackster::ParticleType partType) {
           return ts.id_probability(partType);
         });
@@ -227,6 +236,8 @@ void TICLTracksterPIDValidation::fillDescriptions(edm::ConfigurationDescriptions
   desc.addOptional<edm::InputTag>("tracksterMask");
   desc.addOptional<edm::InputTag>("tracksterMaskFakes");
   desc.add<double>("pidCut", 0.5)->setComment("Cut on the PID score to apply while making PID efficiency plots");
+  desc.add<bool>("useCutBased", false)->setComment("Use the cut-based PID score given in the 'cut' parameter instead of the id_probabilities embedded in the trackster");
+  desc.addOptional<string>("cut")->setComment("Function to compute PID score, in StringObjectFunction syntax (must return a double within 0-1). Only used if useCutBased is True.");
 
   // The default was generated with a logit :  [1/(1+math.exp(-x)) for x in np.linspace(-10, 10, 99)]
   // clang-format off

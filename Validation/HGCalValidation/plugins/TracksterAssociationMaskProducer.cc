@@ -1,6 +1,7 @@
 /**
  * Selects a subset of tracksters based on their association score to simulation, to compute efficiencies and fake rates.
- * Builds vector<bool> as a mask associated to a trackster collection, for "signal" (reco2Sim < threshold) and "fake" (reco2Sim > threshold)
+ * Builds vector<int> as a mask associated to a trackster collection, for "signal" (reco2Sim < threshold) and "fake" (reco2Sim > threshold)
+ * for signal : 0 is matched, 1 & 2 unmatched (with 2=partially matched that fails the score cut, so might be PU-contaminated signal)
  * Author : Theo Cuisset (LLR)
  */
 #include "FWCore/Framework/interface/Event.h"
