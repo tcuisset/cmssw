@@ -183,29 +183,8 @@ TICLCandidateProducer::TICLCandidateProducer(const edm::ParameterSet &ps, const 
   if (useMTDTiming_) {
     inputTimingToken_ = consumes<MtdHostCollection>(ps.getParameter<edm::InputTag>("timingSoA"));
   }
-  // Initialize inference algorithm using the factory.
-  // Do not build the inference plugin if it is disabled or if no model is configured (empty string => no session loaded).
   if (regressionAndPid_) {
-    const std::string inferencePlugin = ps.getParameter<std::string>("inferenceAlgo");
-    if (!inferencePlugin.empty()) {
-      const edm::ParameterSet inferencePSet =
-          ps.getParameter<edm::ParameterSet>("pluginInferenceAlgo" + inferencePlugin);
-
-      // If the plugin config exposes model paths as std::string with default "",
-      // the cache will only contain sessions for non-empty paths.
-      const bool hasSingleModel = inferencePSet.existsAs<std::string>("onnxModelPath", true) &&
-                                  !inferencePSet.getParameter<std::string>("onnxModelPath").empty();
-      const bool hasPIDModel = inferencePSet.existsAs<std::string>("onnxPIDModelPath", true) &&
-                               !inferencePSet.getParameter<std::string>("onnxPIDModelPath").empty();
-      const bool hasEnergyModel = inferencePSet.existsAs<std::string>("onnxEnergyModelPath", true) &&
-                                  !inferencePSet.getParameter<std::string>("onnxEnergyModelPath").empty();
-
-      // Only instantiate the plugin if at least one model path is configured.
-      if (hasSingleModel || hasPIDModel || hasEnergyModel) {
-        inferenceAlgo_ = std::unique_ptr<TracksterInferenceAlgoBase>(
-            TracksterInferenceAlgoFactory::get()->create(inferencePlugin, inferencePSet, cache));
-      }
-    }
+    inferenceAlgo_ = makeTracksterInferenceAlgo(ps, cache);
   }
 
   produces<std::vector<TICLCandidate>>();
@@ -596,9 +575,10 @@ void TICLCandidateProducer::fillDescriptions(edm::ConfigurationDescriptions &des
   edm::ParameterSetDescription muonInterpretationDesc;
   muonInterpretationDesc.addNode(edm::PluginDescription<TICLGeneralInterpretationPluginFactory>("type", "Muon", true));
   desc.add<edm::ParameterSetDescription>("muonInterpretationDescPSet", muonInterpretationDesc);
-  edm::ParameterSetDescription inferenceDesc;
-  inferenceDesc.addNode(edm::PluginDescription<TracksterInferenceAlgoFactory>("type", "TracksterInferenceByPFN", true));
-  desc.add<edm::ParameterSetDescription>("pluginInferenceAlgoTracksterInferenceByPFN", inferenceDesc);
+  edm::ParameterSetDescription inferenceDescONNX;
+  inferenceDescONNX.addNode(
+      edm::PluginDescription<TracksterInferenceAlgoFactory>("type", "TracksterInferenceByONNX", true));
+  desc.add<edm::ParameterSetDescription>("pluginInferenceAlgoTracksterInferenceByONNX", inferenceDescONNX);
   desc.add<edm::ParameterSetDescription>("interpretationDescPSet", interpretationDesc);
   desc.add<std::vector<edm::InputTag>>("egamma_tracksters_collections", {edm::InputTag("ticlTracksterLinks")});
   desc.add<std::vector<edm::InputTag>>("egamma_tracksterlinks_collections", {edm::InputTag("ticlTracksterLinks")});
@@ -620,7 +600,7 @@ void TICLCandidateProducer::fillDescriptions(edm::ConfigurationDescriptions &des
                         "1.48 < abs(eta) < 3.0 && pt > 1. && quality(\"highPurity\") && "
                         "hitPattern().numberOfLostHits(\"MISSING_OUTER_HITS\") < 5");
   desc.add<bool>("regressionAndPid", true);
-  desc.add<std::string>("inferenceAlgo", "TracksterInferenceByPFN");
+  desc.add<std::string>("inferenceAlgo", "TracksterInferenceByONNX");
   descriptions.add("ticlCandidateProducer", desc);
 }
 

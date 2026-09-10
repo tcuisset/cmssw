@@ -135,29 +135,8 @@ TracksterLinksProducer::TracksterLinksProducer(const edm::ParameterSet &ps, cons
   linkingAlgo_ =
       TracksterLinkingPluginFactory::get()->create(algoType_, linkingPSet, consumesCollector(), linkingSession);
 
-  // Initialize inference algorithm using the factory.
-  // Do not build the inference plugin if it is disabled or if no model is configured (empty string => no session loaded).
   if (regressionAndPid_) {
-    const std::string inferencePlugin = ps.getParameter<std::string>("inferenceAlgo");
-    if (!inferencePlugin.empty()) {
-      const edm::ParameterSet inferencePSet =
-          ps.getParameter<edm::ParameterSet>("pluginInferenceAlgo" + inferencePlugin);
-
-      // If the plugin config exposes model paths as std::string with default "",
-      // the cache will only contain sessions for non-empty paths.
-      const bool hasSingleModel = inferencePSet.existsAs<std::string>("onnxModelPath", true) &&
-                                  !inferencePSet.getParameter<std::string>("onnxModelPath").empty();
-      const bool hasPIDModel = inferencePSet.existsAs<std::string>("onnxPIDModelPath", true) &&
-                               !inferencePSet.getParameter<std::string>("onnxPIDModelPath").empty();
-      const bool hasEnergyModel = inferencePSet.existsAs<std::string>("onnxEnergyModelPath", true) &&
-                                  !inferencePSet.getParameter<std::string>("onnxEnergyModelPath").empty();
-
-      // Only instantiate the plugin if at least one model path is configured.
-      if (hasSingleModel || hasPIDModel || hasEnergyModel) {
-        inferenceAlgo_ = std::unique_ptr<TracksterInferenceAlgoBase>(
-            TracksterInferenceAlgoFactory::get()->create(inferencePlugin, inferencePSet, cache));
-      }
-    }
+    inferenceAlgo_ = makeTracksterInferenceAlgo(ps, cache);
   }
 }
 
@@ -301,14 +280,10 @@ void TracksterLinksProducer::fillDescriptions(edm::ConfigurationDescriptions &de
   edm::ParameterSetDescription linkingDesc;
   linkingDesc.addNode(edm::PluginDescription<TracksterLinkingPluginFactory>("type", "Skeletons", true));
   // Inference Plugins
-  edm::ParameterSetDescription inferenceDesc;
-  inferenceDesc.addNode(edm::PluginDescription<TracksterInferenceAlgoFactory>("type", "TracksterInferenceByDNN", true));
-  desc.add<edm::ParameterSetDescription>("pluginInferenceAlgoTracksterInferenceByDNN", inferenceDesc);
-
-  edm::ParameterSetDescription inferenceDescPFN;
-  inferenceDescPFN.addNode(
-      edm::PluginDescription<TracksterInferenceAlgoFactory>("type", "TracksterInferenceByPFN", true));
-  desc.add<edm::ParameterSetDescription>("pluginInferenceAlgoTracksterInferenceByPFN", inferenceDescPFN);
+  edm::ParameterSetDescription inferenceDescONNX;
+  inferenceDescONNX.addNode(
+      edm::PluginDescription<TracksterInferenceAlgoFactory>("type", "TracksterInferenceByONNX", true));
+  desc.add<edm::ParameterSetDescription>("pluginInferenceAlgoTracksterInferenceByONNX", inferenceDescONNX);
   desc.add<edm::ParameterSetDescription>("linkingPSet", linkingDesc);
   desc.add<std::vector<edm::InputTag>>("tracksters_collections", {edm::InputTag("ticlTrackstersCLUE3DHigh")});
   desc.add<std::vector<edm::InputTag>>("original_masks",

@@ -122,22 +122,7 @@ TrackstersProducer::TrackstersProducer(const edm::ParameterSet& ps, ticl::TICLON
     layer_clusters_tiles_token_ = consumes<TICLLayerTiles>(ps.getParameter<edm::InputTag>("layer_clusters_tiles"));
   }
 
-  // Instantiate the inference plugin only if it is configured with at least one non-empty model path.
-  const std::string inferencePlugin = ps.getParameter<std::string>("inferenceAlgo");
-  if (!inferencePlugin.empty()) {
-    const edm::ParameterSet inferencePSet = ps.getParameter<edm::ParameterSet>("pluginInferenceAlgo" + inferencePlugin);
-
-    const bool hasSingleModel = inferencePSet.existsAs<std::string>("onnxModelPath", true) &&
-                                !inferencePSet.getParameter<std::string>("onnxModelPath").empty();
-    const bool hasPIDModel = inferencePSet.existsAs<std::string>("onnxPIDModelPath", true) &&
-                             !inferencePSet.getParameter<std::string>("onnxPIDModelPath").empty();
-    const bool hasEnergyModel = inferencePSet.existsAs<std::string>("onnxEnergyModelPath", true) &&
-                                !inferencePSet.getParameter<std::string>("onnxEnergyModelPath").empty();
-
-    if (hasSingleModel || hasPIDModel || hasEnergyModel) {
-      inferenceAlgo_ = TracksterInferenceAlgoFactory::get()->create(inferencePlugin, inferencePSet, cache);
-    }
-  }
+  inferenceAlgo_ = makeTracksterInferenceAlgo(ps, cache);
 
   if (itername_ == "TrkEM")
     iterIndex_ = ticl::Trackster::TRKEM;
@@ -271,25 +256,10 @@ void TrackstersProducer::fillDescriptions(edm::ConfigurationDescriptions& descri
   desc.add<edm::ParameterSetDescription>("pluginPatternRecognitionByRecovery", pluginDescRecovery);
 
   // Inference plugins
-  edm::ParameterSetDescription inferenceDescDNN;
-  inferenceDescDNN.addNode(
-      edm::PluginDescription<TracksterInferenceAlgoFactory>("type", "TracksterInferenceByDNN", true));
-  desc.add<edm::ParameterSetDescription>("pluginInferenceAlgoTracksterInferenceByDNN", inferenceDescDNN);
-
-  edm::ParameterSetDescription inferenceDescCNN;
-  inferenceDescCNN.addNode(
-      edm::PluginDescription<TracksterInferenceAlgoFactory>("type", "TracksterInferenceByCNN", true));
-  desc.add<edm::ParameterSetDescription>("pluginInferenceAlgoTracksterInferenceByCNN", inferenceDescCNN);
-
-  edm::ParameterSetDescription inferenceDescPFN;
-  inferenceDescPFN.addNode(
-      edm::PluginDescription<TracksterInferenceAlgoFactory>("type", "TracksterInferenceByPFN", true));
-  desc.add<edm::ParameterSetDescription>("pluginInferenceAlgoTracksterInferenceByPFN", inferenceDescPFN);
-
-  edm::ParameterSetDescription inferenceDescBenchmark;
-  inferenceDescBenchmark.addNode(
-      edm::PluginDescription<TracksterInferenceAlgoFactory>("type", "TracksterInferenceByBenchmark", true));
-  desc.add<edm::ParameterSetDescription>("pluginInferenceAlgoTracksterInferenceByBenchmark", inferenceDescBenchmark);
+  edm::ParameterSetDescription inferenceDescONNX;
+  inferenceDescONNX.addNode(
+      edm::PluginDescription<TracksterInferenceAlgoFactory>("type", "TracksterInferenceByONNX", true));
+  desc.add<edm::ParameterSetDescription>("pluginInferenceAlgoTracksterInferenceByONNX", inferenceDescONNX);
 
   descriptions.add("trackstersProducer", desc);
 }

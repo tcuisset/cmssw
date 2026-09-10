@@ -67,7 +67,6 @@ namespace ticl {
 
       const auto infPSet = modulePSet.getParameter<edm::ParameterSet>(infPSetName);
 
-      cache->tryLoadSessionFromKey(infPSet, "onnxModelPath", sess_opts);
       cache->tryLoadSessionFromKey(infPSet, "onnxPIDModelPath", sess_opts);
       cache->tryLoadSessionFromKey(infPSet, "onnxEnergyModelPath", sess_opts);
 

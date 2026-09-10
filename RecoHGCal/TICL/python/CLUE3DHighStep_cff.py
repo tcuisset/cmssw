@@ -27,53 +27,27 @@ ticlTrackstersCLUE3DHigh = _trackstersProducer.clone(
         doPidCut = True,
         cutHadProb = 999
     ),
-    inferenceAlgo = cms.string('TracksterInferenceByCNN'),
-    pluginInferenceAlgoTracksterInferenceByCNN = cms.PSet(
+    inferenceAlgo = cms.string('TracksterInferenceByONNX'),
+    pluginInferenceAlgoTracksterInferenceByONNX = cms.PSet(
         algo_verbosity = cms.int32(0),
-        type = cms.string("TracksterInferenceByCNN"),
-        onnxModelPath = cms.string("RecoHGCal/TICL/data/ticlv5/onnx_models/CNN/patternrecognition/id_v0.onnx"),
+        type = cms.string("TracksterInferenceByONNX"),
+        onnxPIDModelPath = cms.string("RecoHGCal/TICL/data/ticlv5/onnx_models/CNN/patternrecognition/id_v0.onnx"),
+        onnxEnergyModelPath = cms.string(""),
         inputNames = cms.vstring("input"),
-        outputNames = cms.vstring("pid_output"),
-        eid_min_cluster_energy = cms.double(1.0),
-        eid_n_layers = cms.int32(50),
-        eid_n_clusters = cms.int32(10),
-        doPID = cms.int32(1),
+        outputNamesPID = cms.vstring("pid_output"),
+        outputNamesEnergy = cms.vstring("enreg_output"),
+        outputProbabilityIndices = cms.vuint32(0, 1, 2, 3, 4, 5, 6, 7),
+        inputFormat = cms.string("legacyCNN"),
+        minTracksterEnergy = cms.double(1.0),
+        nLayers = cms.int32(50),
+        maxClusters = cms.int32(10),
+        doPID = cms.bool(True),
+        doRegression = cms.bool(False),
         miniBatchSize = cms.untracked.int32(64),
+        reportTiming = cms.untracked.bool(False),
     ),
-    pluginInferenceAlgoTracksterInferenceByDNN = cms.PSet(
-        algo_verbosity = cms.int32(0),
-        onnxPIDModelPath = cms.string('RecoHGCal/TICL/data/ticlv5/onnx_models/DNN/patternrecognition/id_v0.onnx'),
-        onnxEnergyModelPath = cms.string(''),
-        inputNames  = cms.vstring('input'),
-        output_en   = cms.vstring('enreg_output'),
-        output_id   = cms.vstring('pid_output'),
-        eid_min_cluster_energy = cms.double(1),
-        eid_n_layers = cms.int32(50),
-        eid_n_clusters = cms.int32(10),
-        doPID = cms.int32(1),
-        doRegression = cms.int32(0),
-        type = cms.string('TracksterInferenceByDNN')
-    ),
-
-    pluginInferenceAlgoTracksterInferenceByPFN = cms.PSet(
-        algo_verbosity = cms.int32(0),
-        onnxPIDModelPath = cms.string('RecoHGCal/TICL/data/ticlv5/onnx_models/PFN/patternrecognition/id_v0.onnx'),
-        onnxEnergyModelPath = cms.string(''),
-        inputNames  = cms.vstring('input','input_tr_features'),
-        output_en   = cms.vstring('enreg_output'),
-        output_id   = cms.vstring('pid_output'),
-        eid_min_cluster_energy = cms.double(1),
-        eid_n_layers = cms.int32(50),
-        eid_n_clusters = cms.int32(10),
-        doPID = cms.int32(1),
-        doRegression = cms.int32(0),
-        type = cms.string('TracksterInferenceByPFN')
-    )
-
-
 )
 
 ticlCLUE3DHighStepTask = cms.Task(ticlSeedingGlobal
     ,filteredLayerClustersCLUE3DHigh
     ,ticlTrackstersCLUE3DHigh)
-
